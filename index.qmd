@@ -1,0 +1,80 @@
+---
+title: " "
+description: " "
+format:
+  html: 
+    df-print: kable
+    code-fold: show
+    code-summary: "Hide code"
+    code-overflow: wrap
+    toc-title: Page Contents
+    toc: true
+    toc-depth: 2
+    toc-location: right
+    number-sections: false
+    html-math-method: katex
+    smooth-scroll: true
+editor: source
+editor_options: 
+  chunk_output_type: console
+---
+```{=html}
+<style type="text/css">
+
+body, td {
+   font-size: 11pt;
+}
+code.r{
+  font-size: 9pt;
+}
+pre {
+  font-size: 11pt
+}
+</style>
+```
+
+::: {.callout-important icon=false}
+#### Supporting Information  
+
+This site overviews and provides demonstrative analyses for the manuscript:   
+
+### Spatial Dynamics of New World Screwworm Invasion: Density Dependence, Stratified Dispersal, and Surveillance-Corrected Inference. (in review)         
+  
+::: 
+
+```{r fig.width=5, fig.height=8, echo=FALSE}
+#| label: fig-niche
+#| fig-cap: "NWS Niche Capacity 2022-2026"
+#| 
+knitr::include_graphics(here::here("images/nws_niche_limit_2026-03-04.gif"))
+
+```
+
+```{r fig.width=5, fig.height=8, echo=FALSE}
+#| label: fig-spread
+#| fig-cap: "NWS Estimated Spread 2022-2026"
+#| 
+knitr::include_graphics(here::here("images/nws_front_2026-03-08.gif"))
+
+```
+
+## Site Contents    
+Use the below links or tabs above to navigate to different sections of the analysis.    
+- [**NWS Point Simulation**](): Simulation of demonstrative case detections.   
+- [**Mesh Construction**](): Construction of spatial mesh and defining spatial domain.     
+     
+   
+## External Resources  
+Archives of versioned data and code are available on the Open Science Framework (OSF):   
+[Hominivorax-Geostat (link)](https://osf.io/uvqmw/overview) 
+
+  
+  
+   
+  
+
+
+
+
+
+

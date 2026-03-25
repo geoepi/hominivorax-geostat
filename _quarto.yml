@@ -1,0 +1,27 @@
+project:
+  type: website
+  output-dir: docs
+  
+website: 
+  title: "NWS Dynamics"
+  navbar:
+    left:
+      - href: simulation.qmd
+        text: Simulation
+      - href: spatial_domain.qmd
+        text: Spatial
+    right:
+      - href: https://github.com/geoepi/hominivorax-geostat
+        text: GeoEpi
+      - icon: github
+        href: https://github.com/geoepi/hominivorax-geostat
+  page-footer:
+    right: "Built with [Quarto](https://quarto.org/)"
+
+format:
+  html:
+    theme: lux
+    toc: true
+    
+editor: source
+

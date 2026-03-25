@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.2.335">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+<meta name="description" content="Mesh construction, tesselation, and defining the spatial domain">
+
+<title>NWS Dynamics - Mesh</title>
+<style>
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1.6em;
+  vertical-align: middle;
+}
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+    color: #aaaaaa;
+  }
+pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+code span.al { color: #ff0000; font-weight: bold; } /* Alert */
+code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+code span.at { color: #7d9029; } /* Attribute */
+code span.bn { color: #40a070; } /* BaseN */
+code span.bu { color: #008000; } /* BuiltIn */
+code span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+code span.ch { color: #4070a0; } /* Char */
+code span.cn { color: #880000; } /* Constant */
+code span.co { color: #60a0b0; font-style: italic; } /* Comment */
+code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+code span.do { color: #ba2121; font-style: italic; } /* Documentation */
+code span.dt { color: #902000; } /* DataType */
+code span.dv { color: #40a070; } /* DecVal */
+code span.er { color: #ff0000; font-weight: bold; } /* Error */
+code span.ex { } /* Extension */
+code span.fl { color: #40a070; } /* Float */
+code span.fu { color: #06287e; } /* Function */
+code span.im { color: #008000; font-weight: bold; } /* Import */
+code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+code span.kw { color: #007020; font-weight: bold; } /* Keyword */
+code span.op { color: #666666; } /* Operator */
+code span.ot { color: #007020; } /* Other */
+code span.pp { color: #bc7a00; } /* Preprocessor */
+code span.sc { color: #4070a0; } /* SpecialChar */
+code span.ss { color: #bb6688; } /* SpecialString */
+code span.st { color: #4070a0; } /* String */
+code span.va { color: #19177c; } /* Variable */
+code span.vs { color: #4070a0; } /* VerbatimString */
+code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+</style>
+
+
+<script src="site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="site_libs/quarto-nav/headroom.min.js"></script>
+<script src="site_libs/clipboard/clipboard.min.js"></script>
+<script src="site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="site_libs/quarto-search/fuse.min.js"></script>
+<script src="site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="./">
+<script src="site_libs/quarto-html/quarto.js"></script>
+<script src="site_libs/quarto-html/popper.min.js"></script>
+<script src="site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="site_libs/quarto-html/anchor.min.js"></script>
+<link href="site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="site_libs/bootstrap/bootstrap.min.css" rel="stylesheet" id="quarto-bootstrap" data-mode="light">
+<script id="quarto-search-options" type="application/json">{
+  "location": "navbar",
+  "copy-button": false,
+  "collapse-after": 3,
+  "panel-placement": "end",
+  "type": "overlay",
+  "limit": 20,
+  "language": {
+    "search-no-results-text": "No results",
+    "search-matching-documents-text": "matching documents",
+    "search-copy-link-title": "Copy link to search",
+    "search-hide-matches-text": "Hide additional matches",
+    "search-more-match-text": "more match in this document",
+    "search-more-matches-text": "more matches in this document",
+    "search-clear-button-title": "Clear",
+    "search-detached-cancel-button-title": "Cancel",
+    "search-submit-button-title": "Submit"
+  }
+}</script>
+<style>html{ scroll-behavior: smooth; }</style>
+
+
+</head>
+
+<body class="nav-fixed">
+
+<div id="quarto-search-results"></div>
+  <header id="quarto-header" class="headroom fixed-top">
+    <nav class="navbar navbar-expand-lg navbar-dark ">
+      <div class="navbar-container container-fluid">
+      <div class="navbar-brand-container">
+    <a class="navbar-brand" href="./index.html">
+    <span class="navbar-title">NWS Dynamics</span>
+    </a>
+  </div>
+          <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarCollapse" aria-controls="navbarCollapse" aria-expanded="false" aria-label="Toggle navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+  <span class="navbar-toggler-icon"></span>
+</button>
+          <div class="collapse navbar-collapse" id="navbarCollapse">
+            <ul class="navbar-nav navbar-nav-scroll me-auto">
+  <li class="nav-item">
+    <a class="nav-link" href="./simulation.html">
+ <span class="menu-text">Simulation</span></a>
+  </li>  
+  <li class="nav-item">
+    <a class="nav-link active" href="./spatial_domain.html" aria-current="page">
+ <span class="menu-text">Spatial</span></a>
+  </li>  
+</ul>
+            <ul class="navbar-nav navbar-nav-scroll ms-auto">
+  <li class="nav-item">
+    <a class="nav-link" href="https://github.com/geoepi/hominivorax-geostat">
+ <span class="menu-text">GeoEpi</span></a>
+  </li>  
+  <li class="nav-item compact">
+    <a class="nav-link" href="https://github.com/geoepi/hominivorax-geostat"><i class="bi bi-github" role="img">
+</i> 
+ <span class="menu-text"></span></a>
+  </li>  
+</ul>
+              <div id="quarto-search" class="" title="Search"></div>
+          </div> <!-- /navcollapse -->
+      </div> <!-- /container-fluid -->
+    </nav>
+</header>
+<!-- content -->
+<div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article page-navbar">
+<!-- sidebar -->
+<!-- margin-sidebar -->
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+        <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">Page Contents</h2>
+   
+  <ul class="collapse">
+  <li><a href="#overview" id="toc-overview" class="nav-link active" data-scroll-target="#overview">Overview</a></li>
+  <li><a href="#libraries" id="toc-libraries" class="nav-link" data-scroll-target="#libraries">Libraries</a></li>
+  <li><a href="#custom-functions" id="toc-custom-functions" class="nav-link" data-scroll-target="#custom-functions">Custom Functions</a></li>
+  <li><a href="#download-osf-data" id="toc-download-osf-data" class="nav-link" data-scroll-target="#download-osf-data">Download OSF Data</a></li>
+  <li><a href="#spatial-polygons" id="toc-spatial-polygons" class="nav-link" data-scroll-target="#spatial-polygons">Spatial Polygons</a></li>
+  <li><a href="#simulated-nws-cases" id="toc-simulated-nws-cases" class="nav-link" data-scroll-target="#simulated-nws-cases">Simulated NWS Cases</a></li>
+  <li><a href="#build-spatial-mesh" id="toc-build-spatial-mesh" class="nav-link" data-scroll-target="#build-spatial-mesh">Build Spatial Mesh</a></li>
+  <li><a href="#natural-neighborhoods" id="toc-natural-neighborhoods" class="nav-link" data-scroll-target="#natural-neighborhoods">Natural Neighborhoods</a></li>
+  </ul>
+</nav>
+    </div>
+<!-- main -->
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title">Mesh</h1>
+</div>
+
+<div>
+  <div class="description">
+    Mesh construction, tesselation, and defining the spatial domain
+  </div>
+</div>
+
+
+<div class="quarto-title-meta">
+
+    
+  
+    
+  </div>
+  
+
+</header>
+
+<style type="text/css">
+
+body, td {
+   font-size: 11pt;
+}
+code.r{
+  font-size: 9pt;
+}
+pre {
+  font-size: 11pt
+}
+</style>
+<section id="overview" class="level2">
+<h2 class="anchored" data-anchor-id="overview">Overview</h2>
+<p>The script demonstrates how to download model results archived on the Open Science Framework (OSF) and simulate New World screwworm (NWS) case detections.</p>
+<p>The downloaded data include`s spatial GeoTiff files depicting niche capacity and estimated spread for each week between January 2022 and February 2026, spatial boundaries for analysis and visualization, and a copy of previously simulated NWS cases.</p>
+</section>
+<section id="libraries" class="level2">
+<h2 class="anchored" data-anchor-id="libraries">Libraries</h2>
+<p>Load needed libraries and packages.</p>
+<div class="cell">
+<details open="">
+<summary>Hide code</summary>
+<div class="sourceCode cell-code" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(tidyverse) <span class="co"># data wrangling</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="fu">options</span>(<span class="at">dplyr.summarise.inform =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(here) <span class="co"># directory managment</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(pals) <span class="co"># color palettes</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(osfr) <span class="co"># interact with Open Science Framework (OSF, data repository)</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(terra) <span class="co"># spatial data manipulation</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(sf) <span class="co"># spatial data manipulation</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(spatstat) <span class="co"># spatial data manipulation</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(raster) <span class="co"># spatial data manipulation</span></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>select <span class="ot">&lt;-</span> dplyr<span class="sc">::</span>select <span class="co"># deconflict dplyr w/raster  </span></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a><span class="co"># see https://www.r-inla.org/home</span></span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a><span class="co"># install.packages("INLA",repos=c(getOption("repos"),INLA="https://inla.r-inla-download.org/R/stable"), dep=TRUE)</span></span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(INLA) <span class="co"># mesh construction, inference</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+</div>
+</section>
+<section id="custom-functions" class="level2">
+<h2 class="anchored" data-anchor-id="custom-functions">Custom Functions</h2>
+<p>Load customized functions.</p>
+<div class="cell">
+<details open="">
+<summary>Hide code</summary>
+<div class="sourceCode cell-code" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="fu">source</span>(<span class="fu">here</span>(<span class="st">"R/utilities.R"</span>))</span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="fu">source_dir</span>(<span class="fu">here</span>(<span class="st">"R"</span>))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+</div>
+</section>
+<section id="download-osf-data" class="level2">
+<h2 class="anchored" data-anchor-id="download-osf-data">Download OSF Data</h2>
+<p>Spatial GeoTIFF files (.tif) depicting NWS estimated niche capacity and spread are available on the <a href="https://osf.io/uvqmw/">Open Science Framework</a>. Here we link the location and download the files to a demonstration directory (<code>/demo</code>).<br>
+<strong>Downloaded Files:</strong><br>
+- <em>spread_GeoTIFF_2026-03-24.zip</em>: Zipped folder containing estimated NWS spread.<br>
+- <em>niche_GeoTIFF_2026-03-24.zip</em>: Zipped folder containing niche-based estimates for NWS detections.<br>
+- <em>study_polygons.gpkg</em>: Geopackage containing <em>sf</em> class multipolygons delineating political boundaries.<br>
+- <em>sim_locations_2026-03-24.csv</em>: Simulated NWS detections; the same file is reproduced in this script.</p>
+<div class="cell">
+<details open="">
+<summary>Hide code</summary>
+<div class="sourceCode cell-code" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="co"># file location on OSF</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>osf_project_location <span class="ot">&lt;-</span> <span class="fu">osf_retrieve_node</span>(<span class="st">"https://osf.io/uvqmw/"</span>)</span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Project anem on OSF</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>osf_project_location<span class="sc">$</span>name </span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+<div class="cell-output cell-output-stdout">
+<pre><code>[1] "hominivorax-geostat"</code></pre>
+</div>
+<details open="">
+<summary>Hide code</summary>
+<div class="sourceCode cell-code" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="co"># create demo directory</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> (<span class="sc">!</span><span class="fu">dir.exists</span>(<span class="st">"demo"</span>)) <span class="fu">dir.create</span>(<span class="st">"demo"</span>, <span class="at">recursive =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a><span class="co"># get data file names</span></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>osf_id <span class="ot">&lt;-</span> osf_project_location <span class="sc">%&gt;%</span></span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">osf_ls_files</span>()</span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a><span class="co"># download all data</span></span>
+<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a><span class="fu">osf_download</span>(osf_id,</span>
+<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a>             <span class="at">path =</span> <span class="fu">here</span>(<span class="st">"demo"</span>),</span>
+<span id="cb5-11"><a href="#cb5-11" aria-hidden="true" tabindex="-1"></a>             <span class="at">conflicts =</span> <span class="st">"overwrite"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+<div class="cell-output-display">
+<div class="kable-table">
+<table class="table table-sm table-striped">
+<colgroup>
+<col style="width: 0%">
+<col style="width: 0%">
+<col style="width: 0%">
+<col style="width: 97%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">name</th>
+<th style="text-align: left;">id</th>
+<th style="text-align: left;">local_path</th>
+<th style="text-align: left;">meta</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">spread_GeoTIFF_2026-03-24.zip</td>
+<td style="text-align: left;">69c2d3a4e03dca33dc229717</td>
+<td style="text-align: left;">demo/spread_GeoTIFF_2026-03-24.zip</td>
+<td style="text-align: left;">spread_GeoTIFF_2026-03-24.zip , file , /69c2d3a4e03dca33dc229717 , 2465016 , osfstorage , /spread_GeoTIFF_2026-03-24.zip , 1774375844 , 1774375844 , 09634b49a5a4cf7152e86cceaee889e0 , d1b3407a37034b84c5e5e62dd39fce63f265b92ec42b0f7e8d1e4119aee1546c , 5 , FALSE , 1 , FALSE , https://api.osf.io/v2/files/69c2d3a4e03dca33dc229717/ , https://files.osf.io/v1/resources/uvqmw/providers/osfstorage/69c2d3a4e03dca33dc229717 , https://files.osf.io/v1/resources/uvqmw/providers/osfstorage/69c2d3a4e03dca33dc229717 , https://files.osf.io/v1/resources/uvqmw/providers/osfstorage/69c2d3a4e03dca33dc229717 , https://osf.io/download/69c2d3a4e03dca33dc229717/ , https://mfr.osf.io/render?url=https%3A%2F%2Fosf.io%2Fdownload%2F69c2d3a4e03dca33dc229717%2F%3Fdirect%26mode%3Drender, https://osf.io/uvqmw/files/osfstorage/69c2d3a4e03dca33dc229717 , https://api.osf.io/v2/files/69c2d3a4e03dca33dc229717/ , https://api.osf.io/v2/files/69c2b365ae03e5ce6d107b09/ , 69c2b365ae03e5ce6d107b09 , files , https://api.osf.io/v2/files/69c2d3a4e03dca33dc229717/versions/ , https://api.osf.io/v2/nodes/uvqmw/ , uvqmw , nodes , https://api.osf.io/v2/nodes/uvqmw/ , nodes , nodes , uvqmw , https://api.osf.io/v2/files/69c2d3a4e03dca33dc229717/cedar_metadata_records/</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">niche_GeoTIFF_2026-03-24.zip</td>
+<td style="text-align: left;">69c3204a686690fea0927d64</td>
+<td style="text-align: left;">demo/niche_GeoTIFF_2026-03-24.zip</td>
+<td style="text-align: left;">niche_GeoTIFF_2026-03-24.zip , file , /69c3204a686690fea0927d64 , 12205660 , osfstorage , /niche_GeoTIFF_2026-03-24.zip , 1774395466 , 1774395466 , eb0bbf520ebbb15df84d02ad2222e6c3 , 28dd79fcc7f42242a3e9b1b68ba6598875452d77de9a5453e1bf5e791f76baaa , 4 , FALSE , 1 , FALSE , https://api.osf.io/v2/files/69c3204a686690fea0927d64/ , https://files.osf.io/v1/resources/uvqmw/providers/osfstorage/69c3204a686690fea0927d64 , https://files.osf.io/v1/resources/uvqmw/providers/osfstorage/69c3204a686690fea0927d64 , https://files.osf.io/v1/resources/uvqmw/providers/osfstorage/69c3204a686690fea0927d64 , https://osf.io/download/69c3204a686690fea0927d64/ , https://mfr.osf.io/render?url=https%3A%2F%2Fosf.io%2Fdownload%2F69c3204a686690fea0927d64%2F%3Fdirect%26mode%3Drender, https://osf.io/uvqmw/files/osfstorage/69c3204a686690fea0927d64 , https://api.osf.io/v2/files/69c3204a686690fea0927d64/ , https://api.osf.io/v2/files/69c2b365ae03e5ce6d107b09/ , 69c2b365ae03e5ce6d107b09 , files , https://api.osf.io/v2/files/69c3204a686690fea0927d64/versions/ , https://api.osf.io/v2/nodes/uvqmw/ , uvqmw , nodes , https://api.osf.io/v2/nodes/uvqmw/ , nodes , nodes , uvqmw , https://api.osf.io/v2/files/69c3204a686690fea0927d64/cedar_metadata_records/</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">study_polygons.gpkg</td>
+<td style="text-align: left;">69c2c12bcf7cb14d7b48c456</td>
+<td style="text-align: left;">demo/study_polygons.gpkg</td>
+<td style="text-align: left;">study_polygons.gpkg , file , /69c2c12bcf7cb14d7b48c456 , 2670592 , osfstorage , /study_polygons.gpkg , 1774371115 , 1774371115 , 08c72aa055cb38b1473caa3a8063527c , 6734b6f66ebf27962f003e81962bd391cf1381fc74660ddabe64b01fc68b8160 , 6 , FALSE , 1 , FALSE , https://api.osf.io/v2/files/69c2c12bcf7cb14d7b48c456/ , https://files.osf.io/v1/resources/uvqmw/providers/osfstorage/69c2c12bcf7cb14d7b48c456 , https://files.osf.io/v1/resources/uvqmw/providers/osfstorage/69c2c12bcf7cb14d7b48c456 , https://files.osf.io/v1/resources/uvqmw/providers/osfstorage/69c2c12bcf7cb14d7b48c456 , https://osf.io/download/69c2c12bcf7cb14d7b48c456/ , https://mfr.osf.io/render?url=https%3A%2F%2Fosf.io%2Fdownload%2F69c2c12bcf7cb14d7b48c456%2F%3Fdirect%26mode%3Drender, https://osf.io/uvqmw/files/osfstorage/69c2c12bcf7cb14d7b48c456 , https://api.osf.io/v2/files/69c2c12bcf7cb14d7b48c456/ , https://api.osf.io/v2/files/69c2b365ae03e5ce6d107b09/ , 69c2b365ae03e5ce6d107b09 , files , https://api.osf.io/v2/files/69c2c12bcf7cb14d7b48c456/versions/ , https://api.osf.io/v2/nodes/uvqmw/ , uvqmw , nodes , https://api.osf.io/v2/nodes/uvqmw/ , nodes , nodes , uvqmw , https://api.osf.io/v2/files/69c2c12bcf7cb14d7b48c456/cedar_metadata_records/</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">sim_locations_2026-03-24.csv</td>
+<td style="text-align: left;">69c2f06142e811a7159282bc</td>
+<td style="text-align: left;">demo/sim_locations_2026-03-24.csv</td>
+<td style="text-align: left;">sim_locations_2026-03-24.csv , file , /69c2f06142e811a7159282bc , 17625680 , osfstorage , /sim_locations_2026-03-24.csv , 1774383201 , 1774383201 , 90d4cf68473c797fb0d4b8b007fa9519 , 852f7fc148ea5051bc70337ac34ad51f5f8c59f536d88a6f2a555ab8c9cf956d , 4 , FALSE , 1 , FALSE , https://api.osf.io/v2/files/69c2f06142e811a7159282bc/ , https://files.osf.io/v1/resources/uvqmw/providers/osfstorage/69c2f06142e811a7159282bc , https://files.osf.io/v1/resources/uvqmw/providers/osfstorage/69c2f06142e811a7159282bc , https://files.osf.io/v1/resources/uvqmw/providers/osfstorage/69c2f06142e811a7159282bc , https://osf.io/download/69c2f06142e811a7159282bc/ , https://mfr.osf.io/render?url=https%3A%2F%2Fosf.io%2Fdownload%2F69c2f06142e811a7159282bc%2F%3Fdirect%26mode%3Drender, https://osf.io/uvqmw/files/osfstorage/69c2f06142e811a7159282bc , https://api.osf.io/v2/files/69c2f06142e811a7159282bc/ , https://api.osf.io/v2/files/69c2b365ae03e5ce6d107b09/ , 69c2b365ae03e5ce6d107b09 , files , https://api.osf.io/v2/files/69c2f06142e811a7159282bc/versions/ , https://api.osf.io/v2/nodes/uvqmw/ , uvqmw , nodes , https://api.osf.io/v2/nodes/uvqmw/ , nodes , nodes , uvqmw , https://api.osf.io/v2/files/69c2f06142e811a7159282bc/cedar_metadata_records/</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+</section>
+<section id="spatial-polygons" class="level2">
+<h2 class="anchored" data-anchor-id="spatial-polygons">Spatial Polygons</h2>
+<p>Read polygons defining jurisdictional boundaries</p>
+<div class="cell">
+<details open="">
+<summary>Hide code</summary>
+<div class="sourceCode cell-code" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>states_proj <span class="ot">&lt;-</span> <span class="fu">st_read</span>(<span class="fu">here</span>(<span class="st">"demo/study_polygons.gpkg"</span>))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+<div class="cell-output cell-output-stdout">
+<pre><code>Reading layer `study_states' from data source 
+  `D:\Github\hominivorax-geostat\demo\study_polygons.gpkg' using driver `GPKG'
+Simple feature collection with 492 features and 122 fields
+Geometry type: MULTIPOLYGON
+Dimension:     XY
+Bounding box:  xmin: -4363.574 ymin: -2203.058 xmax: 2962.346 ymax: 2835.693
+Projected CRS: +proj=aea +lat_0=20 +lon_0=-75 +lat_1=10 +lat_2=30 +x_0=0 +y_0=0 +datum=WGS84 +units=km +no_defs</code></pre>
+</div>
+</div>
+<p>Simplify geometry to help define spatial extent of study area.</p>
+<div class="cell">
+<details open="">
+<summary>Hide code</summary>
+<div class="sourceCode cell-code" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>states_union <span class="ot">&lt;-</span> <span class="fu">st_union</span>(states_proj) <span class="co"># dissolve states</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a><span class="co"># explode islands</span></span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>poly_single <span class="ot">&lt;-</span> <span class="fu">st_cast</span>(states_union, <span class="st">"POLYGON"</span>, <span class="at">warn =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a><span class="co"># calculate areas</span></span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a>areas <span class="ot">&lt;-</span> <span class="fu">st_area</span>(poly_single)</span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a><span class="co"># set threshold to remove smaller islands</span></span>
+<span id="cb8-10"><a href="#cb8-10" aria-hidden="true" tabindex="-1"></a>threshold <span class="ot">&lt;-</span> units<span class="sc">::</span><span class="fu">set_units</span>(<span class="dv">500</span>, km<span class="sc">^</span><span class="dv">2</span>)</span>
+<span id="cb8-11"><a href="#cb8-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-12"><a href="#cb8-12" aria-hidden="true" tabindex="-1"></a><span class="co"># remove islands</span></span>
+<span id="cb8-13"><a href="#cb8-13" aria-hidden="true" tabindex="-1"></a>states_simple <span class="ot">&lt;-</span> poly_single[areas <span class="sc">&gt;</span> threshold, ]</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+</div>
+</section>
+<section id="simulated-nws-cases" class="level2">
+<h2 class="anchored" data-anchor-id="simulated-nws-cases">Simulated NWS Cases</h2>
+<p>These are simulated NWS cases as simulated in the <a href="">Simulation tab</a> of this site.</p>
+<div class="cell">
+<details open="">
+<summary>Hide code</summary>
+<div class="sourceCode cell-code" id="cb9"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>sim_data_df <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(<span class="fu">here</span>(<span class="st">"demo/sim_locations_2026-03-24.csv"</span>))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+<div class="cell-output cell-output-stderr">
+<pre><code>Rows: 389536 Columns: 4
+── Column specification ────────────────────────────────────────────────────────
+Delimiter: ","
+dbl (4): year, week, x, y
+
+ℹ Use `spec()` to retrieve the full column specification for this data.
+ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.</code></pre>
+</div>
+<details open="">
+<summary>Hide code</summary>
+<div class="sourceCode cell-code" id="cb11"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a>nws_points <span class="ot">&lt;-</span> <span class="fu">vect</span>(sim_data_df, <span class="at">geom =</span> <span class="fu">c</span>(<span class="st">"x"</span>, <span class="st">"y"</span>), <span class="at">crs =</span> <span class="st">"EPSG:4326"</span>) <span class="co"># raw are unprojected</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>nws_points <span class="ot">&lt;-</span> <span class="fu">project</span>(nws_points, <span class="fu">crs</span>(states_proj)) <span class="co"># project to aea, units km</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+</div>
+</section>
+<section id="build-spatial-mesh" class="level2">
+<h2 class="anchored" data-anchor-id="build-spatial-mesh">Build Spatial Mesh</h2>
+<p>Define spatial domain through construction of a spatial triangulation (mesh). Requires use of the <a href="https://www.r-inla.org/home"><strong>r-INLA</strong> package</a>.</p>
+<div class="cell">
+<details open="">
+<summary>Hide code</summary>
+<div class="sourceCode cell-code" id="cb12"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="co"># process requires classic spatial objects</span></span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>points_sp <span class="ot">&lt;-</span> <span class="fu">as</span>(nws_points, <span class="st">"Spatial"</span>)</span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a><span class="co"># slight buffer distance to smooth edges</span></span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a>states_simple_buf <span class="ot">&lt;-</span> <span class="fu">st_buffer</span>(states_simple, <span class="at">dist =</span> <span class="dv">20</span>)</span>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a>simple_union <span class="ot">&lt;-</span> <span class="fu">st_union</span>(states_simple_buf) <span class="co"># dissolve states</span></span>
+<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a><span class="co"># convert to Spatial</span></span>
+<span id="cb12-9"><a href="#cb12-9" aria-hidden="true" tabindex="-1"></a>dom_bnds <span class="ot">&lt;-</span>  <span class="fu">as</span>(simple_union, <span class="st">"Spatial"</span>)</span>
+<span id="cb12-10"><a href="#cb12-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-11"><a href="#cb12-11" aria-hidden="true" tabindex="-1"></a><span class="co"># to INLA format</span></span>
+<span id="cb12-12"><a href="#cb12-12" aria-hidden="true" tabindex="-1"></a>dom_seg <span class="ot">&lt;-</span> <span class="fu">inla.sp2segment</span>(dom_bnds)</span>
+<span id="cb12-13"><a href="#cb12-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-14"><a href="#cb12-14" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">1976</span>)</span>
+<span id="cb12-15"><a href="#cb12-15" aria-hidden="true" tabindex="-1"></a>mesh.dom <span class="ot">&lt;-</span> <span class="fu">inla.mesh.2d</span>(<span class="at">boundary =</span> dom_seg, </span>
+<span id="cb12-16"><a href="#cb12-16" aria-hidden="true" tabindex="-1"></a>                        <span class="at">loc =</span> points_sp,</span>
+<span id="cb12-17"><a href="#cb12-17" aria-hidden="true" tabindex="-1"></a>                        <span class="at">cutoff =</span> <span class="dv">25</span>, </span>
+<span id="cb12-18"><a href="#cb12-18" aria-hidden="true" tabindex="-1"></a>                        <span class="at">max.edge =</span> <span class="fu">c</span>(<span class="dv">50</span>, <span class="dv">200</span>),</span>
+<span id="cb12-19"><a href="#cb12-19" aria-hidden="true" tabindex="-1"></a>                        <span class="at">offset =</span> <span class="fu">c</span>(<span class="dv">100</span>,<span class="dv">250</span>),</span>
+<span id="cb12-20"><a href="#cb12-20" aria-hidden="true" tabindex="-1"></a>                        <span class="at">min.angle =</span> <span class="dv">30</span>) </span>
+<span id="cb12-21"><a href="#cb12-21" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-22"><a href="#cb12-22" aria-hidden="true" tabindex="-1"></a>mesh.dom<span class="sc">$</span>n <span class="co"># node number</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+<div class="cell-output cell-output-stdout">
+<pre><code>[1] 15346</code></pre>
+</div>
+</div>
+<section id="view-mesh" class="level3">
+<h3 class="anchored" data-anchor-id="view-mesh">View Mesh</h3>
+<p>Simulated NWS cases overlain as points.</p>
+<div class="cell">
+<details open="">
+<summary>Hide code</summary>
+<div class="sourceCode cell-code" id="cb14"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="fu">plot_mesh</span>(mesh.dom)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+<div class="cell-output-display">
+<p><img src="spatial_domain_files/figure-html/unnamed-chunk-8-1.png" class="img-fluid" width="1440"></p>
+</div>
+</div>
+</section>
+</section>
+<section id="natural-neighborhoods" class="level2">
+<h2 class="anchored" data-anchor-id="natural-neighborhoods">Natural Neighborhoods</h2>
+<p>Apply tessellation to mesh vertices to identify area of support, or natural neighborhoods around each.</p>
+<div class="cell">
+<details open="">
+<summary>Hide code</summary>
+<div class="sourceCode cell-code" id="cb15"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="co"># mesh areas to polygons</span></span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>mesh_polys <span class="ot">&lt;-</span> <span class="fu">convert_mesh_poly</span>(mesh.dom)</span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a><span class="co"># to spatvector and project</span></span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a>mesh_polys <span class="ot">&lt;-</span> <span class="fu">vect</span>(mesh_polys)</span>
+<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a><span class="fu">crs</span>(mesh_polys) <span class="ot">&lt;-</span> <span class="fu">crs</span>(states_proj)</span>
+<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-8"><a href="#cb15-8" aria-hidden="true" tabindex="-1"></a><span class="co"># calculate area</span></span>
+<span id="cb15-9"><a href="#cb15-9" aria-hidden="true" tabindex="-1"></a>mesh_polys<span class="sc">$</span>area <span class="ot">&lt;-</span> <span class="fu">expanse</span>(mesh_polys, <span class="at">unit =</span> <span class="st">"km"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+</div>
+<section id="plot-neighborhoods" class="level3">
+<h3 class="anchored" data-anchor-id="plot-neighborhoods">Plot Neighborhoods</h3>
+<p>Visual inspection of study area with neighborhoods color coded by geographic area and overlain with mesh and nodes.</p>
+<div class="cell">
+<details open="">
+<summary>Hide code</summary>
+<div class="sourceCode cell-code" id="cb16"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a>mesh_polys_sf <span class="ot">&lt;-</span> sf<span class="sc">::</span><span class="fu">st_as_sf</span>(mesh_polys)</span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a><span class="fu">plot_duel_mesh</span>(mesh_polys_sf, mesh.dom,</span>
+<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a>               <span class="at">bbox =</span> <span class="fu">c</span>(<span class="at">xmin =</span> <span class="sc">-</span><span class="dv">2500</span>, <span class="co"># zoom to location extent</span></span>
+<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a>                        <span class="at">ymin =</span> <span class="sc">-</span><span class="dv">2500</span>, </span>
+<span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a>                        <span class="at">xmax =</span> <span class="dv">1500</span>, </span>
+<span id="cb16-7"><a href="#cb16-7" aria-hidden="true" tabindex="-1"></a>                        <span class="at">ymax =</span> <span class="dv">1500</span>))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+<div class="cell-output-display">
+<p><img src="spatial_domain_files/figure-html/unnamed-chunk-10-1.png" class="img-fluid" width="1440"></p>
+</div>
+</div>
+<p>Zoom in closer and remove ocean neighborhoods</p>
+<div class="cell">
+<details open="">
+<summary>Hide code</summary>
+<div class="sourceCode cell-code" id="cb17"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a>states_simple_sf <span class="ot">&lt;-</span> <span class="fu">st_as_sf</span>(states_simple)</span>
+<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a>mesh_polys_sf_crop <span class="ot">&lt;-</span> <span class="fu">st_intersection</span>(mesh_polys_sf, states_simple_sf)</span>
+<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a><span class="fu">plot_duel_mesh</span>(mesh_polys_sf_crop, mesh.dom,</span>
+<span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a>               <span class="at">bbox =</span> <span class="fu">c</span>(<span class="at">xmin =</span> <span class="sc">-</span><span class="dv">1500</span>, <span class="co"># zoom location</span></span>
+<span id="cb17-6"><a href="#cb17-6" aria-hidden="true" tabindex="-1"></a>                        <span class="at">ymin =</span> <span class="sc">-</span><span class="dv">1100</span>, </span>
+<span id="cb17-7"><a href="#cb17-7" aria-hidden="true" tabindex="-1"></a>                        <span class="at">xmax =</span> <span class="sc">-</span><span class="dv">400</span>, </span>
+<span id="cb17-8"><a href="#cb17-8" aria-hidden="true" tabindex="-1"></a>                        <span class="at">ymax =</span> <span class="sc">-</span><span class="dv">50</span>))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+<div class="cell-output-display">
+<p><img src="spatial_domain_files/figure-html/unnamed-chunk-11-1.png" class="img-fluid" width="1440"></p>
+</div>
+</div>
+
+
+</section>
+</section>
+
+</main> <!-- /main -->
+<script id="quarto-html-after-body" type="application/javascript">
+window.document.addEventListener("DOMContentLoaded", function (event) {
+  const toggleBodyColorMode = (bsSheetEl) => {
+    const mode = bsSheetEl.getAttribute("data-mode");
+    const bodyEl = window.document.querySelector("body");
+    if (mode === "dark") {
+      bodyEl.classList.add("quarto-dark");
+      bodyEl.classList.remove("quarto-light");
+    } else {
+      bodyEl.classList.add("quarto-light");
+      bodyEl.classList.remove("quarto-dark");
+    }
+  }
+  const toggleBodyColorPrimary = () => {
+    const bsSheetEl = window.document.querySelector("link#quarto-bootstrap");
+    if (bsSheetEl) {
+      toggleBodyColorMode(bsSheetEl);
+    }
+  }
+  toggleBodyColorPrimary();  
+  const icon = "";
+  const anchorJS = new window.AnchorJS();
+  anchorJS.options = {
+    placement: 'right',
+    icon: icon
+  };
+  anchorJS.add('.anchored');
+  const clipboard = new window.ClipboardJS('.code-copy-button', {
+    target: function(trigger) {
+      return trigger.previousElementSibling;
+    }
+  });
+  clipboard.on('success', function(e) {
+    // button target
+    const button = e.trigger;
+    // don't keep focus
+    button.blur();
+    // flash "checked"
+    button.classList.add('code-copy-button-checked');
+    var currentTitle = button.getAttribute("title");
+    button.setAttribute("title", "Copied!");
+    let tooltip;
+    if (window.bootstrap) {
+      button.setAttribute("data-bs-toggle", "tooltip");
+      button.setAttribute("data-bs-placement", "left");
+      button.setAttribute("data-bs-title", "Copied!");
+      tooltip = new bootstrap.Tooltip(button, 
+        { trigger: "manual", 
+          customClass: "code-copy-button-tooltip",
+          offset: [0, -8]});
+      tooltip.show();    
+    }
+    setTimeout(function() {
+      if (tooltip) {
+        tooltip.hide();
+        button.removeAttribute("data-bs-title");
+        button.removeAttribute("data-bs-toggle");
+        button.removeAttribute("data-bs-placement");
+      }
+      button.setAttribute("title", currentTitle);
+      button.classList.remove('code-copy-button-checked');
+    }, 1000);
+    // clear code selection
+    e.clearSelection();
+  });
+  function tippyHover(el, contentFn) {
+    const config = {
+      allowHTML: true,
+      content: contentFn,
+      maxWidth: 500,
+      delay: 100,
+      arrow: false,
+      appendTo: function(el) {
+          return el.parentElement;
+      },
+      interactive: true,
+      interactiveBorder: 10,
+      theme: 'quarto',
+      placement: 'bottom-start'
+    };
+    window.tippy(el, config); 
+  }
+  const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+  for (var i=0; i<noterefs.length; i++) {
+    const ref = noterefs[i];
+    tippyHover(ref, function() {
+      // use id or data attribute instead here
+      let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+      try { href = new URL(href).hash; } catch {}
+      const id = href.replace(/^#\/?/, "");
+      const note = window.document.getElementById(id);
+      return note.innerHTML;
+    });
+  }
+  const findCites = (el) => {
+    const parentEl = el.parentElement;
+    if (parentEl) {
+      const cites = parentEl.dataset.cites;
+      if (cites) {
+        return {
+          el,
+          cites: cites.split(' ')
+        };
+      } else {
+        return findCites(el.parentElement)
+      }
+    } else {
+      return undefined;
+    }
+  };
+  var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+  for (var i=0; i<bibliorefs.length; i++) {
+    const ref = bibliorefs[i];
+    const citeInfo = findCites(ref);
+    if (citeInfo) {
+      tippyHover(citeInfo.el, function() {
+        var popup = window.document.createElement('div');
+        citeInfo.cites.forEach(function(cite) {
+          var citeDiv = window.document.createElement('div');
+          citeDiv.classList.add('hanging-indent');
+          citeDiv.classList.add('csl-entry');
+          var biblioDiv = window.document.getElementById('ref-' + cite);
+          if (biblioDiv) {
+            citeDiv.innerHTML = biblioDiv.innerHTML;
+          }
+          popup.appendChild(citeDiv);
+        });
+        return popup.innerHTML;
+      });
+    }
+  }
+});
+</script>
+</div> <!-- /content -->
+<footer class="footer">
+  <div class="nav-footer">
+    <div class="nav-footer-right">Built with <a href="https://quarto.org/">Quarto</a></div>
+  </div>
+</footer>
+
+
+
+<script src="site_libs/quarto-html/zenscroll-min.js"></script>
+</body></html>

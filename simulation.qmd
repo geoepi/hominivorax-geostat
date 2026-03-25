@@ -1,0 +1,223 @@
+---
+title: "Simulation"
+description: "Source data download and simulation of NWS detections"
+format:
+  html: 
+    df-print: kable
+    code-fold: show
+    code-summary: "Hide code"
+    code-overflow: wrap
+    toc-title: Page Contents
+    toc: true
+    toc-depth: 2
+    toc-location: right
+    number-sections: false
+    html-math-method: katex
+    smooth-scroll: true
+editor: source
+editor_options: 
+  chunk_output_type: console
+---
+```{=html}
+<style type="text/css">
+
+body, td {
+   font-size: 11pt;
+}
+code.r{
+  font-size: 9pt;
+}
+pre {
+  font-size: 11pt
+}
+</style>
+```
+
+
+## Overview
+The script demonstrates how to download model results archived on the Open Science Framework (OSF) and simulate New World screwworm (NWS) case detections.   
+    
+The downloaded data include`s spatial GeoTiff files depicting niche capacity and estimated spread for each week between January 2022 and February 2026, spatial boundaries for analysis and visualization, and a copy of previously simulated NWS cases.   
+
+## Libraries  
+Load needed libraries and packages.  
+```{r, warning=FALSE, message=FALSE}
+library(tidyverse) # data wrangling
+options(dplyr.summarise.inform = FALSE)
+library(here) # directory managment
+library(pals) # color palettes
+library(osfr) # interact with Open Science Framework (OSF, data repository)
+library(terra) # spatial data manipulation
+library(sf) # spatial data manipulation
+library(spatstat) # spatial data manipulation
+```
+
+## Custom Functions 
+Load customized functions.  
+```{r, warning=FALSE, message=FALSE}
+source(here("R/utilities.R"))
+source_dir(here("R"))
+```
+
+## Download OSF Data  
+Spatial GeoTIFF files (.tif) depicting NWS estimated niche capacity and spread are available on the [Open Science Framework](https://osf.io/uvqmw/).  Here we link the location and download the files to a demonstration directory (`/demo`).   
+**Downloaded Files:**    
+- *spread_GeoTIFF_2026-03-24.zip*: Zipped folder containing estimated NWS spread.       
+- *niche_GeoTIFF_2026-03-24.zip*: Zipped folder containing niche-based estimates for NWS detections.   
+- *study_polygons.gpkg*: Geopackage containing *sf* class multipolygons delineating political boundaries.    
+- *sim_locations_2026-03-24.csv*: Simulated NWS detections; the same file is reproduced in this script.   
+   
+
+```{r, warning=FALSE, message=FALSE}
+# file location on OSF
+osf_project_location <- osf_retrieve_node("https://osf.io/uvqmw/")
+
+# Project anem on OSF
+osf_project_location$name 
+
+# create demo directory
+if (!dir.exists("demo")) dir.create("demo", recursive = TRUE)
+
+# get data file names
+osf_id <- osf_project_location %>%
+  osf_ls_files()
+
+# download all data
+osf_download(osf_id,
+             path = here("demo"),
+             conflicts = "overwrite")
+```
+
+#### Unzip Grids
+Spatial grids are bundled in zip files. Unzip the files.  
+```{r}
+osf_id$name # file names
+
+unzip(file.path(here("demo"),"spread_GeoTIFF_2026-03-24.zip"), exdir = here("demo")) # spread grids
+unzip(file.path(here("demo"), "niche_GeoTIFF_2026-03-24.zip"), exdir = here("demo")) # niche grids
+```
+
+#### Spatial Polygons
+Read polygons defining jurisdictional boundaries
+```{r, warning=FALSE, message=FALSE}
+states_proj <- st_read(here("demo/study_polygons.gpkg"))
+```
+
+
+## Inspect Grids
+Spatial grid file names are coded with the year and week they represent.  The *stack_rasters()* function will read the files from the corresponding directory, order them by year and week, and return the data as SpatRaster objects. Values in both objects provide the number of NWS detections per 25x25~km grid cell (approx. 625~km$^2$).  The *niche* product is the number of *possible* detections based on environmental conditions, whereas the *spread* product is an estimate of how many occurred between January 2022 and February 2026.  
+
+```{r, warning=FALSE, message=FALSE}
+niche_stk <- stack_rasters(here("demo/niche")) # reflecting niche conditions, limits, or capacity
+spread_stk <- stack_rasters(here("demo/spread")) # reflecting invasion/spread
+```
+
+
+#### Example Niche Maps
+```{r fig.width=15, fig.height=15, warning=FALSE, message=FALSE}
+quick_map_plot(grid_stk=niche_stk, target_year=2024, target_week=10, boundary_polys=states_proj)
+quick_map_plot(grid_stk=niche_stk, target_year=2025, target_week=30, boundary_polys=states_proj)
+```
+
+#### Example Spread Maps
+```{r fig.width=15, fig.height=15, warning=FALSE, message=FALSE}
+quick_map_plot(grid_stk=spread_stk, target_year=2024, target_week=10, boundary_polys=states_proj)
+quick_map_plot(grid_stk=spread_stk, target_year=2025, target_week=30, boundary_polys=states_proj)
+```
+
+
+## Estimated Detections
+The *sum_intensity_grid()* function, when applied to the estimated spread grids, will sum the estimated number of detections for each week.  This approximates the mean number of cases as predicted by the model. Note that the function includes an input option `min_est=` that specifies the minimum cell value to consider a detection.  
+   
+The dataframe returned by the function includes a column *count* that will be used to simulate spatial points in the next step.   
+```{r fig_width=15, fig.height=10, warning=FALSE, message=FALSE}
+weekly_counts <- sum_intensity_grid(spread_stk, min_est = 1)
+
+ggplot(data = weekly_counts, aes(x = date, y = count)) +
+  geom_col(fill = "steelblue", alpha = 0.6, width = 7) + 
+  theme_minimal() +
+  scale_x_date(date_labels = "%b %Y", date_breaks = "3 months") + 
+  scale_y_continuous(breaks=scales::pretty_breaks(6)) + 
+  theme(
+    plot.margin = unit(c(5, 0.01, 5, 0.01), "cm"),
+    legend.position = " none",
+    legend.background = element_rect(fill = "white", color = "grey90"),
+    plot.title = element_text(face = "bold", size = 16),
+    axis.title   = element_text(size = 22, face = "bold"),
+    axis.text.x    = element_text(size = 16, face = "bold", angle = 45, hjust = 1),
+    axis.text.y    = element_text(size = 16, face = "bold")
+  ) +
+  labs(
+    title = " ",
+    subtitle = " ",
+    x = " ",
+    y = "Estimated Case Count",
+    caption = " "
+  )
+
+```
+
+
+## Simulate Spatial Points
+The *simulate_detection_points()* function will use the [**spatstat** package](https://spatstat.org/) to generate random spatial points based on target weekly counts given in the *weekly_counts* dataframe created in the prior step, and estimated intensity as given in the spread grids (*spread_stk*).  Values in *spread_stk* serve as weights for probabilistic assignment of point locations.       
+  
+The returned result is a dataframe with x and y coordinates, year, and week.  Note that the projected coordinate system is used by default.  Conversion to latitude and longitude can be performed as shown below. 
+```{r, warning=FALSE, message=FALSE}
+sim_points <- simulate_detection_points(raster_stack=spread_stk,
+                                        obs_df=weekly_counts, 
+                                        rseed=1976
+                                        )
+
+n_sim_points <- dim(sim_points)[1] # number simulated
+n_est_detctions <- sum(weekly_counts$count) # number estimated by model
+n_sim_points == n_est_detctions # same
+
+head(sim_points)
+
+# convert to SpatVector points
+nws_points <- vect(sim_points, geom = c("x", "y"), crs = crs(spread_stk)) # projected 
+nws_points <- project(nws_points, "EPSG:4326") # convert to lat/long
+
+
+# back to dataframe, if needed
+nws_point_latlong_df <- as.data.frame(nws_points, geom = "xy")
+head(nws_point_latlong_df)
+```
+
+
+Save a copy of simulated point locations.  **Note:** This file is included in initial download from OSF above. 
+```{r eval=FALSE}
+write_csv(nws_point_latlong_df, here("demo/sim_locations_2026-03-24.csv"))
+
+```
+
+
+#### Map Points  
+Visual insection of simulated locations for select weeks.    
+```{r fig.width=15, fig.height=15, warning=FALSE, message=15}
+quick_point_map(target_year=2022, target_week=10, 
+                boundary_polys=states_proj, 
+                point_data=sim_points)
+```
+
+```{r fig.width=15, fig.height=15, warning=FALSE, message=15}
+quick_point_map(target_year=2024, target_week=30, 
+                boundary_polys=states_proj, 
+                point_data=sim_points)
+```
+
+```{r fig.width=15, fig.height=15, warning=FALSE, message=15}
+quick_point_map(target_year=2026, target_week=2, 
+                boundary_polys=states_proj, 
+                point_data=sim_points)
+```
+
+
+
+
+
+
+
+
+
+

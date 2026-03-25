@@ -53,6 +53,12 @@ secrets.yaml
 # local data
 /local
 
+# code demo directory
+/demo
+
+# notes, to be added later
+/scripts
+
 # quarto
 /.quarto/
 
