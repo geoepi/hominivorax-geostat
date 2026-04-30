@@ -172,7 +172,7 @@
     "href": "model.html#computational-privacy-note",
     "title": "Joint Spatiotemporal Model",
     "section": "2 Computational & Privacy Note",
-    "text": "2 Computational & Privacy Note\nNote: This script is for demonstrative purposes only and has not been executed within this document. The full joint model is computationally intensive, containing approximately 10.2 million latent entries and 260,185 replicated spatial field elements. Due to these requirements and the sensitive nature of the original surveillance coordinates, which involve private residences and businesses, the code provided here tracks the structural methodology but does not include the raw datasets."
+    "text": "2 Computational & Privacy Note\nThis script is for demonstrative purposes only and has not been executed within this document. The full joint model is computationally intensive, containing approximately 10.2 million latent entries and 260,185 replicated spatial field elements. Due to these requirements and the sensitive nature of the original surveillance coordinates, which involve private residences and businesses, the code provided here tracks the structural methodology but does not include the raw datasets."
   },
   {
     "objectID": "model.html#hpc-execution-environment",

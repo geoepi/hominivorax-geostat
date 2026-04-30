@@ -8,12 +8,14 @@ This repository provides the computational supporting information for:
 
 *Disentangling Detection and Abundance to Infer Invasion Dynamics in New World Screwworm (in review)*
 
-The Quarto documents are organized as a GitHub Pages site so readers can navigate methods, model demonstrations, and example outputs in HTML format.
+## External Links  
+[Webpage Version](Webpagehttps://geoepi.github.io/hominivorax-geostat/)    
+  
+[Hominivorax-Geostat (link)](https://osf.io/uvqmw/overview): Code and data archive on the Open Science Framework  
+  
 
-## Repository Structure
-
-The tree below summarizes repository contents for key non-ignored folders and top-level files.  
-
+## Repository Structure:  
+  
 ```text
 hominivorax-geostat/
 |- R/                      # analysis and plotting functions
@@ -28,4 +30,5 @@ hominivorax-geostat/
 |- README.md
 |- hominivorax-geostat.Rproj
 |- .gitignore
+
 ```

@@ -53,9 +53,9 @@ knitr::include_graphics(here::here("images/animation.gif"))
 
 ## Site Contents    
 Use the below links or tabs at the top of the page to navigate to different sections of the analysis.    
-- [**Simulation**](): Interactive download of supporting data and simulation of demonstrative case detections.     
-- [**Tessellation**](): Spatial mesh construction, tessellation, and defining the spatial domain.   
-- [**Model**](): Model description, data organization, and model execution.   
+- [**Simulation**](https://geoepi.github.io/hominivorax-geostat/simulation.html): Interactive download of supporting data and simulation of demonstrative case detections.     
+- [**Tessellation**](https://geoepi.github.io/hominivorax-geostat/spatial_domain.html): Spatial mesh construction, tessellation, and defining the spatial domain.   
+- [**Model**](https://geoepi.github.io/hominivorax-geostat/model.html): Model description, data organization, and model execution.   
   
   
 ## External Resources  
