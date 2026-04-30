@@ -1,3 +1,8 @@
+#' sum_intensity_grid
+#'
+#' @description Utility function for geostatistical workflows used in this repository.
+#'
+#' @return Object produced by sum_intensity_grid() based on provided inputs.
 sum_intensity_grid <- function(raster_stack, min_est = 1) {
   
   stk_names <- names(raster_stack)

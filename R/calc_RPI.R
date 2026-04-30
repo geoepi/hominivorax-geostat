@@ -1,5 +1,10 @@
 # Reproductive Persistence Index (RPI)
 
+#' calc_RPI
+#'
+#' @description Utility function for geostatistical workflows used in this repository.
+#'
+#' @return Object produced by calc_RPI() based on provided inputs.
 calc_RPI <- function(count_stk, nws_obs, gen_days = 21, 
                      days_per_layer = 7, cut_quant = 0.10) {
   
@@ -11,6 +16,11 @@ calc_RPI <- function(count_stk, nws_obs, gen_days = 21,
   message(paste("Data-driven suitability threshold set at:", round(bio_threshold, 3)))
   
   # consecutive runs
+#' calc_max_run
+#'
+#' @description Utility function for geostatistical workflows used in this repository.
+#'
+#' @return Object produced by calc_max_run() based on provided inputs.
   calc_max_run <- function(x) {
     if (all(is.na(x))) return(NA)
     

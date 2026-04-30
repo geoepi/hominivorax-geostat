@@ -1,5 +1,10 @@
 library(spatstat)
 
+#' simulate_detection_points
+#'
+#' @description Utility function for geostatistical workflows used in this repository.
+#'
+#' @return Object produced by simulate_detection_points() based on provided inputs.
 simulate_detection_points <- function(raster_stack, obs_df, rseed=1976) {
   all_points_list <- list()
   stk_names <- names(raster_stack)

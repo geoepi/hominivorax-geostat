@@ -1,3 +1,8 @@
+#' stack_rasters
+#'
+#' @description Utility function for geostatistical workflows used in this repository.
+#'
+#' @return Object produced by stack_rasters() based on provided inputs.
 stack_rasters <- function(rast_dir) {
   
   library(terra)

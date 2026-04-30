@@ -1,3 +1,8 @@
+#' extract_mesh_network
+#'
+#' @description Utility function for geostatistical workflows used in this repository.
+#'
+#' @return Object produced by extract_mesh_network() based on provided inputs.
 extract_mesh_network <- function(mesh){
   
   # orginal source: https://github.com/timcdlucas/INLAutils

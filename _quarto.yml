@@ -3,13 +3,17 @@ project:
   output-dir: docs
   
 website: 
-  title: "NWS Dynamics"
+  title: "NWS Invasion Dynamics"
   navbar:
     left:
+      - href: index.qmd
+        text: Home
       - href: simulation.qmd
         text: Simulation
       - href: spatial_domain.qmd
-        text: Spatial
+        text: Tessellation
+      - href: model.qmd
+        text: Model
     right:
       - href: https://github.com/geoepi/hominivorax-geostat
         text: GeoEpi

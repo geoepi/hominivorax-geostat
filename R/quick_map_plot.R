@@ -1,3 +1,8 @@
+#' quick_map_plot
+#'
+#' @description Utility function for geostatistical workflows used in this repository.
+#'
+#' @return Object produced by quick_map_plot() based on provided inputs.
 quick_map_plot <- function(grid_stk, target_year, target_week, boundary_polys) {
   
   year_pat <- paste0("y", target_year)

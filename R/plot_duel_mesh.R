@@ -1,3 +1,8 @@
+#' plot_duel_mesh
+#'
+#' @description Utility function for geostatistical workflows used in this repository.
+#'
+#' @return Object produced by plot_duel_mesh() based on provided inputs.
 plot_duel_mesh <- function(
     mesh_polys_sf,
     mesh,

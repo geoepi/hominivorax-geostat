@@ -1,3 +1,8 @@
+#' estimate_stability
+#'
+#' @description Utility function for geostatistical workflows used in this repository.
+#'
+#' @return Object produced by estimate_stability() based on provided inputs.
 estimate_stability <- function(count_stk) {
 
   mean_rast <- terra::app(count_stk, fun = mean, na.rm = TRUE)

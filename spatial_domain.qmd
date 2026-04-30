@@ -1,6 +1,6 @@
 ---
-title: "Mesh"
-description: "Mesh construction, tesselation, and defining the spatial domain"
+title: "Tessellation"
+description: "Mesh construction, tessellation, and defining the spatial domain"
 format:
   html: 
     df-print: kable
@@ -35,10 +35,10 @@ pre {
 
 
 ## Overview
-The script demonstrates how to download model results archived on the Open Science Framework (OSF) and simulate New World screwworm (NWS) case detections.   
-    
-The downloaded data include`s spatial GeoTiff files depicting niche capacity and estimated spread for each week between January 2022 and February 2026, spatial boundaries for analysis and visualization, and a copy of previously simulated NWS cases.   
-
+The script demonstrates spatial discretization of the study area as detailed in the associated manuscript. First, a triangulated mesh is constructed using administrative boundaries and simulated case point locations. Next, *natural neighborhoods* are defined using Voronoi tessellation around simulated case points, such that each cell represents the area closest to a given detection point. The resulting polygons define the spatial support and associated integration weights for numerical approximation of the spatial point-process model.  
+  
+**Note:** This script assumes that supporting data has already been downloaded to a directory called `/demo` as described on the [Simulation]() page of this site.   
+   
 ## Libraries  
 Load needed libraries and packages.  
 ```{r, warning=FALSE, message=FALSE}
@@ -65,35 +65,6 @@ source(here("R/utilities.R"))
 source_dir(here("R"))
 ```
 
-## Download OSF Data  
-Spatial GeoTIFF files (.tif) depicting NWS estimated niche capacity and spread are available on the [Open Science Framework](https://osf.io/uvqmw/).  Here we link the location and download the files to a demonstration directory (`/demo`).   
-**Downloaded Files:**    
-- *spread_GeoTIFF_2026-03-24.zip*: Zipped folder containing estimated NWS spread.       
-- *niche_GeoTIFF_2026-03-24.zip*: Zipped folder containing niche-based estimates for NWS detections.   
-- *study_polygons.gpkg*: Geopackage containing *sf* class multipolygons delineating political boundaries.    
-- *sim_locations_2026-03-24.csv*: Simulated NWS detections; the same file is reproduced in this script.   
-   
-
-```{r, warning=FALSE, message=FALSE}
-# file location on OSF
-osf_project_location <- osf_retrieve_node("https://osf.io/uvqmw/")
-
-# Project anem on OSF
-osf_project_location$name 
-
-# create demo directory
-if (!dir.exists("demo")) dir.create("demo", recursive = TRUE)
-
-# get data file names
-osf_id <- osf_project_location %>%
-  osf_ls_files()
-
-# download all data
-osf_download(osf_id,
-             path = here("demo"),
-             conflicts = "overwrite")
-```
-
 
 ## Spatial Polygons
 Read polygons defining jurisdictional boundaries
@@ -102,7 +73,7 @@ states_proj <- st_read(here("demo/study_polygons.gpkg"))
 ```
 
 Simplify geometry to help define spatial extent of study area.  
-```{r}
+```{r warning=FALSE, message=FALSE}
 states_union <- st_union(states_proj) # dissolve states
 
 # explode islands
@@ -121,7 +92,7 @@ states_simple <- poly_single[areas > threshold, ]
 
 ## Simulated NWS Cases
 These are simulated NWS cases as simulated in the [Simulation tab]() of this site.
-```{r}
+```{r warning=FALSE, message=FALSE}
 sim_data_df <- read_csv(here("demo/sim_locations_2026-03-24.csv"))
 
 nws_points <- vect(sim_data_df, geom = c("x", "y"), crs = "EPSG:4326") # raw are unprojected
@@ -131,7 +102,9 @@ nws_points <- project(nws_points, crs(states_proj)) # project to aea, units km
 
 ## Build Spatial Mesh
 Define spatial domain through construction of a spatial triangulation (mesh). Requires use of the [**r-INLA** package](https://www.r-inla.org/home).  
-```{r warning=FALSE, eval=TRUE}
+   
+Note that because the simulated points used in this script differ from the data presented in the associated paper, results here may be slightly different.     
+```{r warning=FALSE, eval=TRUE, message=FALSE}
 # process requires classic spatial objects
 points_sp <- as(nws_points, "Spatial")
 
@@ -145,7 +118,7 @@ dom_bnds <-  as(simple_union, "Spatial")
 # to INLA format
 dom_seg <- inla.sp2segment(dom_bnds)
 
-set.seed(1976)
+set.seed(1976) # random seed
 mesh.dom <- inla.mesh.2d(boundary = dom_seg, 
                         loc = points_sp,
                         cutoff = 25, 
@@ -158,13 +131,13 @@ mesh.dom$n # node number
 
 ### View Mesh
 Simulated NWS cases overlain as points. 
-```{r fig.height=15, fig.width=15}
+```{r fig.height=15, fig.width=15, warning=FALSE, message=FALSE}
 plot_mesh(mesh.dom)
 ```
 
 ## Natural Neighborhoods  
-Apply tessellation to mesh vertices to identify area of support, or natural neighborhoods around each.  
-```{r message=FALSE, warning=FALSE}
+Apply tessellation to mesh vertices to identify area of support, or natural neighborhoods around each. Here, this is done using the custom *convert_mesh_poly()* function.   
+```{r message=FALSE, warning=FALSE, warning=FALSE, message=FALSE}
 # mesh areas to polygons
 mesh_polys <- convert_mesh_poly(mesh.dom)
 
@@ -188,7 +161,7 @@ plot_duel_mesh(mesh_polys_sf, mesh.dom,
                         ymax = 1500))
 ```
 
-Zoom in closer and remove ocean neighborhoods
+Zoom in closer and remove ocean neighborhoods to improve visualization.  
 ```{r warning=FALSE, message=FALSE, fig.width=15, fig.height=15}
 states_simple_sf <- st_as_sf(states_simple)
 mesh_polys_sf_crop <- st_intersection(mesh_polys_sf, states_simple_sf)

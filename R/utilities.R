@@ -1,3 +1,8 @@
+#' source_dir
+#'
+#' @description Utility function for geostatistical workflows used in this repository.
+#'
+#' @return Object produced by source_dir() based on provided inputs.
 source_dir <- function(directory_path) {
   
   if (!dir.exists(directory_path)) {
@@ -12,10 +17,20 @@ source_dir <- function(directory_path) {
 }
 
 
+#' convert_doy_to_date
+#'
+#' @description Utility function for geostatistical workflows used in this repository.
+#'
+#' @return Object produced by convert_doy_to_date() based on provided inputs.
 convert_doy_to_date <- function(year, day_of_year) {
   as.Date(paste(year, day_of_year, sep="-"), format="%Y-%j")
 }
 
+#' convert_decimal_date
+#'
+#' @description Utility function for geostatistical workflows used in this repository.
+#'
+#' @return Object produced by convert_decimal_date() based on provided inputs.
 convert_decimal_date <- function(decimal_date) {
   
   year <- floor(decimal_date)
@@ -34,6 +49,11 @@ convert_decimal_date <- function(decimal_date) {
   return(format(date, "%Y-%m-%d"))
 }
 
+#' get_gamma_params
+#'
+#' @description Utility function for geostatistical workflows used in this repository.
+#'
+#' @return Object produced by get_gamma_params() based on provided inputs.
 get_gamma_params <- function(mean, range) {
   
   variance <- (range[2] - range[1])^2 / 16
@@ -43,6 +63,11 @@ get_gamma_params <- function(mean, range) {
   return(list(shape = alpha, scale = beta))
 }
 
+#' rescale_raster
+#'
+#' @description Utility function for geostatistical workflows used in this repository.
+#'
+#' @return Object produced by rescale_raster() based on provided inputs.
 rescale_raster <- function(r, new_min = 5, new_max = 95) {
   rng <- global(r, fun = c("min","max"), na.rm = TRUE)
   old_min <- rng[1, "min"]

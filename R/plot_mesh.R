@@ -1,3 +1,8 @@
+#' plot_mesh
+#'
+#' @description Utility function for geostatistical workflows used in this repository.
+#'
+#' @return Object produced by plot_mesh() based on provided inputs.
 plot_mesh <- function(mesh,
                       node_cols   = c(evertices = "gray40",
                                       adata     = "darkred"),

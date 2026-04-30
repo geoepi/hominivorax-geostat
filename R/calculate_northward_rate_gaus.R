@@ -1,3 +1,8 @@
+#' calculate_northward_rate_gaus
+#'
+#' @description Utility function for geostatistical workflows used in this repository.
+#'
+#' @return Object produced by calculate_northward_rate_gaus() based on provided inputs.
 calculate_northward_rate_gaus <- function(
     nws_obs,
     date_col = "date",

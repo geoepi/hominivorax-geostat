@@ -1,3 +1,8 @@
+#' quick_point_map
+#'
+#' @description Utility function for geostatistical workflows used in this repository.
+#'
+#' @return Object produced by quick_point_map() based on provided inputs.
 quick_point_map <- function(target_year, target_week, boundary_polys, point_data) {
   
   filtered_points <- point_data %>%

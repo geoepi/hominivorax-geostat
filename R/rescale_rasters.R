@@ -1,5 +1,10 @@
 library(terra)
 
+#' rescale_rasters
+#'
+#' @description Utility function for geostatistical workflows used in this repository.
+#'
+#' @return Object produced by rescale_rasters() based on provided inputs.
 rescale_rasters <- function(in_dir, out_dir, max_value = 100, pattern = "\\.tif$") {
   files <- list.files(in_dir, pattern = pattern, full.names = TRUE)
   

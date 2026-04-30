@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.2.335">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+<meta name="dcterms.date" content="2026-04-30">
+
+<title>NWS Invasion Dynamics - Joint Spatiotemporal Model</title>
+<style>
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1.6em;
+  vertical-align: middle;
+}
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+    color: #aaaaaa;
+  }
+pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+code span.al { color: #ff0000; font-weight: bold; } /* Alert */
+code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+code span.at { color: #7d9029; } /* Attribute */
+code span.bn { color: #40a070; } /* BaseN */
+code span.bu { color: #008000; } /* BuiltIn */
+code span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+code span.ch { color: #4070a0; } /* Char */
+code span.cn { color: #880000; } /* Constant */
+code span.co { color: #60a0b0; font-style: italic; } /* Comment */
+code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+code span.do { color: #ba2121; font-style: italic; } /* Documentation */
+code span.dt { color: #902000; } /* DataType */
+code span.dv { color: #40a070; } /* DecVal */
+code span.er { color: #ff0000; font-weight: bold; } /* Error */
+code span.ex { } /* Extension */
+code span.fl { color: #40a070; } /* Float */
+code span.fu { color: #06287e; } /* Function */
+code span.im { color: #008000; font-weight: bold; } /* Import */
+code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+code span.kw { color: #007020; font-weight: bold; } /* Keyword */
+code span.op { color: #666666; } /* Operator */
+code span.ot { color: #007020; } /* Other */
+code span.pp { color: #bc7a00; } /* Preprocessor */
+code span.sc { color: #4070a0; } /* SpecialChar */
+code span.ss { color: #bb6688; } /* SpecialString */
+code span.st { color: #4070a0; } /* String */
+code span.va { color: #19177c; } /* Variable */
+code span.vs { color: #4070a0; } /* VerbatimString */
+code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+</style>
+
+
+<script src="site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="site_libs/quarto-nav/headroom.min.js"></script>
+<script src="site_libs/clipboard/clipboard.min.js"></script>
+<script src="site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="site_libs/quarto-search/fuse.min.js"></script>
+<script src="site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="./">
+<script src="site_libs/quarto-html/quarto.js"></script>
+<script src="site_libs/quarto-html/popper.min.js"></script>
+<script src="site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="site_libs/quarto-html/anchor.min.js"></script>
+<link href="site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="site_libs/bootstrap/bootstrap.min.css" rel="stylesheet" id="quarto-bootstrap" data-mode="light">
+<script id="quarto-search-options" type="application/json">{
+  "location": "navbar",
+  "copy-button": false,
+  "collapse-after": 3,
+  "panel-placement": "end",
+  "type": "overlay",
+  "limit": 20,
+  "language": {
+    "search-no-results-text": "No results",
+    "search-matching-documents-text": "matching documents",
+    "search-copy-link-title": "Copy link to search",
+    "search-hide-matches-text": "Hide additional matches",
+    "search-more-match-text": "more match in this document",
+    "search-more-matches-text": "more matches in this document",
+    "search-clear-button-title": "Clear",
+    "search-detached-cancel-button-title": "Cancel",
+    "search-submit-button-title": "Submit"
+  }
+}</script>
+
+  <script>window.backupDefine = window.define; window.define = undefined;</script><script src="https://cdn.jsdelivr.net/npm/katex@0.15.1/dist/katex.min.js"></script>
+  <script>document.addEventListener("DOMContentLoaded", function () {
+ var mathElements = document.getElementsByClassName("math");
+ var macros = [];
+ for (var i = 0; i < mathElements.length; i++) {
+  var texText = mathElements[i].firstChild;
+  if (mathElements[i].tagName == "SPAN") {
+   katex.render(texText.data, mathElements[i], {
+    displayMode: mathElements[i].classList.contains('display'),
+    throwOnError: false,
+    macros: macros,
+    fleqn: false
+   });
+}}});
+  </script>
+  <script>window.define = window.backupDefine; window.backupDefine = undefined;</script><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.15.1/dist/katex.min.css">
+
+</head>
+
+<body class="nav-fixed">
+
+<div id="quarto-search-results"></div>
+  <header id="quarto-header" class="headroom fixed-top">
+    <nav class="navbar navbar-expand-lg navbar-dark ">
+      <div class="navbar-container container-fluid">
+      <div class="navbar-brand-container">
+    <a class="navbar-brand" href="./index.html">
+    <span class="navbar-title">NWS Invasion Dynamics</span>
+    </a>
+  </div>
+          <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarCollapse" aria-controls="navbarCollapse" aria-expanded="false" aria-label="Toggle navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+  <span class="navbar-toggler-icon"></span>
+</button>
+          <div class="collapse navbar-collapse" id="navbarCollapse">
+            <ul class="navbar-nav navbar-nav-scroll me-auto">
+  <li class="nav-item">
+    <a class="nav-link" href="./index.html">
+ <span class="menu-text">Home</span></a>
+  </li>  
+  <li class="nav-item">
+    <a class="nav-link" href="./simulation.html">
+ <span class="menu-text">Simulation</span></a>
+  </li>  
+  <li class="nav-item">
+    <a class="nav-link" href="./spatial_domain.html">
+ <span class="menu-text">Tessellation</span></a>
+  </li>  
+  <li class="nav-item">
+    <a class="nav-link active" href="./model.html" aria-current="page">
+ <span class="menu-text">Model</span></a>
+  </li>  
+</ul>
+            <ul class="navbar-nav navbar-nav-scroll ms-auto">
+  <li class="nav-item">
+    <a class="nav-link" href="https://github.com/geoepi/hominivorax-geostat">
+ <span class="menu-text">GeoEpi</span></a>
+  </li>  
+  <li class="nav-item compact">
+    <a class="nav-link" href="https://github.com/geoepi/hominivorax-geostat"><i class="bi bi-github" role="img">
+</i> 
+ <span class="menu-text"></span></a>
+  </li>  
+</ul>
+              <div id="quarto-search" class="" title="Search"></div>
+          </div> <!-- /navcollapse -->
+      </div> <!-- /container-fluid -->
+    </nav>
+</header>
+<!-- content -->
+<div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article page-navbar">
+<!-- sidebar -->
+<!-- margin-sidebar -->
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+        <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">On this page</h2>
+   
+  <ul>
+  <li><a href="#overview" id="toc-overview" class="nav-link active" data-scroll-target="#overview"><span class="toc-section-number">1</span>  Overview</a></li>
+  <li><a href="#computational-privacy-note" id="toc-computational-privacy-note" class="nav-link" data-scroll-target="#computational-privacy-note"><span class="toc-section-number">2</span>  Computational &amp; Privacy Note</a></li>
+  <li><a href="#hpc-execution-environment" id="toc-hpc-execution-environment" class="nav-link" data-scroll-target="#hpc-execution-environment"><span class="toc-section-number">3</span>  HPC Execution Environment</a></li>
+  <li><a href="#statistical-formulation" id="toc-statistical-formulation" class="nav-link" data-scroll-target="#statistical-formulation"><span class="toc-section-number">4</span>  Statistical Formulation</a>
+  <ul class="collapse">
+  <li><a href="#linear-predictors" id="toc-linear-predictors" class="nav-link" data-scroll-target="#linear-predictors"><span class="toc-section-number">4.1</span>  Linear Predictors</a></li>
+  </ul></li>
+  <li><a href="#spatial-projection" id="toc-spatial-projection" class="nav-link" data-scroll-target="#spatial-projection"><span class="toc-section-number">5</span>  Spatial Projection</a></li>
+  <li><a href="#data-integration" id="toc-data-integration" class="nav-link" data-scroll-target="#data-integration"><span class="toc-section-number">6</span>  Data Integration</a>
+  <ul class="collapse">
+  <li><a href="#detection-stack" id="toc-detection-stack" class="nav-link" data-scroll-target="#detection-stack"><span class="toc-section-number">6.1</span>  Detection Stack</a></li>
+  <li><a href="#abundance-stack" id="toc-abundance-stack" class="nav-link" data-scroll-target="#abundance-stack"><span class="toc-section-number">6.2</span>  Abundance Stack</a></li>
+  <li><a href="#join-data" id="toc-join-data" class="nav-link" data-scroll-target="#join-data"><span class="toc-section-number">6.3</span>  Join Data</a></li>
+  </ul></li>
+  <li><a href="#model-fitting" id="toc-model-fitting" class="nav-link" data-scroll-target="#model-fitting"><span class="toc-section-number">7</span>  Model Fitting</a>
+  <ul class="collapse">
+  <li><a href="#priors" id="toc-priors" class="nav-link" data-scroll-target="#priors"><span class="toc-section-number">7.1</span>  Priors</a></li>
+  <li><a href="#formula" id="toc-formula" class="nav-link" data-scroll-target="#formula"><span class="toc-section-number">7.2</span>  Formula</a></li>
+  <li><a href="#run-model" id="toc-run-model" class="nav-link" data-scroll-target="#run-model"><span class="toc-section-number">7.3</span>  Run Model</a></li>
+  </ul></li>
+  </ul>
+</nav>
+    </div>
+<!-- main -->
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title">Joint Spatiotemporal Model</h1>
+<p class="subtitle lead">Hierarchical Bayesian Inference for NWS Detection and Abundance</p>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    
+    <div>
+    <div class="quarto-title-meta-heading">Published</div>
+    <div class="quarto-title-meta-contents">
+      <p class="date">April 30, 2026</p>
+    </div>
+  </div>
+  
+    
+  </div>
+  
+
+</header>
+
+<style type="text/css">
+  body { font-size: 11pt; }
+  h1, h2, h3 { color: #2c3e50; }
+  .math { font-size: 1.1em; }
+  code.r { font-size: 9pt; }
+</style>
+<section id="overview" class="level2" data-number="1">
+<h2 data-number="1" class="anchored" data-anchor-id="overview"><span class="header-section-number">1</span> Overview</h2>
+<p>This script demonstrates the <strong>Bayesian hierarchical joint model</strong> used to estimate New World Screwworm (NWS) intensity. Given that detections arise from opportunistic surveillance, the model explicitly separates the <strong>observation process</strong> (detection probability) from the <strong>biological process</strong> (abundance) to isolate the true biological signal from surveillance bias.</p>
+<hr>
+</section>
+<section id="computational-privacy-note" class="level2" data-number="2">
+<h2 data-number="2" class="anchored" data-anchor-id="computational-privacy-note"><span class="header-section-number">2</span> Computational &amp; Privacy Note</h2>
+<p><strong>Note:</strong> This script is for <strong>demonstrative purposes only</strong> and has not been executed within this document. The full joint model is computationally intensive, containing approximately 10.2 million latent entries and 260,185 replicated spatial field elements. Due to these requirements and the sensitive nature of the original surveillance coordinates, which involve private residences and businesses, the code provided here tracks the structural methodology but does not include the raw datasets.</p>
+</section>
+<section id="hpc-execution-environment" class="level2" data-number="3">
+<h2 data-number="3" class="anchored" data-anchor-id="hpc-execution-environment"><span class="header-section-number">3</span> HPC Execution Environment</h2>
+<p>To handle the high dimensionality of the latent Gaussian fields and the spatial point-process likelihood, the model was executed on a high-performance computing (HPC) cluster. The following SLURM batch script illustrates the resource allocation required for a successful run once reasonable starting values (<em>theta_init</em> below) have been identified:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co">#!/bin/bash</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="co">#SBATCH --job-name=nws_joint_model</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="co">#SBATCH -A disease_ecology</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="co">#SBATCH -N 1</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="co">#SBATCH -n 1</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="co">#SBATCH -p bigmem</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="co">#SBATCH --cpus-per-task=14</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="co">#SBATCH -t 35:59:00</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a><span class="co">#SBATCH --mem=280G</span></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a><span class="co"># Load necessary spatial and computational modules</span></span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a><span class="ex">module</span> load udunits proj geos/3.12.1 gdal/3.8.5 openblas r/4.4</span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a><span class="co"># Set threading for INLA/OpenBLAS to match allocated CPUs</span></span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a><span class="bu">export</span> <span class="va">OMP_NUM_THREADS</span><span class="op">=</span>14</span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a><span class="bu">export</span> <span class="va">OPENBLAS_NUM_THREADS</span><span class="op">=</span>14</span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a><span class="co"># Execute the R script in batch mode</span></span>
+<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a><span class="ex">R</span> CMD BATCH <span class="at">--no-save</span> <span class="at">--no-restore</span> jcat.R</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<hr>
+</section>
+<section id="statistical-formulation" class="level2" data-number="4">
+<h2 data-number="4" class="anchored" data-anchor-id="statistical-formulation"><span class="header-section-number">4</span> Statistical Formulation</h2>
+<p>The model evaluates two coupled processes across 15,305 spatial mesh nodes (<span class="math inline">i</span>) over epidemiological weeks (<span class="math inline">t</span>):</p>
+<p><span class="math display">
+\begin{aligned}
+y_{1,it} &amp;\sim \text{Bernoulli}(p_{it}) &amp;&amp; \text{(Detection Tier)} \\
+y_{2,it} &amp;\sim \text{NegBinom}(\mu_{it}, n) &amp;&amp; \text{(Abundance Tier)}
+\end{aligned}
+</span></p>
+<section id="linear-predictors" class="level3" data-number="4.1">
+<h3 data-number="4.1" class="anchored" data-anchor-id="linear-predictors"><span class="header-section-number">4.1</span> Linear Predictors</h3>
+<p>The expected outcomes are linked to predictors via logit and log link functions:</p>
+<p><strong>Detection Tier (Observation):</strong> <span class="math display">\text{logit}(p_{it}) = \beta_{0}^{(1)} + \sum \beta_{1} \mathbf{X}_{1,it} + \xi_{1,it} + w_{1,t} + \gamma_{c(i)}</span></p>
+<p><strong>Abundance Tier (Biological):</strong> <span class="math display">\log(\mu_{it}) = \log(\text{Area}_i) + \beta_{0}^{(2)} + \sum \beta_{2} \mathbf{X}_{2,it} + f(\text{H}_{it}) + \xi_{2,it} + \alpha \xi_{1,it} + w_{2,t}</span><br>
+<strong>Key Components:</strong><br>
+* <span class="math inline">\mathbf{X}_{1}, \mathbf{X}_{2}</span>: Linear covariates (e.g., environment, infrastructure).<br>
+* <span class="math inline">\xi_{1,it}, \xi_{2,it}</span>: Replicated spatial Gaussian Fields (SPDE).<br>
+* <span class="math inline">\alpha \xi_{1,it}</span>: A shared spatial component where <span class="math inline">\alpha</span> scales quantifies detection process on abundance.<br>
+* <span class="math inline">w_{1,t}, w_{2,t}</span>: Temporal random walks (RW1) for weekly trends.<br>
+* <span class="math inline">\gamma_{c(i)}</span>: IID random effect for administrative jurisdictions.<br>
+* <span class="math inline">f(\text{H}_{it})</span>: Non-linear livestock density effect (RW2).</p>
+<blockquote class="blockquote">
+<p><strong>Note on <span class="math inline">\alpha \xi_{1,it}</span>:</strong> This represents a shared spatial component where <span class="math inline">\alpha</span> quantifies the association between surveillance effort and biological intensity, allowing for the correction of preferential sampling.</p>
+</blockquote>
+<hr>
+</section>
+</section>
+<section id="spatial-projection" class="level2" data-number="5">
+<h2 data-number="5" class="anchored" data-anchor-id="spatial-projection"><span class="header-section-number">5</span> Spatial Projection</h2>
+<p>We utilize the <strong>Stochastic Partial Differential Equation (SPDE)</strong> approach with Penalized Complexity (PC) priors to prevent overfitting.</p>
+<div class="cell">
+<details open="">
+<summary>Show R Code</summary>
+<div class="sourceCode cell-code" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co"># SPDE for Tier 1: Detection (xi_1)</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>spde.t1 <span class="ot">&lt;-</span> <span class="fu">inla.spde2.pcmatern</span>(mesh.dom, </span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>                               <span class="at">alpha =</span> <span class="dv">2</span>,</span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>                               <span class="at">prior.range =</span> <span class="fu">c</span>(<span class="dv">150</span>, <span class="fl">0.05</span>),  </span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>                               <span class="at">prior.sigma =</span> <span class="fu">c</span>(<span class="fl">0.5</span>, <span class="fl">0.05</span>),</span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>                               <span class="at">constr =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a><span class="co"># SPDE for Tier 2: Abundance (xi_2)</span></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>spde.t2 <span class="ot">&lt;-</span> <span class="fu">inla.spde2.pcmatern</span>(mesh.dom, </span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>                               <span class="at">alpha =</span> <span class="dv">2</span>,</span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>                               <span class="at">prior.range =</span> <span class="fu">c</span>(<span class="dv">90</span>, <span class="fl">0.5</span>),  </span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>                               <span class="at">prior.sigma =</span> <span class="fu">c</span>(<span class="dv">1</span>, <span class="fl">0.5</span>),</span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>                               <span class="at">constr =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a><span class="co"># Temporal steps</span></span>
+<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a>t_steps <span class="ot">&lt;-</span> <span class="fu">length</span>(<span class="fu">unique</span>(tier_1.set<span class="sc">$</span>time_index))</span>
+<span id="cb2-17"><a href="#cb2-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-18"><a href="#cb2-18" aria-hidden="true" tabindex="-1"></a><span class="co"># Define Spatial Indices</span></span>
+<span id="cb2-19"><a href="#cb2-19" aria-hidden="true" tabindex="-1"></a>field.xi1 <span class="ot">&lt;-</span> <span class="fu">inla.spde.make.index</span>(<span class="st">"field.xi1"</span>, <span class="at">n.spde =</span> spde.t1<span class="sc">$</span>n.spde, <span class="at">n.group =</span> t_steps)</span>
+<span id="cb2-20"><a href="#cb2-20" aria-hidden="true" tabindex="-1"></a>field.xi2 <span class="ot">&lt;-</span> <span class="fu">inla.spde.make.index</span>(<span class="st">"field.xi2"</span>, <span class="at">n.spde =</span> spde.t2<span class="sc">$</span>n.spde, <span class="at">n.group =</span> t_steps)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+</div>
+</section>
+<section id="data-integration" class="level2" data-number="6">
+<h2 data-number="6" class="anchored" data-anchor-id="data-integration"><span class="header-section-number">6</span> Data Integration</h2>
+<section id="detection-stack" class="level3" data-number="6.1">
+<h3 data-number="6.1" class="anchored" data-anchor-id="detection-stack"><span class="header-section-number">6.1</span> Detection Stack</h3>
+<div class="cell">
+<details open="">
+<summary>Show R Code</summary>
+<div class="sourceCode cell-code" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>A.xi1 <span class="ot">&lt;-</span> <span class="fu">inla.spde.make.A</span>(mesh.dom, <span class="at">loc =</span> locs_t1, <span class="at">group =</span> tier_1.set<span class="sc">$</span>time_index)</span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>eff_t1 <span class="ot">&lt;-</span> <span class="fu">list</span>(</span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">c</span>(field.xi1, <span class="fu">list</span>(<span class="at">intercept1 =</span> <span class="dv">1</span>)), </span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">list</span>(<span class="at">north =</span> tier_1.set<span class="sc">$</span>northing_km_s,</span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>       <span class="at">road_dens =</span> tier_1.set<span class="sc">$</span>road_dens_s,</span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>       <span class="at">night_illum =</span> tier_1.set<span class="sc">$</span>night_illum_s,</span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>       <span class="at">admin_gamma =</span> <span class="fu">as.integer</span>(<span class="fu">as.factor</span>(tier_1.set<span class="sc">$</span>admin_u)),</span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>       <span class="at">week_w1 =</span> tier_1.set<span class="sc">$</span>timestep)</span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a>jtier1.stk <span class="ot">&lt;-</span> <span class="fu">inla.stack</span>(</span>
+<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a>  <span class="at">data =</span> <span class="fu">list</span>(<span class="at">Y =</span> <span class="fu">cbind</span>(tier_1.set<span class="sc">$</span>Yi_cens_test, <span class="cn">NA</span>), <span class="at">link =</span> <span class="dv">1</span>, <span class="at">e =</span> <span class="fu">rep</span>(<span class="cn">NA</span>, <span class="fu">nrow</span>(tier_1.set))),</span>
+<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a>  <span class="at">A =</span> <span class="fu">list</span>(A.xi1, <span class="dv">1</span>), </span>
+<span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a>  <span class="at">effects =</span> eff_t1,   </span>
+<span id="cb3-16"><a href="#cb3-16" aria-hidden="true" tabindex="-1"></a>  <span class="at">tag =</span> <span class="st">"det.stack"</span></span>
+<span id="cb3-17"><a href="#cb3-17" aria-hidden="true" tabindex="-1"></a>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+</div>
+</section>
+<section id="abundance-stack" class="level3" data-number="6.2">
+<h3 data-number="6.2" class="anchored" data-anchor-id="abundance-stack"><span class="header-section-number">6.2</span> Abundance Stack</h3>
+<div class="cell">
+<details open="">
+<summary>Show R Code</summary>
+<div class="sourceCode cell-code" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>A.xi2 <span class="ot">&lt;-</span> <span class="fu">inla.spde.make.A</span>(mesh.dom, <span class="at">loc =</span> locs_t2, <span class="at">group =</span> tier_2.set<span class="sc">$</span>time_index)</span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>eff_t2 <span class="ot">&lt;-</span> <span class="fu">list</span>(</span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">c</span>(field.xi2, <span class="fu">list</span>(<span class="at">field.xi1.copy =</span> field.xi1<span class="sc">$</span>field.xi1), <span class="fu">list</span>(<span class="at">intercept2 =</span> <span class="dv">1</span>)), </span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">list</span>(<span class="at">mintemp =</span> tier_2.set<span class="sc">$</span>mintemp_s,</span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>       <span class="at">soilmoist =</span> tier_2.set<span class="sc">$</span>soilmoist_s,</span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>       <span class="at">leafarea =</span> tier_2.set<span class="sc">$</span>leafarea_s,</span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>       <span class="at">livestock_H =</span> tier_2.set<span class="sc">$</span>cattle20_q,</span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a>       <span class="at">week_w2 =</span> tier_2.set<span class="sc">$</span>timestep)</span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a>jtier2.stk <span class="ot">&lt;-</span> <span class="fu">inla.stack</span>(</span>
+<span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a>  <span class="at">data =</span> <span class="fu">list</span>(<span class="at">Y =</span> <span class="fu">cbind</span>(<span class="cn">NA</span>, tier_2.set<span class="sc">$</span>Count_cens_test), <span class="at">link =</span> <span class="dv">2</span>, <span class="at">e =</span> tier_2.set<span class="sc">$</span>area),</span>
+<span id="cb4-14"><a href="#cb4-14" aria-hidden="true" tabindex="-1"></a>  <span class="at">A =</span> <span class="fu">list</span>(A.xi2, <span class="dv">1</span>), </span>
+<span id="cb4-15"><a href="#cb4-15" aria-hidden="true" tabindex="-1"></a>  <span class="at">effects =</span> eff_t2,   </span>
+<span id="cb4-16"><a href="#cb4-16" aria-hidden="true" tabindex="-1"></a>  <span class="at">tag =</span> <span class="st">"abun.stack"</span></span>
+<span id="cb4-17"><a href="#cb4-17" aria-hidden="true" tabindex="-1"></a>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+</div>
+</section>
+<section id="join-data" class="level3" data-number="6.3">
+<h3 data-number="6.3" class="anchored" data-anchor-id="join-data"><span class="header-section-number">6.3</span> Join Data</h3>
+<p>The tier specific stacks are merged into a single object for the <em>inla()</em> call. This allows the model to estimate both processes simultaneously, propagating uncertainty from the detection tier to the abundance tier.</p>
+<div class="cell">
+<details open="">
+<summary>Show R Code</summary>
+<div class="sourceCode cell-code" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>joint_stk <span class="ot">&lt;-</span> <span class="fu">inla.stack</span>(jtier1.stk, jtier2.stk)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+</div>
+</section>
+</section>
+<section id="model-fitting" class="level2" data-number="7">
+<h2 data-number="7" class="anchored" data-anchor-id="model-fitting"><span class="header-section-number">7</span> Model Fitting</h2>
+<p>The model is fitted using a joint likelihood (Bernoulli and Negative Binomial). We utilize the <em>eb</em> (Empirical Bayes) integration strategy to handle the high dimensionality of the latent fields.</p>
+<section id="priors" class="level3" data-number="7.1">
+<h3 data-number="7.1" class="anchored" data-anchor-id="priors"><span class="header-section-number">7.1</span> Priors</h3>
+<p>Penalized Complexity (PC) priors are defined for the random effects to prevent overfitting and reflect known dispersal capacities.</p>
+<div class="cell">
+<details open="">
+<summary>Show R Code</summary>
+<div class="sourceCode cell-code" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Shared spatial field scaling (alpha) and fixed effects</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>hyper_alpha <span class="ot">&lt;-</span> <span class="fu">list</span>(<span class="at">beta =</span> <span class="fu">list</span>(<span class="at">prior =</span> <span class="st">"normal"</span>, <span class="at">param =</span> <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">1</span>)))</span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a><span class="co"># PC priors for Random Walks (Temporal and Jurisdictional)</span></span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>pc_rw <span class="ot">&lt;-</span> <span class="fu">list</span>(<span class="at">prec =</span> <span class="fu">list</span>(<span class="at">prior =</span> <span class="st">"pc.prec"</span>, <span class="at">param =</span> <span class="fu">c</span>(<span class="dv">1</span>, <span class="fl">0.01</span>)))</span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>pc_rw_strong <span class="ot">&lt;-</span> <span class="fu">list</span>(<span class="at">prec =</span> <span class="fu">list</span>(<span class="at">prior =</span> <span class="st">"pc.prec"</span>, <span class="at">param =</span> <span class="fu">c</span>(<span class="fl">0.3</span>, <span class="fl">0.01</span>)))</span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a>pc_rw_cat <span class="ot">&lt;-</span> <span class="fu">list</span>(<span class="at">prec =</span> <span class="fu">list</span>(<span class="at">prior =</span> <span class="st">"pc.prec"</span>, <span class="at">param =</span> <span class="fu">c</span>(<span class="fl">0.5</span>, <span class="fl">0.05</span>)))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+</div>
+</section>
+<section id="formula" class="level3" data-number="7.2">
+<h3 data-number="7.2" class="anchored" data-anchor-id="formula"><span class="header-section-number">7.2</span> Formula</h3>
+<p>The formula couples the two tiers, using <code>f(..., copy = "field.xi1")</code> to represent the shared spatial effect <span class="math inline">\alpha \xi_{1,it}</span>.</p>
+<div class="cell">
+<details open="">
+<summary>Show R Code</summary>
+<div class="sourceCode cell-code" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>formula_nws <span class="ot">&lt;-</span> Y <span class="sc">~</span> <span class="sc">-</span><span class="dv">1</span> <span class="sc">+</span> intercept1 <span class="sc">+</span> intercept2 <span class="sc">+</span> <span class="co"># response and intercepts for each tier</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>  <span class="co"># Tier 1 Components</span></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">f</span>(field.xi1, <span class="co"># tier 1 field</span></span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>    <span class="at">model =</span> spde.t1, </span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">group =</span> field.xi1.group, </span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>    <span class="at">control.group =</span> <span class="fu">list</span>(<span class="at">model =</span> <span class="st">"iid"</span>, </span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a>                         <span class="at">hyper =</span> pc_rw)) <span class="sc">+</span></span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">f</span>(week_w1, </span>
+<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">model =</span> <span class="st">"rw1"</span>, </span>
+<span id="cb7-10"><a href="#cb7-10" aria-hidden="true" tabindex="-1"></a>    <span class="at">constr =</span> <span class="cn">TRUE</span>, </span>
+<span id="cb7-11"><a href="#cb7-11" aria-hidden="true" tabindex="-1"></a>    <span class="at">scale.model =</span> <span class="cn">TRUE</span>, </span>
+<span id="cb7-12"><a href="#cb7-12" aria-hidden="true" tabindex="-1"></a>    <span class="at">hyper =</span> pc_rw) <span class="sc">+</span></span>
+<span id="cb7-13"><a href="#cb7-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">f</span>(admin_gamma, </span>
+<span id="cb7-14"><a href="#cb7-14" aria-hidden="true" tabindex="-1"></a>    <span class="at">model =</span> <span class="st">"iid"</span>, </span>
+<span id="cb7-15"><a href="#cb7-15" aria-hidden="true" tabindex="-1"></a>    <span class="at">constr =</span> <span class="cn">TRUE</span>, </span>
+<span id="cb7-16"><a href="#cb7-16" aria-hidden="true" tabindex="-1"></a>    <span class="at">hyper =</span> pc_rw_strong) <span class="sc">+</span></span>
+<span id="cb7-17"><a href="#cb7-17" aria-hidden="true" tabindex="-1"></a>  north <span class="sc">+</span> road_dens <span class="sc">+</span> night_illum <span class="sc">+</span> </span>
+<span id="cb7-18"><a href="#cb7-18" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb7-19"><a href="#cb7-19" aria-hidden="true" tabindex="-1"></a>  <span class="co"># Tier 2 Components</span></span>
+<span id="cb7-20"><a href="#cb7-20" aria-hidden="true" tabindex="-1"></a>  <span class="fu">f</span>(field.xi2, </span>
+<span id="cb7-21"><a href="#cb7-21" aria-hidden="true" tabindex="-1"></a>    <span class="at">model =</span> spde.t2, </span>
+<span id="cb7-22"><a href="#cb7-22" aria-hidden="true" tabindex="-1"></a>    <span class="at">group =</span> field.xi2.group, </span>
+<span id="cb7-23"><a href="#cb7-23" aria-hidden="true" tabindex="-1"></a>    <span class="at">control.group =</span> <span class="fu">list</span>(<span class="at">model =</span> <span class="st">"iid"</span>, </span>
+<span id="cb7-24"><a href="#cb7-24" aria-hidden="true" tabindex="-1"></a>                         <span class="at">hyper =</span> pc_rw)) <span class="sc">+</span></span>
+<span id="cb7-25"><a href="#cb7-25" aria-hidden="true" tabindex="-1"></a>  <span class="fu">f</span>(field.xi1.copy, </span>
+<span id="cb7-26"><a href="#cb7-26" aria-hidden="true" tabindex="-1"></a>    <span class="at">copy =</span> <span class="st">"field.xi1"</span>, </span>
+<span id="cb7-27"><a href="#cb7-27" aria-hidden="true" tabindex="-1"></a>    <span class="at">group =</span> field.xi1.copy.group, </span>
+<span id="cb7-28"><a href="#cb7-28" aria-hidden="true" tabindex="-1"></a>    <span class="at">fixed =</span> <span class="cn">FALSE</span>, </span>
+<span id="cb7-29"><a href="#cb7-29" aria-hidden="true" tabindex="-1"></a>    <span class="at">hyper =</span> hyper_alpha) <span class="sc">+</span></span>
+<span id="cb7-30"><a href="#cb7-30" aria-hidden="true" tabindex="-1"></a>  <span class="fu">f</span>(week_w2, <span class="at">model =</span> <span class="st">"rw1"</span>, </span>
+<span id="cb7-31"><a href="#cb7-31" aria-hidden="true" tabindex="-1"></a>    <span class="at">constr =</span> <span class="cn">TRUE</span>, </span>
+<span id="cb7-32"><a href="#cb7-32" aria-hidden="true" tabindex="-1"></a>    <span class="at">scale.model =</span> <span class="cn">TRUE</span>, </span>
+<span id="cb7-33"><a href="#cb7-33" aria-hidden="true" tabindex="-1"></a>    <span class="at">hyper =</span> pc_rw) <span class="sc">+</span></span>
+<span id="cb7-34"><a href="#cb7-34" aria-hidden="true" tabindex="-1"></a>  <span class="fu">f</span>(livestock_H, </span>
+<span id="cb7-35"><a href="#cb7-35" aria-hidden="true" tabindex="-1"></a>    <span class="at">model =</span> <span class="st">"rw2"</span>, </span>
+<span id="cb7-36"><a href="#cb7-36" aria-hidden="true" tabindex="-1"></a>    <span class="at">constr =</span> <span class="cn">TRUE</span>, </span>
+<span id="cb7-37"><a href="#cb7-37" aria-hidden="true" tabindex="-1"></a>    <span class="at">scale.model =</span> <span class="cn">TRUE</span>, </span>
+<span id="cb7-38"><a href="#cb7-38" aria-hidden="true" tabindex="-1"></a>    <span class="at">hyper =</span> pc_rw_cat) <span class="sc">+</span></span>
+<span id="cb7-39"><a href="#cb7-39" aria-hidden="true" tabindex="-1"></a>  mintemp <span class="sc">+</span> soilmoist <span class="sc">+</span> leafarea <span class="sc">+</span> rhum <span class="sc">+</span> cattle_s <span class="sc">+</span> horses_s <span class="sc">+</span> pigs_s <span class="sc">+</span> goats_s <span class="sc">+</span> sheep_s</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+</div>
+</section>
+<section id="run-model" class="level3" data-number="7.3">
+<h3 data-number="7.3" class="anchored" data-anchor-id="run-model"><span class="header-section-number">7.3</span> Run Model</h3>
+<div class="cell">
+<details open="">
+<summary>Show R Code</summary>
+<div class="sourceCode cell-code" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Quantiles for posterior summaries</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>return_quants <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="fl">0.025</span>, <span class="fl">0.25</span>, <span class="fl">0.5</span>, <span class="fl">0.75</span>, <span class="fl">0.975</span>) </span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Initial values for hyperparameters (speeds up run)</span></span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a>theta_init <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="fl">4.65</span>, <span class="fl">0.98</span>, <span class="sc">-</span><span class="fl">2.01</span>, <span class="sc">-</span><span class="fl">3.61</span>, <span class="fl">2.30</span>, <span class="fl">5.02</span>, <span class="sc">-</span><span class="fl">0.02</span>, <span class="fl">0.50</span>, <span class="fl">5.42</span>, <span class="fl">0.39</span>)</span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a>model_joint <span class="ot">&lt;-</span> <span class="fu">inla</span>(formula_nws,<span class="co"># formula</span></span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a>                <span class="at">family =</span> <span class="fu">c</span>(<span class="st">"binomial"</span>, <span class="st">"nbinomial"</span>), <span class="co"># family for each tier</span></span>
+<span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a>                <span class="at">data =</span> <span class="fu">inla.stack.data</span>(joint_stk), <span class="co"># combined data</span></span>
+<span id="cb8-10"><a href="#cb8-10" aria-hidden="true" tabindex="-1"></a>                <span class="at">E =</span> <span class="fu">inla.stack.data</span>(joint_stk)<span class="sc">$</span>e, <span class="co"># geographic exposure</span></span>
+<span id="cb8-11"><a href="#cb8-11" aria-hidden="true" tabindex="-1"></a>                <span class="at">control.predictor =</span> <span class="fu">list</span>(<span class="at">A =</span> <span class="fu">inla.stack.A</span>(joint_stk), </span>
+<span id="cb8-12"><a href="#cb8-12" aria-hidden="true" tabindex="-1"></a>                                         <span class="at">compute =</span> <span class="cn">TRUE</span>, <span class="co">#return fitted values</span></span>
+<span id="cb8-13"><a href="#cb8-13" aria-hidden="true" tabindex="-1"></a>                                         <span class="at">link =</span> <span class="dv">1</span>), </span>
+<span id="cb8-14"><a href="#cb8-14" aria-hidden="true" tabindex="-1"></a>                <span class="at">control.inla =</span> <span class="fu">list</span>(<span class="at">strategy =</span> <span class="st">"adaptive"</span>, </span>
+<span id="cb8-15"><a href="#cb8-15" aria-hidden="true" tabindex="-1"></a>                                    <span class="at">int.strategy =</span> <span class="st">"eb"</span>), <span class="co"># Empirical Bayes strategy</span></span>
+<span id="cb8-16"><a href="#cb8-16" aria-hidden="true" tabindex="-1"></a>                <span class="at">control.mode =</span> <span class="fu">list</span>(<span class="at">restart =</span> <span class="cn">TRUE</span>, <span class="at">theta =</span> theta_init), <span class="co"># initial values</span></span>
+<span id="cb8-17"><a href="#cb8-17" aria-hidden="true" tabindex="-1"></a>                <span class="at">num.threads =</span> <span class="dv">12</span>, <span class="co"># run using 16 cores, others reserved for background processes</span></span>
+<span id="cb8-18"><a href="#cb8-18" aria-hidden="true" tabindex="-1"></a>                <span class="at">quantiles =</span> return_quants,</span>
+<span id="cb8-19"><a href="#cb8-19" aria-hidden="true" tabindex="-1"></a>                <span class="at">verbose =</span> <span class="cn">TRUE</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+</div>
+
+
+</section>
+</section>
+
+</main> <!-- /main -->
+<script id="quarto-html-after-body" type="application/javascript">
+window.document.addEventListener("DOMContentLoaded", function (event) {
+  const toggleBodyColorMode = (bsSheetEl) => {
+    const mode = bsSheetEl.getAttribute("data-mode");
+    const bodyEl = window.document.querySelector("body");
+    if (mode === "dark") {
+      bodyEl.classList.add("quarto-dark");
+      bodyEl.classList.remove("quarto-light");
+    } else {
+      bodyEl.classList.add("quarto-light");
+      bodyEl.classList.remove("quarto-dark");
+    }
+  }
+  const toggleBodyColorPrimary = () => {
+    const bsSheetEl = window.document.querySelector("link#quarto-bootstrap");
+    if (bsSheetEl) {
+      toggleBodyColorMode(bsSheetEl);
+    }
+  }
+  toggleBodyColorPrimary();  
+  const icon = "";
+  const anchorJS = new window.AnchorJS();
+  anchorJS.options = {
+    placement: 'right',
+    icon: icon
+  };
+  anchorJS.add('.anchored');
+  const clipboard = new window.ClipboardJS('.code-copy-button', {
+    target: function(trigger) {
+      return trigger.previousElementSibling;
+    }
+  });
+  clipboard.on('success', function(e) {
+    // button target
+    const button = e.trigger;
+    // don't keep focus
+    button.blur();
+    // flash "checked"
+    button.classList.add('code-copy-button-checked');
+    var currentTitle = button.getAttribute("title");
+    button.setAttribute("title", "Copied!");
+    let tooltip;
+    if (window.bootstrap) {
+      button.setAttribute("data-bs-toggle", "tooltip");
+      button.setAttribute("data-bs-placement", "left");
+      button.setAttribute("data-bs-title", "Copied!");
+      tooltip = new bootstrap.Tooltip(button, 
+        { trigger: "manual", 
+          customClass: "code-copy-button-tooltip",
+          offset: [0, -8]});
+      tooltip.show();    
+    }
+    setTimeout(function() {
+      if (tooltip) {
+        tooltip.hide();
+        button.removeAttribute("data-bs-title");
+        button.removeAttribute("data-bs-toggle");
+        button.removeAttribute("data-bs-placement");
+      }
+      button.setAttribute("title", currentTitle);
+      button.classList.remove('code-copy-button-checked');
+    }, 1000);
+    // clear code selection
+    e.clearSelection();
+  });
+  function tippyHover(el, contentFn) {
+    const config = {
+      allowHTML: true,
+      content: contentFn,
+      maxWidth: 500,
+      delay: 100,
+      arrow: false,
+      appendTo: function(el) {
+          return el.parentElement;
+      },
+      interactive: true,
+      interactiveBorder: 10,
+      theme: 'quarto',
+      placement: 'bottom-start'
+    };
+    window.tippy(el, config); 
+  }
+  const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+  for (var i=0; i<noterefs.length; i++) {
+    const ref = noterefs[i];
+    tippyHover(ref, function() {
+      // use id or data attribute instead here
+      let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+      try { href = new URL(href).hash; } catch {}
+      const id = href.replace(/^#\/?/, "");
+      const note = window.document.getElementById(id);
+      return note.innerHTML;
+    });
+  }
+  const findCites = (el) => {
+    const parentEl = el.parentElement;
+    if (parentEl) {
+      const cites = parentEl.dataset.cites;
+      if (cites) {
+        return {
+          el,
+          cites: cites.split(' ')
+        };
+      } else {
+        return findCites(el.parentElement)
+      }
+    } else {
+      return undefined;
+    }
+  };
+  var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+  for (var i=0; i<bibliorefs.length; i++) {
+    const ref = bibliorefs[i];
+    const citeInfo = findCites(ref);
+    if (citeInfo) {
+      tippyHover(citeInfo.el, function() {
+        var popup = window.document.createElement('div');
+        citeInfo.cites.forEach(function(cite) {
+          var citeDiv = window.document.createElement('div');
+          citeDiv.classList.add('hanging-indent');
+          citeDiv.classList.add('csl-entry');
+          var biblioDiv = window.document.getElementById('ref-' + cite);
+          if (biblioDiv) {
+            citeDiv.innerHTML = biblioDiv.innerHTML;
+          }
+          popup.appendChild(citeDiv);
+        });
+        return popup.innerHTML;
+      });
+    }
+  }
+});
+</script>
+</div> <!-- /content -->
+<footer class="footer">
+  <div class="nav-footer">
+    <div class="nav-footer-right">Built with <a href="https://quarto.org/">Quarto</a></div>
+  </div>
+</footer>
+
+
+
+</body></html>

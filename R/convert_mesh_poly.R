@@ -1,5 +1,10 @@
 # INLA helper function, convert mesh areas to polygons, see: https://becarioprecario.bitbucket.io/spde-gitbook/ 
 
+#' convert_mesh_poly
+#'
+#' @description Utility function for geostatistical workflows used in this repository.
+#'
+#' @return Object produced by convert_mesh_poly() based on provided inputs.
 convert_mesh_poly <- function(mesh) {
   if (mesh$manifold=='R2') {
     ce <- t(sapply(1:nrow(mesh$graph$tv), function(i)
