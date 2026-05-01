@@ -9,7 +9,7 @@ This repository provides the computational supporting information for:
 *Disentangling Detection and Abundance to Infer Invasion Dynamics in New World Screwworm (in review)*
 
 ## External Links  
-[Repo Web Version](https://geoepi.github.io/hominivorax-geostat/)    
+[Git Page](https://geoepi.github.io/hominivorax-geostat/): Website version of this repository       
   
 [OSF Data Archive](https://osf.io/uvqmw/overview): Code and data archive on the Open Science Framework (OSF)   
   
