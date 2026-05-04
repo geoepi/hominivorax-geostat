@@ -1,22 +1,19 @@
 ---
 title: "Tessellation"
-description: "Mesh construction, tessellation, and defining the spatial domain"
+subtitle: "Mesh Construction and Tessellation"
+date: last-modified
 format:
   html: 
     df-print: kable
     code-fold: show
-    code-summary: "Hide code"
+    code-summary: "Show R Code"
     code-overflow: wrap
-    toc-title: Page Contents
     toc: true
-    toc-depth: 2
+    toc-depth: 3
     toc-location: right
-    number-sections: false
+    number-sections: true
     html-math-method: katex
-    smooth-scroll: true
-editor: source
-editor_options: 
-  chunk_output_type: console
+    theme: cosmo
 ---
 ```{=html}
 <style type="text/css">
@@ -139,6 +136,9 @@ mesh.dom$n # node number
 ### View Mesh
 Simulated NWS cases overlain as points. 
 ```{r fig.height=15, fig.width=15, warning=FALSE, message=FALSE}
+#| label: fig-mesh
+#| fig-cap: "Triangulated mesh for the study area with simulates NWS case detection overlain."
+#| 
 plot_mesh(mesh.dom)
 ```
 
@@ -159,6 +159,10 @@ mesh_polys$area <- expanse(mesh_polys, unit = "km")
 ### Plot Neighborhoods  
 Visual inspection of study area with neighborhoods color coded by geographic area and overlain with mesh and nodes.  
 ```{r warning=FALSE, message=FALSE, fig.width=15, fig.height=15}
+#| label: fig-tess1
+#| fig-cap: "Tessellation around mesh nodes to identify natural neighborhoods.  Zoomed view shows major terrestrial boundaries, mesh, and simulated NWS case detections overlain on neighborhoods.  Neighborhoods are colored by geographic area."
+
+
 mesh_polys_sf <- sf::st_as_sf(mesh_polys)
 
 plot_duel_mesh(mesh_polys_sf, mesh.dom,
@@ -170,6 +174,9 @@ plot_duel_mesh(mesh_polys_sf, mesh.dom,
 
 Zoom in closer and remove ocean neighborhoods to improve visualization.  
 ```{r warning=FALSE, message=FALSE, fig.width=15, fig.height=15}
+#| label: fig-tess2
+#| fig-cap: "Tessellation around mesh nodes to identify natural neighborhoods.  Zoomed view shows mesh and simulated NWS case detections overlain on neighborhoods.  Neighborhoods are colored by geographic area, with those over major waterbodies have been removed for clarity."
+#| 
 states_simple_sf <- st_as_sf(states_simple)
 mesh_polys_sf_crop <- st_intersection(mesh_polys_sf, states_simple_sf)
 

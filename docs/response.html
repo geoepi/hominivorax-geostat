@@ -6,7 +6,7 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
-<meta name="description" content="Construct bivariate response variable">
+<meta name="dcterms.date" content="2026-05-04">
 
 <title>NWS Invasion Dynamics - Response</title>
 <style>
@@ -122,7 +122,6 @@ code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warni
     "search-submit-button-title": "Submit"
   }
 }</script>
-<style>html{ scroll-behavior: smooth; }</style>
 
   <script>window.backupDefine = window.define; window.define = undefined;</script><script src="https://cdn.jsdelivr.net/npm/katex@0.15.1/dist/katex.min.js"></script>
   <script>document.addEventListener("DOMContentLoaded", function () {
@@ -202,20 +201,20 @@ code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warni
 <!-- margin-sidebar -->
     <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
         <nav id="TOC" role="doc-toc" class="toc-active">
-    <h2 id="toc-title">Page Contents</h2>
+    <h2 id="toc-title">On this page</h2>
    
-  <ul class="collapse">
-  <li><a href="#overview" id="toc-overview" class="nav-link active" data-scroll-target="#overview">Overview</a></li>
-  <li><a href="#libraries" id="toc-libraries" class="nav-link" data-scroll-target="#libraries">Libraries</a></li>
-  <li><a href="#custom-functions" id="toc-custom-functions" class="nav-link" data-scroll-target="#custom-functions">Custom Functions</a></li>
-  <li><a href="#load-preprocessed-data" id="toc-load-preprocessed-data" class="nav-link" data-scroll-target="#load-preprocessed-data">Load Preprocessed Data</a></li>
-  <li><a href="#prepare-node-locations" id="toc-prepare-node-locations" class="nav-link" data-scroll-target="#prepare-node-locations">Prepare Node Locations</a></li>
-  <li><a href="#time-expansion" id="toc-time-expansion" class="nav-link" data-scroll-target="#time-expansion">Time Expansion</a></li>
-  <li><a href="#clean-detections" id="toc-clean-detections" class="nav-link" data-scroll-target="#clean-detections">Clean Detections</a></li>
-  <li><a href="#combine-detection-tier" id="toc-combine-detection-tier" class="nav-link" data-scroll-target="#combine-detection-tier">Combine Detection Tier</a></li>
-  <li><a href="#aggregate-counts" id="toc-aggregate-counts" class="nav-link" data-scroll-target="#aggregate-counts">Aggregate Counts</a></li>
-  <li><a href="#match-to-neighborhood" id="toc-match-to-neighborhood" class="nav-link" data-scroll-target="#match-to-neighborhood">Match to Neighborhood</a></li>
-  <li><a href="#map-response" id="toc-map-response" class="nav-link" data-scroll-target="#map-response">Map Response</a></li>
+  <ul>
+  <li><a href="#overview" id="toc-overview" class="nav-link active" data-scroll-target="#overview"><span class="toc-section-number">1</span>  Overview</a></li>
+  <li><a href="#libraries" id="toc-libraries" class="nav-link" data-scroll-target="#libraries"><span class="toc-section-number">2</span>  Libraries</a></li>
+  <li><a href="#custom-functions" id="toc-custom-functions" class="nav-link" data-scroll-target="#custom-functions"><span class="toc-section-number">3</span>  Custom Functions</a></li>
+  <li><a href="#load-preprocessed-data" id="toc-load-preprocessed-data" class="nav-link" data-scroll-target="#load-preprocessed-data"><span class="toc-section-number">4</span>  Load Preprocessed Data</a></li>
+  <li><a href="#prepare-node-locations" id="toc-prepare-node-locations" class="nav-link" data-scroll-target="#prepare-node-locations"><span class="toc-section-number">5</span>  Prepare Node Locations</a></li>
+  <li><a href="#time-expansion" id="toc-time-expansion" class="nav-link" data-scroll-target="#time-expansion"><span class="toc-section-number">6</span>  Time Expansion</a></li>
+  <li><a href="#clean-detections" id="toc-clean-detections" class="nav-link" data-scroll-target="#clean-detections"><span class="toc-section-number">7</span>  Clean Detections</a></li>
+  <li><a href="#combine-detection-tier" id="toc-combine-detection-tier" class="nav-link" data-scroll-target="#combine-detection-tier"><span class="toc-section-number">8</span>  Combine Detection Tier</a></li>
+  <li><a href="#aggregate-counts" id="toc-aggregate-counts" class="nav-link" data-scroll-target="#aggregate-counts"><span class="toc-section-number">9</span>  Aggregate Counts</a></li>
+  <li><a href="#match-to-neighborhood" id="toc-match-to-neighborhood" class="nav-link" data-scroll-target="#match-to-neighborhood"><span class="toc-section-number">10</span>  Match to Neighborhood</a></li>
+  <li><a href="#map-response" id="toc-map-response" class="nav-link" data-scroll-target="#map-response"><span class="toc-section-number">11</span>  Map Response</a></li>
   </ul>
 </nav>
     </div>
@@ -225,18 +224,20 @@ code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warni
 <header id="title-block-header" class="quarto-title-block default">
 <div class="quarto-title">
 <h1 class="title">Response</h1>
+<p class="subtitle lead">Construct Bivariate Response Variable</p>
 </div>
 
-<div>
-  <div class="description">
-    Construct bivariate response variable
-  </div>
-</div>
 
 
 <div class="quarto-title-meta">
 
     
+    <div>
+    <div class="quarto-title-meta-heading">Published</div>
+    <div class="quarto-title-meta-contents">
+      <p class="date">May 4, 2026</p>
+    </div>
+  </div>
   
     
   </div>
@@ -256,8 +257,8 @@ pre {
   font-size: 11pt
 }
 </style>
-<section id="overview" class="level2">
-<h2 class="anchored" data-anchor-id="overview">Overview</h2>
+<section id="overview" class="level2" data-number="1">
+<h2 data-number="1" class="anchored" data-anchor-id="overview"><span class="header-section-number">1</span> Overview</h2>
 <p>The script demonstrates how to expand and index reported NWS case detections and mesh nodes to ensure that all weeks are represented in the data set. Additionally, the script shows how to aggregate individual detection counts to natural natural neighborhoods as needed for the abundance tier in the joint model described in the associated paper.</p>
 <p>Once data has been formatted correctly, it can be organized as a bivariate response variable such that <strong>Tier 1</strong> describes point-level NWS case detections:<br>
 <span class="math display">
@@ -290,12 +291,12 @@ Note
 </div>
 <hr>
 </section>
-<section id="libraries" class="level2">
-<h2 class="anchored" data-anchor-id="libraries">Libraries</h2>
+<section id="libraries" class="level2" data-number="2">
+<h2 data-number="2" class="anchored" data-anchor-id="libraries"><span class="header-section-number">2</span> Libraries</h2>
 <p>Load needed libraries and packages.</p>
 <div class="cell">
 <details open="">
-<summary>Hide code</summary>
+<summary>Show R Code</summary>
 <div class="sourceCode cell-code" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(tidyverse) <span class="co"># data wrangling</span></span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="fu">options</span>(<span class="at">dplyr.summarise.inform =</span> <span class="cn">FALSE</span>)</span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(here) <span class="co"># directory management</span></span>
@@ -314,22 +315,22 @@ Note
 </details>
 </div>
 </section>
-<section id="custom-functions" class="level2">
-<h2 class="anchored" data-anchor-id="custom-functions">Custom Functions</h2>
+<section id="custom-functions" class="level2" data-number="3">
+<h2 data-number="3" class="anchored" data-anchor-id="custom-functions"><span class="header-section-number">3</span> Custom Functions</h2>
 <p>Load customized functions.</p>
 <div class="cell">
 <details open="">
-<summary>Hide code</summary>
+<summary>Show R Code</summary>
 <div class="sourceCode cell-code" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="fu">source</span>(<span class="fu">here</span>(<span class="st">"R/utilities.R"</span>))</span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="fu">source_dir</span>(<span class="fu">here</span>(<span class="st">"R"</span>))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 </div>
 </section>
-<section id="load-preprocessed-data" class="level2">
-<h2 class="anchored" data-anchor-id="load-preprocessed-data">Load Preprocessed Data</h2>
+<section id="load-preprocessed-data" class="level2" data-number="4">
+<h2 data-number="4" class="anchored" data-anchor-id="load-preprocessed-data"><span class="header-section-number">4</span> Load Preprocessed Data</h2>
 <div class="cell">
 <details open="">
-<summary>Hide code</summary>
+<summary>Show R Code</summary>
 <div class="sourceCode cell-code" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="co"># simulated case detections</span></span>
 <span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>sim_data_df <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(<span class="fu">here</span>(<span class="st">"demo/sim_locations_demo.csv"</span>))</span>
 <span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a></span>
@@ -349,7 +350,7 @@ Bounding box:  xmin: -4633.52 ymin: -2473.057 xmax: 3209.094 ymax: 3100.675
 Projected CRS: +proj=aea +lat_0=20 +lon_0=-75 +lat_1=10 +lat_2=30 +x_0=0 +y_0=0 +datum=WGS84 +units=km +no_defs</code></pre>
 </div>
 <details open="">
-<summary>Hide code</summary>
+<summary>Show R Code</summary>
 <div class="sourceCode cell-code" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="co"># study area administrative boundaries</span></span>
 <span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>states_proj <span class="ot">&lt;-</span> <span class="fu">st_read</span>(<span class="fu">here</span>(<span class="st">"demo/study_polygons.gpkg"</span>))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
@@ -366,7 +367,7 @@ Projected CRS: +proj=aea +lat_0=20 +lon_0=-75 +lat_1=10 +lat_2=30 +x_0=0 +y_0=0 
 <p>Geographic projection of simulated NWS detections (currently unprojected)</p>
 <div class="cell">
 <details open="">
-<summary>Hide code</summary>
+<summary>Show R Code</summary>
 <div class="sourceCode cell-code" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>sim_data_pnts <span class="ot">&lt;-</span> <span class="fu">vect</span>(sim_data_df, <span class="at">geom =</span> <span class="fu">c</span>(<span class="st">"x"</span>, <span class="st">"y"</span>), <span class="st">"EPSG:4326"</span>) <span class="co"># to points</span></span>
 <span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>sim_data_pnts <span class="ot">&lt;-</span> <span class="fu">project</span>(sim_data_pnts, states_proj) <span class="co"># match other data projection</span></span>
 <span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a></span>
@@ -375,11 +376,11 @@ Projected CRS: +proj=aea +lat_0=20 +lon_0=-75 +lat_1=10 +lat_2=30 +x_0=0 +y_0=0 
 </details>
 </div>
 </section>
-<section id="prepare-node-locations" class="level2">
-<h2 class="anchored" data-anchor-id="prepare-node-locations">Prepare Node Locations</h2>
+<section id="prepare-node-locations" class="level2" data-number="5">
+<h2 data-number="5" class="anchored" data-anchor-id="prepare-node-locations"><span class="header-section-number">5</span> Prepare Node Locations</h2>
 <div class="cell">
 <details open="">
-<summary>Hide code</summary>
+<summary>Show R Code</summary>
 <div class="sourceCode cell-code" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="co"># get node coordinates</span></span>
 <span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>int_pnts <span class="ot">&lt;-</span> <span class="fu">as.data.frame</span>(<span class="fu">cbind</span>(mesh.dom<span class="sc">$</span>loc[,<span class="dv">1</span>],</span>
 <span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>                                mesh.dom<span class="sc">$</span>loc[,<span class="dv">2</span>]))</span>
@@ -393,7 +394,7 @@ Projected CRS: +proj=aea +lat_0=20 +lon_0=-75 +lat_1=10 +lat_2=30 +x_0=0 +y_0=0 
 <p>Identify and remove nodes located in oceans (non-NWS habitat)</p>
 <div class="cell">
 <details open="">
-<summary>Hide code</summary>
+<summary>Show R Code</summary>
 <div class="sourceCode cell-code" id="cb9"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>states_simple <span class="ot">&lt;-</span> <span class="fu">vect</span>(states_proj)</span>
 <span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>states_simple<span class="sc">$</span>inside <span class="ot">&lt;-</span> <span class="dv">1</span></span>
 <span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>int_pnts<span class="sc">$</span>inside <span class="ot">&lt;-</span> <span class="fu">extract</span>(states_simple[<span class="st">"inside"</span>], int_pnts)<span class="sc">$</span>inside</span>
@@ -407,12 +408,12 @@ Projected CRS: +proj=aea +lat_0=20 +lon_0=-75 +lat_1=10 +lat_2=30 +x_0=0 +y_0=0 
 </details>
 </div>
 </section>
-<section id="time-expansion" class="level2">
-<h2 class="anchored" data-anchor-id="time-expansion">Time Expansion</h2>
+<section id="time-expansion" class="level2" data-number="6">
+<h2 data-number="6" class="anchored" data-anchor-id="time-expansion"><span class="header-section-number">6</span> Time Expansion</h2>
 <p>Create dataframe with all years and weeks for the study period, weeks between <code>2022-01-01</code> and <code>2026-03-01</code>.</p>
 <div class="cell">
 <details open="">
-<summary>Hide code</summary>
+<summary>Show R Code</summary>
 <div class="sourceCode cell-code" id="cb10"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>study_start <span class="ot">&lt;-</span> <span class="fu">as_date</span>(<span class="st">"2022-01-01"</span>)</span>
 <span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>study_end <span class="ot">&lt;-</span> <span class="fu">as_date</span>(<span class="st">"2026-03-01"</span>)</span>
 <span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a></span>
@@ -437,7 +438,7 @@ Projected CRS: +proj=aea +lat_0=20 +lon_0=-75 +lat_1=10 +lat_2=30 +x_0=0 +y_0=0 
 <p>Replicate nodes to ensure a copy for each week in the study period.</p>
 <div class="cell">
 <details open="">
-<summary>Hide code</summary>
+<summary>Show R Code</summary>
 <div class="sourceCode cell-code" id="cb11"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a>quad_expand <span class="ot">&lt;-</span> <span class="fu">crossing</span>(integ_df, time_index)</span>
 <span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a><span class="fu">dim</span>(quad_expand) <span class="co"># dimensions</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
@@ -446,7 +447,7 @@ Projected CRS: +proj=aea +lat_0=20 +lon_0=-75 +lat_1=10 +lat_2=30 +x_0=0 +y_0=0 
 <pre><code>[1] 2219565       6</code></pre>
 </div>
 <details open="">
-<summary>Hide code</summary>
+<summary>Show R Code</summary>
 <div class="sourceCode cell-code" id="cb13"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="fu">head</span>(quad_expand)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 <div class="cell-output-display">
@@ -516,7 +517,7 @@ Projected CRS: +proj=aea +lat_0=20 +lon_0=-75 +lat_1=10 +lat_2=30 +x_0=0 +y_0=0 
 </div>
 </div>
 <details open="">
-<summary>Hide code</summary>
+<summary>Show R Code</summary>
 <div class="sourceCode cell-code" id="cb14"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="fu">tail</span>(quad_expand)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 <div class="cell-output-display">
@@ -587,11 +588,11 @@ Projected CRS: +proj=aea +lat_0=20 +lon_0=-75 +lat_1=10 +lat_2=30 +x_0=0 +y_0=0 
 </div>
 </div>
 </section>
-<section id="clean-detections" class="level2">
-<h2 class="anchored" data-anchor-id="clean-detections">Clean Detections</h2>
+<section id="clean-detections" class="level2" data-number="7">
+<h2 data-number="7" class="anchored" data-anchor-id="clean-detections"><span class="header-section-number">7</span> Clean Detections</h2>
 <div class="cell">
 <details open="">
-<summary>Hide code</summary>
+<summary>Show R Code</summary>
 <div class="sourceCode cell-code" id="cb15"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a>nws_detections_df <span class="ot">&lt;-</span> sim_data_df <span class="sc">%&gt;%</span></span>
 <span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">Y1 =</span> <span class="dv">1</span>, <span class="co"># NWS detection was reported</span></span>
 <span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>         <span class="at">Exp =</span> <span class="cn">NA</span>) <span class="sc">%&gt;%</span> <span class="co"># no exposure (point locations, no area)</span></span>
@@ -599,12 +600,12 @@ Projected CRS: +proj=aea +lat_0=20 +lon_0=-75 +lat_1=10 +lat_2=30 +x_0=0 +y_0=0 
 </details>
 </div>
 </section>
-<section id="combine-detection-tier" class="level2">
-<h2 class="anchored" data-anchor-id="combine-detection-tier">Combine Detection Tier</h2>
+<section id="combine-detection-tier" class="level2" data-number="8">
+<h2 data-number="8" class="anchored" data-anchor-id="combine-detection-tier"><span class="header-section-number">8</span> Combine Detection Tier</h2>
 <p>Combine mesh nodes (quadrature) with NWS detections (simulated)</p>
 <div class="cell">
 <details open="">
-<summary>Hide code</summary>
+<summary>Show R Code</summary>
 <div class="sourceCode cell-code" id="cb16"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a>tier1_df <span class="ot">&lt;-</span> <span class="fu">rbind</span>(nws_detections_df, quad_expand)</span>
 <span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a><span class="co"># check</span></span>
@@ -614,7 +615,7 @@ Projected CRS: +proj=aea +lat_0=20 +lon_0=-75 +lat_1=10 +lat_2=30 +x_0=0 +y_0=0 
 <pre><code>[1] TRUE</code></pre>
 </div>
 <details open="">
-<summary>Hide code</summary>
+<summary>Show R Code</summary>
 <div class="sourceCode cell-code" id="cb18"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="fu">dim</span>(tier1_df)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 <div class="cell-output cell-output-stdout">
@@ -622,12 +623,12 @@ Projected CRS: +proj=aea +lat_0=20 +lon_0=-75 +lat_1=10 +lat_2=30 +x_0=0 +y_0=0 
 </div>
 </div>
 </section>
-<section id="aggregate-counts" class="level2">
-<h2 class="anchored" data-anchor-id="aggregate-counts">Aggregate Counts</h2>
+<section id="aggregate-counts" class="level2" data-number="9">
+<h2 data-number="9" class="anchored" data-anchor-id="aggregate-counts"><span class="header-section-number">9</span> Aggregate Counts</h2>
 <p>Summing NWS detections within each neighborhood.</p>
 <div class="cell">
 <details open="">
-<summary>Hide code</summary>
+<summary>Show R Code</summary>
 <div class="sourceCode cell-code" id="cb20"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="co"># assign unique polygon ID</span></span>
 <span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a>mesh_polys<span class="sc">$</span>poly_id <span class="ot">&lt;-</span> <span class="dv">1</span><span class="sc">:</span><span class="fu">nrow</span>(mesh_polys)</span>
 <span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a></span>
@@ -651,12 +652,12 @@ Projected CRS: +proj=aea +lat_0=20 +lon_0=-75 +lat_1=10 +lat_2=30 +x_0=0 +y_0=0 
 </div>
 </div>
 </section>
-<section id="match-to-neighborhood" class="level2">
-<h2 class="anchored" data-anchor-id="match-to-neighborhood">Match to Neighborhood</h2>
+<section id="match-to-neighborhood" class="level2" data-number="10">
+<h2 data-number="10" class="anchored" data-anchor-id="match-to-neighborhood"><span class="header-section-number">10</span> Match to Neighborhood</h2>
 <p>Lastly, aggregate counts per neighborhood are match to the location of that neighborhood centroid.</p>
 <div class="cell">
 <details open="">
-<summary>Hide code</summary>
+<summary>Show R Code</summary>
 <div class="sourceCode cell-code" id="cb22"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="co"># get centroid coordinates</span></span>
 <span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a>centroids <span class="ot">&lt;-</span> <span class="fu">centroids</span>(mesh_polys)</span>
 <span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a>mesh_centroids_df <span class="ot">&lt;-</span> <span class="fu">as.data.frame</span>(<span class="fu">geom</span>(centroids)[, <span class="fu">c</span>(<span class="st">"x"</span>, <span class="st">"y"</span>)])</span>
@@ -683,30 +684,38 @@ Projected CRS: +proj=aea +lat_0=20 +lon_0=-75 +lat_1=10 +lat_2=30 +x_0=0 +y_0=0 
 </div>
 </div>
 </section>
-<section id="map-response" class="level2">
-<h2 class="anchored" data-anchor-id="map-response">Map Response</h2>
+<section id="map-response" class="level2" data-number="11">
+<h2 data-number="11" class="anchored" data-anchor-id="map-response"><span class="header-section-number">11</span> Map Response</h2>
 <p>Viewing the detection and count data for a select year and week.</p>
 <div class="cell">
 <details open="">
-<summary>Hide code</summary>
+<summary>Show R Code</summary>
 <div class="sourceCode cell-code" id="cb24"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a><span class="co"># convert to SF for plotting</span></span>
 <span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a>tier1_sf <span class="ot">&lt;-</span> <span class="fu">st_as_sf</span>(tier1_df, <span class="at">coords =</span> <span class="fu">c</span>(<span class="st">"x"</span>, <span class="st">"y"</span>), <span class="at">crs =</span> <span class="fu">st_crs</span>(states_proj))</span>
 <span id="cb24-3"><a href="#cb24-3" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb24-4"><a href="#cb24-4" aria-hidden="true" tabindex="-1"></a>tier2_sf <span class="ot">&lt;-</span> mesh_polys <span class="sc">%&gt;%</span> </span>
 <span id="cb24-5"><a href="#cb24-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">st_as_sf</span>() <span class="sc">%&gt;%</span> </span>
-<span id="cb24-6"><a href="#cb24-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">inner_join</span>(weekly_counts, <span class="at">by =</span> <span class="st">"poly_id"</span>)</span>
-<span id="cb24-7"><a href="#cb24-7" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-8"><a href="#cb24-8" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-9"><a href="#cb24-9" aria-hidden="true" tabindex="-1"></a><span class="fu">plot_bivariate_response</span>(</span>
-<span id="cb24-10"><a href="#cb24-10" aria-hidden="true" tabindex="-1"></a>  <span class="at">tier1_sf =</span> tier1_sf,</span>
-<span id="cb24-11"><a href="#cb24-11" aria-hidden="true" tabindex="-1"></a>  <span class="at">tier2_sf =</span> tier2_sf,</span>
-<span id="cb24-12"><a href="#cb24-12" aria-hidden="true" tabindex="-1"></a>  <span class="at">states_sf =</span> states_proj,</span>
-<span id="cb24-13"><a href="#cb24-13" aria-hidden="true" tabindex="-1"></a>  <span class="at">yr =</span> <span class="dv">2025</span>,</span>
-<span id="cb24-14"><a href="#cb24-14" aria-hidden="true" tabindex="-1"></a>  <span class="at">wk =</span> <span class="dv">35</span></span>
-<span id="cb24-15"><a href="#cb24-15" aria-hidden="true" tabindex="-1"></a>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<span id="cb24-6"><a href="#cb24-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">inner_join</span>(weekly_counts, <span class="at">by =</span> <span class="st">"poly_id"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+</div>
+<div class="cell">
+<details open="">
+<summary>Show R Code</summary>
+<div class="sourceCode cell-code" id="cb25"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a><span class="fu">plot_bivariate_response</span>(</span>
+<span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">tier1_sf =</span> tier1_sf,</span>
+<span id="cb25-3"><a href="#cb25-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">tier2_sf =</span> tier2_sf,</span>
+<span id="cb25-4"><a href="#cb25-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">states_sf =</span> states_proj,</span>
+<span id="cb25-5"><a href="#cb25-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">yr =</span> <span class="dv">2025</span>,</span>
+<span id="cb25-6"><a href="#cb25-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">wk =</span> <span class="dv">35</span></span>
+<span id="cb25-7"><a href="#cb25-7" aria-hidden="true" tabindex="-1"></a>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 <div class="cell-output-display">
-<p><img src="response_files/figure-html/unnamed-chunk-13-1.png" class="img-fluid" width="1920"></p>
+<div id="fig-resp" class="quarto-figure quarto-figure-center anchored">
+<figure class="figure">
+<p><img src="response_files/figure-html/fig-resp-1.png" class="img-fluid figure-img" width="1920"></p>
+<p></p><figcaption class="figure-caption">Figure&nbsp;1: Comparison of data used as bivariate response variable for detection (left) and potential abundance (right) tiers for arbitrary week. Panel at left shows point-level location of simulated detections whereas that at right shows sum of detections per neighborhood.</figcaption><p></p>
+</figure>
+</div>
 </div>
 </div>
 <div class="callout-tip callout callout-style-default no-icon callout-captioned">
@@ -869,5 +878,4 @@ window.document.addEventListener("DOMContentLoaded", function (event) {
 
 
 
-<script src="site_libs/quarto-html/zenscroll-min.js"></script>
 </body></html>

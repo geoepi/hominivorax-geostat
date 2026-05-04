@@ -6,7 +6,7 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
-<meta name="description" content="Source data download and simulation of NWS point detections">
+<meta name="dcterms.date" content="2026-05-04">
 
 <title>NWS Invasion Dynamics - Simulation</title>
 <style>
@@ -122,7 +122,6 @@ code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warni
     "search-submit-button-title": "Submit"
   }
 }</script>
-<style>html{ scroll-behavior: smooth; }</style>
 
   <script>window.backupDefine = window.define; window.define = undefined;</script><script src="https://cdn.jsdelivr.net/npm/katex@0.15.1/dist/katex.min.js"></script>
   <script>document.addEventListener("DOMContentLoaded", function () {
@@ -202,16 +201,16 @@ code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warni
 <!-- margin-sidebar -->
     <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
         <nav id="TOC" role="doc-toc" class="toc-active">
-    <h2 id="toc-title">Page Contents</h2>
+    <h2 id="toc-title">On this page</h2>
    
-  <ul class="collapse">
-  <li><a href="#overview" id="toc-overview" class="nav-link active" data-scroll-target="#overview">Overview</a></li>
-  <li><a href="#libraries" id="toc-libraries" class="nav-link" data-scroll-target="#libraries">Libraries</a></li>
-  <li><a href="#custom-functions" id="toc-custom-functions" class="nav-link" data-scroll-target="#custom-functions">Custom Functions</a></li>
-  <li><a href="#download-osf-data" id="toc-download-osf-data" class="nav-link" data-scroll-target="#download-osf-data">Download OSF Data</a></li>
-  <li><a href="#inspect-grids" id="toc-inspect-grids" class="nav-link" data-scroll-target="#inspect-grids">Inspect Grids</a></li>
-  <li><a href="#estimated-detections" id="toc-estimated-detections" class="nav-link" data-scroll-target="#estimated-detections">Estimated Detections</a></li>
-  <li><a href="#simulate-spatial-points" id="toc-simulate-spatial-points" class="nav-link" data-scroll-target="#simulate-spatial-points">Simulate Spatial Points</a></li>
+  <ul>
+  <li><a href="#overview" id="toc-overview" class="nav-link active" data-scroll-target="#overview"><span class="toc-section-number">1</span>  Overview</a></li>
+  <li><a href="#libraries" id="toc-libraries" class="nav-link" data-scroll-target="#libraries"><span class="toc-section-number">2</span>  Libraries</a></li>
+  <li><a href="#custom-functions" id="toc-custom-functions" class="nav-link" data-scroll-target="#custom-functions"><span class="toc-section-number">3</span>  Custom Functions</a></li>
+  <li><a href="#download-osf-data" id="toc-download-osf-data" class="nav-link" data-scroll-target="#download-osf-data"><span class="toc-section-number">4</span>  Download OSF Data</a></li>
+  <li><a href="#inspect-grids" id="toc-inspect-grids" class="nav-link" data-scroll-target="#inspect-grids"><span class="toc-section-number">5</span>  Inspect Grids</a></li>
+  <li><a href="#estimated-detections" id="toc-estimated-detections" class="nav-link" data-scroll-target="#estimated-detections"><span class="toc-section-number">6</span>  Estimated Detections</a></li>
+  <li><a href="#simulate-spatial-points" id="toc-simulate-spatial-points" class="nav-link" data-scroll-target="#simulate-spatial-points"><span class="toc-section-number">7</span>  Simulate Spatial Points</a></li>
   </ul>
 </nav>
     </div>
@@ -221,18 +220,20 @@ code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warni
 <header id="title-block-header" class="quarto-title-block default">
 <div class="quarto-title">
 <h1 class="title">Simulation</h1>
+<p class="subtitle lead">Source Data Download and NWS Case Detection Simulation</p>
 </div>
 
-<div>
-  <div class="description">
-    Source data download and simulation of NWS point detections
-  </div>
-</div>
 
 
 <div class="quarto-title-meta">
 
     
+    <div>
+    <div class="quarto-title-meta-heading">Published</div>
+    <div class="quarto-title-meta-contents">
+      <p class="date">May 4, 2026</p>
+    </div>
+  </div>
   
     
   </div>
@@ -252,18 +253,18 @@ pre {
   font-size: 11pt
 }
 </style>
-<section id="overview" class="level2">
-<h2 class="anchored" data-anchor-id="overview">Overview</h2>
+<section id="overview" class="level2" data-number="1">
+<h2 data-number="1" class="anchored" data-anchor-id="overview"><span class="header-section-number">1</span> Overview</h2>
 <p>The script demonstrates how to interactively download model results and supporting information archived on the Open Science Framework (OSF) and then simulate New World Screwworm (NWS) case detections.</p>
 <p>The downloaded data includes spatial GeoTiff files depicting potential NWS abundance and estimated spread for each week between January 2022 and February 2026, spatial boundaries for analysis and visualization, and a copy of previously simulated NWS case point locations.</p>
 <hr>
 </section>
-<section id="libraries" class="level2">
-<h2 class="anchored" data-anchor-id="libraries">Libraries</h2>
+<section id="libraries" class="level2" data-number="2">
+<h2 data-number="2" class="anchored" data-anchor-id="libraries"><span class="header-section-number">2</span> Libraries</h2>
 <p>Load needed libraries and packages.</p>
 <div class="cell">
 <details open="">
-<summary>Hide code</summary>
+<summary>Show R Code</summary>
 <div class="sourceCode cell-code" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(tidyverse) <span class="co"># data wrangling</span></span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="fu">options</span>(<span class="at">dplyr.summarise.inform =</span> <span class="cn">FALSE</span>)</span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(here) <span class="co"># directory management</span></span>
@@ -275,19 +276,19 @@ pre {
 </details>
 </div>
 </section>
-<section id="custom-functions" class="level2">
-<h2 class="anchored" data-anchor-id="custom-functions">Custom Functions</h2>
+<section id="custom-functions" class="level2" data-number="3">
+<h2 data-number="3" class="anchored" data-anchor-id="custom-functions"><span class="header-section-number">3</span> Custom Functions</h2>
 <p>Load customized functions.</p>
 <div class="cell">
 <details open="">
-<summary>Hide code</summary>
+<summary>Show R Code</summary>
 <div class="sourceCode cell-code" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="fu">source</span>(<span class="fu">here</span>(<span class="st">"R/utilities.R"</span>))</span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="fu">source_dir</span>(<span class="fu">here</span>(<span class="st">"R"</span>))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 </div>
 </section>
-<section id="download-osf-data" class="level2">
-<h2 class="anchored" data-anchor-id="download-osf-data">Download OSF Data</h2>
+<section id="download-osf-data" class="level2" data-number="4">
+<h2 data-number="4" class="anchored" data-anchor-id="download-osf-data"><span class="header-section-number">4</span> Download OSF Data</h2>
 <p>Spatial GeoTIFF files (.tif) depicting NWS estimated potential abundance and spread are available on the <a href="https://osf.io/uvqmw/">Open Science Framework</a>. Here we link the location and download the files to a demonstration directory (<code>/demo</code>).</p>
 <p><strong>Downloaded Files:</strong><br>
 - <em>spread_GeoTIFF_2026-03-24.zip</em>: Zipped folder containing rasters showing estimated NWS spread.<br>
@@ -296,7 +297,7 @@ pre {
 - <em>sim_locations_2026-03-24.csv</em>: Simulated NWS detections; the same file is reproduced in this script.</p>
 <div class="cell">
 <details open="">
-<summary>Hide code</summary>
+<summary>Show R Code</summary>
 <div class="sourceCode cell-code" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="co"># file location on OSF</span></span>
 <span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>osf_project_location <span class="ot">&lt;-</span> <span class="fu">osf_retrieve_node</span>(<span class="st">"https://osf.io/uvqmw/"</span>)</span>
 <span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a></span>
@@ -307,7 +308,7 @@ pre {
 <pre><code>[1] "hominivorax-geostat"</code></pre>
 </div>
 <details open="">
-<summary>Hide code</summary>
+<summary>Show R Code</summary>
 <div class="sourceCode cell-code" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="co"># create demo directory</span></span>
 <span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> (<span class="sc">!</span><span class="fu">dir.exists</span>(<span class="st">"demo"</span>)) <span class="fu">dir.create</span>(<span class="st">"demo"</span>, <span class="at">recursive =</span> <span class="cn">TRUE</span>)</span>
 <span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a></span>
@@ -367,12 +368,12 @@ pre {
 </div>
 </div>
 </div>
-<section id="unzip-grids" class="level4">
-<h4 class="anchored" data-anchor-id="unzip-grids">Unzip Grids</h4>
+<section id="unzip-grids" class="level4" data-number="4.0.1">
+<h4 data-number="4.0.1" class="anchored" data-anchor-id="unzip-grids"><span class="header-section-number">4.0.1</span> Unzip Grids</h4>
 <p>Spatial grids are bundled in zip files. Unzip the files.</p>
 <div class="cell">
 <details open="">
-<summary>Hide code</summary>
+<summary>Show R Code</summary>
 <div class="sourceCode cell-code" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>osf_id<span class="sc">$</span>name <span class="co"># file names</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 <div class="cell-output cell-output-stdout">
@@ -380,18 +381,18 @@ pre {
 [3] "study_polygons.gpkg"           "sim_locations_2026-03-24.csv" </code></pre>
 </div>
 <details open="">
-<summary>Hide code</summary>
+<summary>Show R Code</summary>
 <div class="sourceCode cell-code" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="fu">unzip</span>(<span class="fu">file.path</span>(<span class="fu">here</span>(<span class="st">"demo"</span>),<span class="st">"spread_GeoTIFF_2026-03-24.zip"</span>), <span class="at">exdir =</span> <span class="fu">here</span>(<span class="st">"demo"</span>)) <span class="co"># spread grids</span></span>
 <span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a><span class="fu">unzip</span>(<span class="fu">file.path</span>(<span class="fu">here</span>(<span class="st">"demo"</span>), <span class="st">"niche_GeoTIFF_2026-03-24.zip"</span>), <span class="at">exdir =</span> <span class="fu">here</span>(<span class="st">"demo"</span>)) <span class="co"># potential abundance grids</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 </div>
 </section>
-<section id="spatial-polygons" class="level4">
-<h4 class="anchored" data-anchor-id="spatial-polygons">Spatial Polygons</h4>
+<section id="spatial-polygons" class="level4" data-number="4.0.2">
+<h4 data-number="4.0.2" class="anchored" data-anchor-id="spatial-polygons"><span class="header-section-number">4.0.2</span> Spatial Polygons</h4>
 <p>Read polygons defining jurisdictional and administrative boundaries</p>
 <div class="cell">
 <details open="">
-<summary>Hide code</summary>
+<summary>Show R Code</summary>
 <div class="sourceCode cell-code" id="cb9"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>states_proj <span class="ot">&lt;-</span> <span class="fu">st_read</span>(<span class="fu">here</span>(<span class="st">"demo/study_polygons.gpkg"</span>))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 <div class="cell-output cell-output-stdout">
@@ -406,29 +407,29 @@ Projected CRS: +proj=aea +lat_0=20 +lon_0=-75 +lat_1=10 +lat_2=30 +x_0=0 +y_0=0 
 </div>
 </section>
 </section>
-<section id="inspect-grids" class="level2">
-<h2 class="anchored" data-anchor-id="inspect-grids">Inspect Grids</h2>
+<section id="inspect-grids" class="level2" data-number="5">
+<h2 data-number="5" class="anchored" data-anchor-id="inspect-grids"><span class="header-section-number">5</span> Inspect Grids</h2>
 <p>Spatial grid file names are coded with the year and week they represent. The <em>stack_rasters()</em> function will read the files from the corresponding directory, order them by year and week, and return the data as SpatRaster objects. Values in both objects provide the number of NWS detections per 25x25~km grid cell (approx. 625~km<span class="math inline">^2</span>). The <em>niche</em> product is the number of <em>potential</em> detections based on environmental conditions, whereas the <em>spread</em> product is an estimate of how many occurred between January 2022 and February 2026.</p>
 <p>Organize and stack rasters.</p>
 <div class="cell">
 <details open="">
-<summary>Hide code</summary>
+<summary>Show R Code</summary>
 <div class="sourceCode cell-code" id="cb11"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a>abundance_stk <span class="ot">&lt;-</span> <span class="fu">stack_rasters</span>(<span class="fu">here</span>(<span class="st">"demo/niche"</span>)) <span class="co"># potential abundance given niche conditions, limits, or capacity</span></span>
 <span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>spread_stk <span class="ot">&lt;-</span> <span class="fu">stack_rasters</span>(<span class="fu">here</span>(<span class="st">"demo/spread"</span>)) <span class="co"># reflecting invasion/spread</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 </div>
-<section id="example-potential-abundance-maps" class="level4">
-<h4 class="anchored" data-anchor-id="example-potential-abundance-maps">Example Potential Abundance Maps</h4>
+<section id="example-potential-abundance-maps" class="level4" data-number="5.0.1">
+<h4 data-number="5.0.1" class="anchored" data-anchor-id="example-potential-abundance-maps"><span class="header-section-number">5.0.1</span> Example Potential Abundance Maps</h4>
 <div class="cell">
 <details open="">
-<summary>Hide code</summary>
+<summary>Show R Code</summary>
 <div class="sourceCode cell-code" id="cb12"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="fu">quick_map_plot</span>(<span class="at">grid_stk=</span>abundance_stk, <span class="at">target_year=</span><span class="dv">2024</span>, <span class="at">target_week=</span><span class="dv">10</span>, <span class="at">boundary_polys=</span>states_proj)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 <div class="cell-output-display">
 <p><img src="simulation_files/figure-html/unnamed-chunk-7-1.png" class="img-fluid" width="1440"></p>
 </div>
 <details open="">
-<summary>Hide code</summary>
+<summary>Show R Code</summary>
 <div class="sourceCode cell-code" id="cb13"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="fu">quick_map_plot</span>(<span class="at">grid_stk=</span>abundance_stk, <span class="at">target_year=</span><span class="dv">2025</span>, <span class="at">target_week=</span><span class="dv">30</span>, <span class="at">boundary_polys=</span>states_proj)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 <div class="cell-output-display">
@@ -436,18 +437,18 @@ Projected CRS: +proj=aea +lat_0=20 +lon_0=-75 +lat_1=10 +lat_2=30 +x_0=0 +y_0=0 
 </div>
 </div>
 </section>
-<section id="example-spread-maps" class="level4">
-<h4 class="anchored" data-anchor-id="example-spread-maps">Example Spread Maps</h4>
+<section id="example-spread-maps" class="level4" data-number="5.0.2">
+<h4 data-number="5.0.2" class="anchored" data-anchor-id="example-spread-maps"><span class="header-section-number">5.0.2</span> Example Spread Maps</h4>
 <div class="cell">
 <details open="">
-<summary>Hide code</summary>
+<summary>Show R Code</summary>
 <div class="sourceCode cell-code" id="cb14"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="fu">quick_map_plot</span>(<span class="at">grid_stk=</span>spread_stk, <span class="at">target_year=</span><span class="dv">2024</span>, <span class="at">target_week=</span><span class="dv">10</span>, <span class="at">boundary_polys=</span>states_proj)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 <div class="cell-output-display">
 <p><img src="simulation_files/figure-html/unnamed-chunk-8-1.png" class="img-fluid" width="1440"></p>
 </div>
 <details open="">
-<summary>Hide code</summary>
+<summary>Show R Code</summary>
 <div class="sourceCode cell-code" id="cb15"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="fu">quick_map_plot</span>(<span class="at">grid_stk=</span>spread_stk, <span class="at">target_year=</span><span class="dv">2025</span>, <span class="at">target_week=</span><span class="dv">30</span>, <span class="at">boundary_polys=</span>states_proj)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 <div class="cell-output-display">
@@ -456,16 +457,16 @@ Projected CRS: +proj=aea +lat_0=20 +lon_0=-75 +lat_1=10 +lat_2=30 +x_0=0 +y_0=0 
 </div>
 </section>
 </section>
-<section id="estimated-detections" class="level2">
-<h2 class="anchored" data-anchor-id="estimated-detections">Estimated Detections</h2>
+<section id="estimated-detections" class="level2" data-number="6">
+<h2 data-number="6" class="anchored" data-anchor-id="estimated-detections"><span class="header-section-number">6</span> Estimated Detections</h2>
 <p>The <em>sum_intensity_grid()</em> function, when applied to the estimated spread grids, will sum the estimated number of detections for each week. This approximates the mean number of cases as predicted by the model described in the manuscript. Note that the function includes an input option <code>min_est=</code> that specifies the minimum cell value to consider a detection.</p>
 <p>The dataframe returned by the function includes a column <em>count</em> that will be used to simulate spatial points in the next step.</p>
 <div class="cell" data-fig_width="15">
 <details open="">
-<summary>Hide code</summary>
+<summary>Show R Code</summary>
 <div class="sourceCode cell-code" id="cb16"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a>weekly_counts <span class="ot">&lt;-</span> <span class="fu">sum_intensity_grid</span>(spread_stk, <span class="at">min_est =</span> <span class="dv">1</span>)</span>
 <span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(<span class="at">data =</span> weekly_counts, <span class="fu">aes</span>(<span class="at">x =</span> date, <span class="at">y =</span> count)) <span class="sc">+</span></span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a>det_plt <span class="ot">&lt;-</span> <span class="fu">ggplot</span>(<span class="at">data =</span> weekly_counts, <span class="fu">aes</span>(<span class="at">x =</span> date, <span class="at">y =</span> count)) <span class="sc">+</span></span>
 <span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_col</span>(<span class="at">fill =</span> <span class="st">"steelblue"</span>, <span class="at">alpha =</span> <span class="fl">0.6</span>, <span class="at">width =</span> <span class="dv">7</span>) <span class="sc">+</span> </span>
 <span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>() <span class="sc">+</span></span>
 <span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_x_date</span>(<span class="at">date_labels =</span> <span class="st">"%b %Y"</span>, <span class="at">date_breaks =</span> <span class="st">"3 months"</span>) <span class="sc">+</span> </span>
@@ -487,33 +488,44 @@ Projected CRS: +proj=aea +lat_0=20 +lon_0=-75 +lat_1=10 +lat_2=30 +x_0=0 +y_0=0 
 <span id="cb16-22"><a href="#cb16-22" aria-hidden="true" tabindex="-1"></a>    <span class="at">caption =</span> <span class="st">" "</span></span>
 <span id="cb16-23"><a href="#cb16-23" aria-hidden="true" tabindex="-1"></a>  )</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
+</div>
+<div class="cell" data-fig_width="15">
+<details open="">
+<summary>Show R Code</summary>
+<div class="sourceCode cell-code" id="cb17"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a>det_plt</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
 <div class="cell-output-display">
-<p><img src="simulation_files/figure-html/unnamed-chunk-9-1.png" class="img-fluid" width="672"></p>
+<div id="fig-estcount" class="quarto-figure quarto-figure-center anchored">
+<figure class="figure">
+<p><img src="simulation_files/figure-html/fig-estcount-1.png" class="img-fluid figure-img" width="672"></p>
+<p></p><figcaption class="figure-caption">Figure&nbsp;1: Estimated detections by week. Counts represent the weekly sum of counts in all raster cells.</figcaption><p></p>
+</figure>
+</div>
 </div>
 </div>
 </section>
-<section id="simulate-spatial-points" class="level2">
-<h2 class="anchored" data-anchor-id="simulate-spatial-points">Simulate Spatial Points</h2>
+<section id="simulate-spatial-points" class="level2" data-number="7">
+<h2 data-number="7" class="anchored" data-anchor-id="simulate-spatial-points"><span class="header-section-number">7</span> Simulate Spatial Points</h2>
 <p>The <em>simulate_detection_points()</em> function will use the <a href="https://spatstat.org/"><strong>spatstat</strong> package</a> to generate random spatial points based on target weekly counts given in the <em>weekly_counts</em> dataframe created in the prior step, and estimated intensity as given in the spread grids (<em>spread_stk</em>). Values in <em>spread_stk</em> serve as weights for probabilistic assignment of point locations.</p>
 <p>The returned result is a dataframe with x and y coordinates, year, and week. Note that the projected coordinate system is used by default. Conversion to latitude and longitude can be performed as shown below.</p>
 <div class="cell">
 <details open="">
-<summary>Hide code</summary>
-<div class="sourceCode cell-code" id="cb17"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a>sim_points <span class="ot">&lt;-</span> <span class="fu">simulate_detection_points</span>(<span class="at">raster_stack=</span>spread_stk, <span class="co"># weights for location assignment</span></span>
-<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a>                                        <span class="at">obs_df=</span>weekly_counts, <span class="co"># how many to simulate per week</span></span>
-<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a>                                        <span class="at">rseed=</span><span class="dv">1976</span> <span class="co"># change to alter assignment probability</span></span>
-<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a>                                        )</span>
-<span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb17-6"><a href="#cb17-6" aria-hidden="true" tabindex="-1"></a>n_sim_points <span class="ot">&lt;-</span> <span class="fu">dim</span>(sim_points)[<span class="dv">1</span>] <span class="co"># number simulated</span></span>
-<span id="cb17-7"><a href="#cb17-7" aria-hidden="true" tabindex="-1"></a>n_est_detctions <span class="ot">&lt;-</span> <span class="fu">sum</span>(weekly_counts<span class="sc">$</span>count) <span class="co"># number estimated by model</span></span>
-<span id="cb17-8"><a href="#cb17-8" aria-hidden="true" tabindex="-1"></a>n_sim_points <span class="sc">==</span> n_est_detctions <span class="co"># same</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<summary>Show R Code</summary>
+<div class="sourceCode cell-code" id="cb18"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a>sim_points <span class="ot">&lt;-</span> <span class="fu">simulate_detection_points</span>(<span class="at">raster_stack=</span>spread_stk, <span class="co"># weights for location assignment</span></span>
+<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a>                                        <span class="at">obs_df=</span>weekly_counts, <span class="co"># how many to simulate per week</span></span>
+<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a>                                        <span class="at">rseed=</span><span class="dv">1976</span> <span class="co"># change to alter assignment probability</span></span>
+<span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a>                                        )</span>
+<span id="cb18-5"><a href="#cb18-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-6"><a href="#cb18-6" aria-hidden="true" tabindex="-1"></a>n_sim_points <span class="ot">&lt;-</span> <span class="fu">dim</span>(sim_points)[<span class="dv">1</span>] <span class="co"># number simulated</span></span>
+<span id="cb18-7"><a href="#cb18-7" aria-hidden="true" tabindex="-1"></a>n_est_detctions <span class="ot">&lt;-</span> <span class="fu">sum</span>(weekly_counts<span class="sc">$</span>count) <span class="co"># number estimated by model</span></span>
+<span id="cb18-8"><a href="#cb18-8" aria-hidden="true" tabindex="-1"></a>n_sim_points <span class="sc">==</span> n_est_detctions <span class="co"># same</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 <div class="cell-output cell-output-stdout">
 <pre><code>[1] TRUE</code></pre>
 </div>
 <details open="">
-<summary>Hide code</summary>
-<div class="sourceCode cell-code" id="cb19"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="fu">head</span>(sim_points)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<summary>Show R Code</summary>
+<div class="sourceCode cell-code" id="cb20"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="fu">head</span>(sim_points)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 <div class="cell-output-display">
 <div class="kable-table">
@@ -568,15 +580,15 @@ Projected CRS: +proj=aea +lat_0=20 +lon_0=-75 +lat_1=10 +lat_2=30 +x_0=0 +y_0=0 
 </div>
 </div>
 <details open="">
-<summary>Hide code</summary>
-<div class="sourceCode cell-code" id="cb20"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="co"># convert to SpatVector points</span></span>
-<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a>nws_points <span class="ot">&lt;-</span> <span class="fu">vect</span>(sim_points, <span class="at">geom =</span> <span class="fu">c</span>(<span class="st">"x"</span>, <span class="st">"y"</span>), <span class="at">crs =</span> <span class="fu">crs</span>(spread_stk)) <span class="co"># projected </span></span>
-<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a>nws_points <span class="ot">&lt;-</span> <span class="fu">project</span>(nws_points, <span class="st">"EPSG:4326"</span>) <span class="co"># convert to lat/long</span></span>
-<span id="cb20-4"><a href="#cb20-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb20-5"><a href="#cb20-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb20-6"><a href="#cb20-6" aria-hidden="true" tabindex="-1"></a><span class="co"># back to dataframe, if needed</span></span>
-<span id="cb20-7"><a href="#cb20-7" aria-hidden="true" tabindex="-1"></a>nws_point_latlong_df <span class="ot">&lt;-</span> <span class="fu">as.data.frame</span>(nws_points, <span class="at">geom =</span> <span class="st">"xy"</span>)</span>
-<span id="cb20-8"><a href="#cb20-8" aria-hidden="true" tabindex="-1"></a><span class="fu">head</span>(nws_point_latlong_df)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<summary>Show R Code</summary>
+<div class="sourceCode cell-code" id="cb21"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="co"># convert to SpatVector points</span></span>
+<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a>nws_points <span class="ot">&lt;-</span> <span class="fu">vect</span>(sim_points, <span class="at">geom =</span> <span class="fu">c</span>(<span class="st">"x"</span>, <span class="st">"y"</span>), <span class="at">crs =</span> <span class="fu">crs</span>(spread_stk)) <span class="co"># projected </span></span>
+<span id="cb21-3"><a href="#cb21-3" aria-hidden="true" tabindex="-1"></a>nws_points <span class="ot">&lt;-</span> <span class="fu">project</span>(nws_points, <span class="st">"EPSG:4326"</span>) <span class="co"># convert to lat/long</span></span>
+<span id="cb21-4"><a href="#cb21-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-5"><a href="#cb21-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-6"><a href="#cb21-6" aria-hidden="true" tabindex="-1"></a><span class="co"># back to dataframe, if needed</span></span>
+<span id="cb21-7"><a href="#cb21-7" aria-hidden="true" tabindex="-1"></a>nws_point_latlong_df <span class="ot">&lt;-</span> <span class="fu">as.data.frame</span>(nws_points, <span class="at">geom =</span> <span class="st">"xy"</span>)</span>
+<span id="cb21-8"><a href="#cb21-8" aria-hidden="true" tabindex="-1"></a><span class="fu">head</span>(nws_point_latlong_df)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 <div class="cell-output-display">
 <div class="kable-table">
@@ -635,44 +647,59 @@ Projected CRS: +proj=aea +lat_0=20 +lon_0=-75 +lat_1=10 +lat_2=30 +x_0=0 +y_0=0 
 <p><strong>Note:</strong> A similar file is included in initial download from OSF above.</p>
 <div class="cell">
 <details open="">
-<summary>Hide code</summary>
-<div class="sourceCode cell-code" id="cb21"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="fu">write_csv</span>(nws_point_latlong_df, <span class="fu">here</span>(<span class="st">"demo/sim_locations_demo.csv"</span>))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<summary>Show R Code</summary>
+<div class="sourceCode cell-code" id="cb22"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="fu">write_csv</span>(nws_point_latlong_df, <span class="fu">here</span>(<span class="st">"demo/sim_locations_demo.csv"</span>))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 </div>
-<section id="map-points" class="level4">
-<h4 class="anchored" data-anchor-id="map-points">Map Points</h4>
+<section id="map-points" class="level4" data-number="7.0.1">
+<h4 data-number="7.0.1" class="anchored" data-anchor-id="map-points"><span class="header-section-number">7.0.1</span> Map Points</h4>
 <p>Visual inspection of simulated locations for select weeks.</p>
 <div class="cell">
 <details open="">
-<summary>Hide code</summary>
-<div class="sourceCode cell-code" id="cb22"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="fu">quick_point_map</span>(<span class="at">target_year=</span><span class="dv">2022</span>, <span class="at">target_week=</span><span class="dv">10</span>, </span>
-<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a>                <span class="at">boundary_polys=</span>states_proj, </span>
-<span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a>                <span class="at">point_data=</span>sim_points)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
-</details>
-<div class="cell-output-display">
-<p><img src="simulation_files/figure-html/unnamed-chunk-12-1.png" class="img-fluid" width="1440"></p>
-</div>
-</div>
-<div class="cell">
-<details open="">
-<summary>Hide code</summary>
-<div class="sourceCode cell-code" id="cb23"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a><span class="fu">quick_point_map</span>(<span class="at">target_year=</span><span class="dv">2024</span>, <span class="at">target_week=</span><span class="dv">30</span>, </span>
+<summary>Show R Code</summary>
+<div class="sourceCode cell-code" id="cb23"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a><span class="fu">quick_point_map</span>(<span class="at">target_year=</span><span class="dv">2022</span>, <span class="at">target_week=</span><span class="dv">10</span>, </span>
 <span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a>                <span class="at">boundary_polys=</span>states_proj, </span>
 <span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a>                <span class="at">point_data=</span>sim_points)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 <div class="cell-output-display">
-<p><img src="simulation_files/figure-html/unnamed-chunk-13-1.png" class="img-fluid" width="1440"></p>
+<div id="fig-simpnt1" class="quarto-figure quarto-figure-center anchored">
+<figure class="figure">
+<p><img src="simulation_files/figure-html/fig-simpnt1-1.png" class="img-fluid figure-img" width="1440"></p>
+<p></p><figcaption class="figure-caption">Figure&nbsp;2: Simulated NWS case detections.</figcaption><p></p>
+</figure>
+</div>
 </div>
 </div>
 <div class="cell">
 <details open="">
-<summary>Hide code</summary>
-<div class="sourceCode cell-code" id="cb24"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a><span class="fu">quick_point_map</span>(<span class="at">target_year=</span><span class="dv">2026</span>, <span class="at">target_week=</span><span class="dv">2</span>, </span>
+<summary>Show R Code</summary>
+<div class="sourceCode cell-code" id="cb24"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a><span class="fu">quick_point_map</span>(<span class="at">target_year=</span><span class="dv">2024</span>, <span class="at">target_week=</span><span class="dv">30</span>, </span>
 <span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a>                <span class="at">boundary_polys=</span>states_proj, </span>
 <span id="cb24-3"><a href="#cb24-3" aria-hidden="true" tabindex="-1"></a>                <span class="at">point_data=</span>sim_points)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 <div class="cell-output-display">
-<p><img src="simulation_files/figure-html/unnamed-chunk-14-1.png" class="img-fluid" width="1440"></p>
+<div id="fig-simpnt2" class="quarto-figure quarto-figure-center anchored">
+<figure class="figure">
+<p><img src="simulation_files/figure-html/fig-simpnt2-1.png" class="img-fluid figure-img" width="1440"></p>
+<p></p><figcaption class="figure-caption">Figure&nbsp;3: Simulated NWS case detections.</figcaption><p></p>
+</figure>
+</div>
+</div>
+</div>
+<div class="cell">
+<details open="">
+<summary>Show R Code</summary>
+<div class="sourceCode cell-code" id="cb25"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a><span class="fu">quick_point_map</span>(<span class="at">target_year=</span><span class="dv">2026</span>, <span class="at">target_week=</span><span class="dv">2</span>, </span>
+<span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a>                <span class="at">boundary_polys=</span>states_proj, </span>
+<span id="cb25-3"><a href="#cb25-3" aria-hidden="true" tabindex="-1"></a>                <span class="at">point_data=</span>sim_points)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+<div class="cell-output-display">
+<div id="fig-simpnt3" class="quarto-figure quarto-figure-center anchored">
+<figure class="figure">
+<p><img src="simulation_files/figure-html/fig-simpnt3-1.png" class="img-fluid figure-img" width="1440"></p>
+<p></p><figcaption class="figure-caption">Figure&nbsp;4: Simulated NWS case detections.</figcaption><p></p>
+</figure>
+</div>
 </div>
 </div>
 <div class="callout-tip callout callout-style-default no-icon callout-captioned">
@@ -836,5 +863,4 @@ window.document.addEventListener("DOMContentLoaded", function (event) {
 
 
 
-<script src="site_libs/quarto-html/zenscroll-min.js"></script>
 </body></html>

@@ -1,22 +1,19 @@
 ---
 title: "Simulation"
-description: "Source data download and simulation of NWS point detections"
+subtitle: "Source Data Download and NWS Case Detection Simulation"
+date: last-modified
 format:
   html: 
     df-print: kable
     code-fold: show
-    code-summary: "Hide code"
+    code-summary: "Show R Code"
     code-overflow: wrap
-    toc-title: Page Contents
     toc: true
-    toc-depth: 2
+    toc-depth: 3
     toc-location: right
-    number-sections: false
+    number-sections: true
     html-math-method: katex
-    smooth-scroll: true
-editor: source
-editor_options: 
-  chunk_output_type: console
+    theme: cosmo
 ---
 ```{=html}
 <style type="text/css">
@@ -139,7 +136,7 @@ The dataframe returned by the function includes a column *count* that will be us
 ```{r fig_width=15, fig.height=8, warning=FALSE, message=FALSE}
 weekly_counts <- sum_intensity_grid(spread_stk, min_est = 1)
 
-ggplot(data = weekly_counts, aes(x = date, y = count)) +
+det_plt <- ggplot(data = weekly_counts, aes(x = date, y = count)) +
   geom_col(fill = "steelblue", alpha = 0.6, width = 7) + 
   theme_minimal() +
   scale_x_date(date_labels = "%b %Y", date_breaks = "3 months") + 
@@ -160,6 +157,14 @@ ggplot(data = weekly_counts, aes(x = date, y = count)) +
     y = "Estimated Case Count",
     caption = " "
   )
+
+```
+```{r fig_width=15, fig.height=8, warning=FALSE, message=FALSE}
+#| label: fig-estcount
+#| fig-cap: "Estimated detections by week. Counts represent the weekly sum of counts in all raster cells."
+#| 
+det_plt
+
 
 ```
 
@@ -203,18 +208,28 @@ write_csv(nws_point_latlong_df, here("demo/sim_locations_demo.csv"))
 #### Map Points  
 Visual inspection of simulated locations for select weeks.    
 ```{r fig.width=15, fig.height=15, warning=FALSE, message=15}
+#| label: fig-simpnt1
+#| fig-cap: "Simulated NWS case detections."
+#| 
 quick_point_map(target_year=2022, target_week=10, 
                 boundary_polys=states_proj, 
                 point_data=sim_points)
 ```
 
 ```{r fig.width=15, fig.height=15, warning=FALSE, message=15}
+#| label: fig-simpnt2
+#| fig-cap: "Simulated NWS case detections."
+
+
 quick_point_map(target_year=2024, target_week=30, 
                 boundary_polys=states_proj, 
                 point_data=sim_points)
 ```
 
 ```{r fig.width=15, fig.height=15, warning=FALSE, message=15}
+#| label: fig-simpnt3
+#| fig-cap: "Simulated NWS case detections."
+#| 
 quick_point_map(target_year=2026, target_week=2, 
                 boundary_polys=states_proj, 
                 point_data=sim_points)

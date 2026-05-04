@@ -1,22 +1,19 @@
 ---
 title: "Response"
-description: "Construct bivariate response variable"
+subtitle: "Construct Bivariate Response Variable"
+date: last-modified
 format:
   html: 
     df-print: kable
     code-fold: show
-    code-summary: "Hide code"
+    code-summary: "Show R Code"
     code-overflow: wrap
-    toc-title: Page Contents
     toc: true
-    toc-depth: 2
+    toc-depth: 3
     toc-location: right
-    number-sections: false
+    number-sections: true
     html-math-method: katex
-    smooth-scroll: true
-editor: source
-editor_options: 
-  chunk_output_type: console
+    theme: cosmo
 ---
 ```{=html}
 <style type="text/css">
@@ -260,6 +257,10 @@ tier1_sf <- st_as_sf(tier1_df, coords = c("x", "y"), crs = st_crs(states_proj))
 tier2_sf <- mesh_polys %>% 
   st_as_sf() %>% 
   inner_join(weekly_counts, by = "poly_id")
+```
+```{r warning=FALSE, message=FALSE, fig.width=20, fig.height=10}
+#| label: fig-resp
+#| fig-cap: "Comparison of data used as bivariate response variable for detection (left) and potential abundance (right) tiers for arbitrary week. Panel at left shows point-level location of simulated detections whereas that at right shows sum of detections per neighborhood."
 
 
 plot_bivariate_response(
