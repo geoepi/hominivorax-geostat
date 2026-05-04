@@ -12,7 +12,7 @@ This repository provides supporting information for:
 [Git Page](https://geoepi.github.io/hominivorax-geostat/): Website version of this repository       
   
   
-[OSF Data Archive (not yet public)](https://osf.io/uvqmw/overview): Code and data archive on the Open Science Framework (OSF)   
+[OSF Data Archive](https://osf.io/uvqmw/overview): Code and data archive on the Open Science Framework (OSF)   
   
 
 ## Repository Structure:  
