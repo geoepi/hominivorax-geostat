@@ -6,7 +6,7 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
-<meta name="dcterms.date" content="2026-04-30">
+<meta name="dcterms.date" content="2026-05-03">
 
 <title>NWS Invasion Dynamics - Joint Spatiotemporal Model</title>
 <style>
@@ -171,6 +171,10 @@ code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warni
  <span class="menu-text">Tessellation</span></a>
   </li>  
   <li class="nav-item">
+    <a class="nav-link" href="./response.html">
+ <span class="menu-text">Response</span></a>
+  </li>  
+  <li class="nav-item">
     <a class="nav-link active" href="./model.html" aria-current="page">
  <span class="menu-text">Model</span></a>
   </li>  
@@ -240,7 +244,7 @@ code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warni
     <div>
     <div class="quarto-title-meta-heading">Published</div>
     <div class="quarto-title-meta-contents">
-      <p class="date">April 30, 2026</p>
+      <p class="date">May 3, 2026</p>
     </div>
   </div>
   
@@ -325,23 +329,24 @@ y_{2,it} &amp;\sim \text{NegBinom}(\mu_{it}, n) &amp;&amp; \text{(Abundance Tier
 <div class="sourceCode cell-code" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co"># SPDE for Tier 1: Detection (xi_1)</span></span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>spde.t1 <span class="ot">&lt;-</span> <span class="fu">inla.spde2.pcmatern</span>(mesh.dom, </span>
 <span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>                               <span class="at">alpha =</span> <span class="dv">2</span>,</span>
-<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>                               <span class="at">prior.range =</span> <span class="fu">c</span>(<span class="dv">150</span>, <span class="fl">0.05</span>),  </span>
-<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>                               <span class="at">prior.sigma =</span> <span class="fu">c</span>(<span class="fl">0.5</span>, <span class="fl">0.05</span>),</span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>                               <span class="at">prior.range =</span> <span class="fu">c</span>(<span class="dv">90</span>, <span class="fl">0.5</span>),  </span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>                               <span class="at">prior.sigma =</span> <span class="fu">c</span>(<span class="dv">1</span>, <span class="fl">0.5</span>),</span>
 <span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>                               <span class="at">constr =</span> <span class="cn">TRUE</span>)</span>
 <span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a><span class="co"># SPDE for Tier 2: Abundance (xi_2)</span></span>
 <span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>spde.t2 <span class="ot">&lt;-</span> <span class="fu">inla.spde2.pcmatern</span>(mesh.dom, </span>
 <span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>                               <span class="at">alpha =</span> <span class="dv">2</span>,</span>
-<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>                               <span class="at">prior.range =</span> <span class="fu">c</span>(<span class="dv">90</span>, <span class="fl">0.5</span>),  </span>
-<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>                               <span class="at">prior.sigma =</span> <span class="fu">c</span>(<span class="dv">1</span>, <span class="fl">0.5</span>),</span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>                               <span class="at">prior.range =</span> <span class="fu">c</span>(<span class="dv">150</span>, <span class="fl">0.05</span>),  </span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>                               <span class="at">prior.sigma =</span> <span class="fu">c</span>(<span class="fl">0.5</span>, <span class="fl">0.05</span>),</span>
 <span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>                               <span class="at">constr =</span> <span class="cn">TRUE</span>)</span>
 <span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a><span class="co"># Temporal steps</span></span>
-<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a>t_steps <span class="ot">&lt;-</span> <span class="fu">length</span>(<span class="fu">unique</span>(tier_1.set<span class="sc">$</span>time_index))</span>
-<span id="cb2-17"><a href="#cb2-17" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-18"><a href="#cb2-18" aria-hidden="true" tabindex="-1"></a><span class="co"># Define Spatial Indices</span></span>
-<span id="cb2-19"><a href="#cb2-19" aria-hidden="true" tabindex="-1"></a>field.xi1 <span class="ot">&lt;-</span> <span class="fu">inla.spde.make.index</span>(<span class="st">"field.xi1"</span>, <span class="at">n.spde =</span> spde.t1<span class="sc">$</span>n.spde, <span class="at">n.group =</span> t_steps)</span>
-<span id="cb2-20"><a href="#cb2-20" aria-hidden="true" tabindex="-1"></a>field.xi2 <span class="ot">&lt;-</span> <span class="fu">inla.spde.make.index</span>(<span class="st">"field.xi2"</span>, <span class="at">n.spde =</span> spde.t2<span class="sc">$</span>n.spde, <span class="at">n.group =</span> t_steps)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a><span class="co"># Temporal steps</span></span>
+<span id="cb2-17"><a href="#cb2-17" aria-hidden="true" tabindex="-1"></a>t_steps <span class="ot">&lt;-</span> <span class="fu">length</span>(<span class="fu">unique</span>(tier_1.set<span class="sc">$</span>time_index))</span>
+<span id="cb2-18"><a href="#cb2-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-19"><a href="#cb2-19" aria-hidden="true" tabindex="-1"></a><span class="co"># Define Spatial Indices</span></span>
+<span id="cb2-20"><a href="#cb2-20" aria-hidden="true" tabindex="-1"></a>field.xi1 <span class="ot">&lt;-</span> <span class="fu">inla.spde.make.index</span>(<span class="st">"field.xi1"</span>, <span class="at">n.spde =</span> spde.t1<span class="sc">$</span>n.spde, <span class="at">n.group =</span> t_steps)</span>
+<span id="cb2-21"><a href="#cb2-21" aria-hidden="true" tabindex="-1"></a>field.xi2 <span class="ot">&lt;-</span> <span class="fu">inla.spde.make.index</span>(<span class="st">"field.xi2"</span>, <span class="at">n.spde =</span> spde.t2<span class="sc">$</span>n.spde, <span class="at">n.group =</span> t_steps)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 </div>
 </section>

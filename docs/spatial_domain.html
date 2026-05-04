@@ -156,6 +156,10 @@ code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warni
  <span class="menu-text">Tessellation</span></a>
   </li>  
   <li class="nav-item">
+    <a class="nav-link" href="./response.html">
+ <span class="menu-text">Response</span></a>
+  </li>  
+  <li class="nav-item">
     <a class="nav-link" href="./model.html">
  <span class="menu-text">Model</span></a>
   </li>  
@@ -234,8 +238,21 @@ pre {
 </style>
 <section id="overview" class="level2">
 <h2 class="anchored" data-anchor-id="overview">Overview</h2>
-<p>The script demonstrates spatial discretization of the study area as detailed in the associated manuscript. First, a triangulated mesh is constructed using administrative boundaries and simulated case point locations. Next, <em>natural neighborhoods</em> are defined using Voronoi tessellation around simulated case points, such that each cell represents the area closest to a given detection point. The resulting polygons define the spatial support and associated integration weights for numerical approximation of the spatial point-process model.</p>
-<p><strong>Note:</strong> This script assumes that supporting data has already been downloaded to a directory called <code>/demo</code> as described on the <a href="">Simulation</a> page of this site.</p>
+<p>The script demonstrates spatial discretization of the study area as detailed in the associated manuscript. First, a triangulated mesh is constructed using administrative boundaries and simulated case point locations. Next, <em>natural neighborhoods</em> are defined using Voronoi tessellation around mesh vertices, such that each cell encapsulates the area each vertex. The resulting polygons define the spatial support and associated integration weights for numerical approximation of the spatial point-process model.</p>
+<div class="callout-tip callout callout-style-default no-icon callout-captioned">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon no-icon"></i>
+</div>
+<div class="callout-caption-container flex-fill">
+Note
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>This script assumes that supporting data has already been downloaded to a directory called <code>/demo</code> and that NWS case detections have been simulated as described on the <a href="https://geoepi.github.io/hominivorax-geostat/simulation.html">Simulation</a> page of this site.</p>
+</div>
+</div>
+<hr>
 </section>
 <section id="libraries" class="level2">
 <h2 class="anchored" data-anchor-id="libraries">Libraries</h2>
@@ -311,11 +328,11 @@ Projected CRS: +proj=aea +lat_0=20 +lon_0=-75 +lat_1=10 +lat_2=30 +x_0=0 +y_0=0 
 </section>
 <section id="simulated-nws-cases" class="level2">
 <h2 class="anchored" data-anchor-id="simulated-nws-cases">Simulated NWS Cases</h2>
-<p>These are simulated NWS cases as simulated in the <a href="">Simulation tab</a> of this site.</p>
+<p>These are NWS cases as simulated in the <a href="https://geoepi.github.io/hominivorax-geostat/simulation.html">Simulation tab</a> of this site.</p>
 <div class="cell">
 <details open="">
 <summary>Hide code</summary>
-<div class="sourceCode cell-code" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>sim_data_df <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(<span class="fu">here</span>(<span class="st">"demo/sim_locations_2026-03-24.csv"</span>))</span>
+<div class="sourceCode cell-code" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>sim_data_df <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(<span class="fu">here</span>(<span class="st">"demo/sim_locations_demo.csv"</span>))</span>
 <span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>nws_points <span class="ot">&lt;-</span> <span class="fu">vect</span>(sim_data_df, <span class="at">geom =</span> <span class="fu">c</span>(<span class="st">"x"</span>, <span class="st">"y"</span>), <span class="at">crs =</span> <span class="st">"EPSG:4326"</span>) <span class="co"># raw are unprojected</span></span>
 <span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>nws_points <span class="ot">&lt;-</span> <span class="fu">project</span>(nws_points, <span class="fu">crs</span>(states_proj)) <span class="co"># project to aea, units km</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
@@ -420,6 +437,33 @@ Projected CRS: +proj=aea +lat_0=20 +lon_0=-75 +lat_1=10 +lat_2=30 +x_0=0 +y_0=0 
 </details>
 <div class="cell-output-display">
 <p><img src="spatial_domain_files/figure-html/unnamed-chunk-10-1.png" class="img-fluid" width="1440"></p>
+</div>
+</div>
+</section>
+<section id="save-mesh-and-tesselation" class="level3">
+<h3 class="anchored" data-anchor-id="save-mesh-and-tesselation">Save Mesh and Tesselation</h3>
+<p>Save the triangulated mesh and areal tessellation for the next step.</p>
+<div class="cell">
+<details open="">
+<summary>Hide code</summary>
+<div class="sourceCode cell-code" id="cb13"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="co"># save mesh</span></span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a><span class="fu">saveRDS</span>(mesh.dom, <span class="fu">here</span>(<span class="st">"demo/mesh.rds"</span>))</span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a><span class="co"># copy of natural neighborhoods</span></span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a><span class="fu">writeVector</span>(mesh_polys, <span class="fu">here</span>(<span class="st">"demo/neighboorhoods.gpkg"</span>), <span class="at">overwrite =</span> <span class="cn">TRUE</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+</div>
+<div class="callout-tip callout callout-style-default no-icon callout-captioned">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon no-icon"></i>
+</div>
+<div class="callout-caption-container flex-fill">
+Next Step
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Once the triangulated mesh and natural neighborhoods have been created and saved, proceed to proceed to the <a href="">Response</a> page of this site.</p>
 </div>
 </div>
 

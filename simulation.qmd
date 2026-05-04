@@ -35,9 +35,13 @@ pre {
 
 
 ## Overview
-The script demonstrates how to download model results archived on the Open Science Framework (OSF) and simulate New World screwworm (NWS) case detections.   
+The script demonstrates how to interactively download model results and supporting information archived on the Open Science Framework (OSF) and then simulate New World Screwworm (NWS) case detections.   
     
-The downloaded data includes spatial GeoTiff files depicting potential abundance and estimated spread for each week between January 2022 and February 2026, spatial boundaries for analysis and visualization, and a copy of previously simulated NWS case point locations.   
+The downloaded data includes spatial GeoTiff files depicting potential NWS abundance and estimated spread for each week between January 2022 and February 2026, spatial boundaries for analysis and visualization, and a copy of previously simulated NWS case point locations.   
+
+
+---
+
 
 ## Libraries  
 Load needed libraries and packages.  
@@ -60,7 +64,7 @@ source_dir(here("R"))
 ```
 
 ## Download OSF Data  
-Spatial GeoTIFF files (.tif) depicting NWS estimated niche capacity and spread are available on the [Open Science Framework](https://osf.io/uvqmw/).  Here we link the location and download the files to a demonstration directory (`/demo`).  
+Spatial GeoTIFF files (.tif) depicting NWS estimated potential abundance and spread are available on the [Open Science Framework](https://osf.io/uvqmw/).  Here we link the location and download the files to a demonstration directory (`/demo`).  
   
 **Downloaded Files:**    
 - *spread_GeoTIFF_2026-03-24.zip*: Zipped folder containing rasters showing estimated NWS spread.       
@@ -95,7 +99,7 @@ Spatial grids are bundled in zip files. Unzip the files.
 osf_id$name # file names
 
 unzip(file.path(here("demo"),"spread_GeoTIFF_2026-03-24.zip"), exdir = here("demo")) # spread grids
-unzip(file.path(here("demo"), "niche_GeoTIFF_2026-03-24.zip"), exdir = here("demo")) # niche grids
+unzip(file.path(here("demo"), "niche_GeoTIFF_2026-03-24.zip"), exdir = here("demo")) # potential abundance grids
 ```
 
 #### Spatial Polygons
@@ -110,15 +114,15 @@ Spatial grid file names are coded with the year and week they represent.  The *s
    
 Organize and stack rasters.  
 ```{r, warning=FALSE, message=FALSE}
-niche_stk <- stack_rasters(here("demo/niche")) # reflecting niche conditions, limits, or capacity
+abundance_stk <- stack_rasters(here("demo/niche")) # potential abundance given niche conditions, limits, or capacity
 spread_stk <- stack_rasters(here("demo/spread")) # reflecting invasion/spread
 ```
 
 
-#### Example Niche Maps
+#### Example Potential Abundance Maps
 ```{r fig.width=15, fig.height=15, warning=FALSE, message=FALSE}
-quick_map_plot(grid_stk=niche_stk, target_year=2024, target_week=10, boundary_polys=states_proj)
-quick_map_plot(grid_stk=niche_stk, target_year=2025, target_week=30, boundary_polys=states_proj)
+quick_map_plot(grid_stk=abundance_stk, target_year=2024, target_week=10, boundary_polys=states_proj)
+quick_map_plot(grid_stk=abundance_stk, target_year=2025, target_week=30, boundary_polys=states_proj)
 ```
 
 #### Example Spread Maps
@@ -132,7 +136,7 @@ quick_map_plot(grid_stk=spread_stk, target_year=2025, target_week=30, boundary_p
 The *sum_intensity_grid()* function, when applied to the estimated spread grids, will sum the estimated number of detections for each week.  This approximates the mean number of cases as predicted by the model described in the manuscript. Note that the function includes an input option `min_est=` that specifies the minimum cell value to consider a detection.  
    
 The dataframe returned by the function includes a column *count* that will be used to simulate spatial points in the next step.   
-```{r fig_width=15, fig.height=10, warning=FALSE, message=FALSE}
+```{r fig_width=15, fig.height=6, warning=FALSE, message=FALSE}
 weekly_counts <- sum_intensity_grid(spread_stk, min_est = 1)
 
 ggplot(data = weekly_counts, aes(x = date, y = count)) +
@@ -165,9 +169,9 @@ The *simulate_detection_points()* function will use the [**spatstat** package](h
   
 The returned result is a dataframe with x and y coordinates, year, and week.  Note that the projected coordinate system is used by default.  Conversion to latitude and longitude can be performed as shown below. 
 ```{r, warning=FALSE, message=FALSE}
-sim_points <- simulate_detection_points(raster_stack=spread_stk,
-                                        obs_df=weekly_counts, 
-                                        rseed=1976
+sim_points <- simulate_detection_points(raster_stack=spread_stk, # weights for location assignment
+                                        obs_df=weekly_counts, # how many to simulate per week
+                                        rseed=1976 # change to alter assignment probability
                                         )
 
 n_sim_points <- dim(sim_points)[1] # number simulated
@@ -187,9 +191,11 @@ head(nws_point_latlong_df)
 ```
 
 
-Save a copy of simulated point locations.  **Note:** This file is included in initial download from OSF above. 
-```{r eval=FALSE, warning=FALSE, message=FALSE}
-write_csv(nws_point_latlong_df, here("demo/sim_locations_2026-04-30.csv"))
+Save a copy of simulated point locations.  This file will be needed to run the [Tessellation](https://geoepi.github.io/hominivorax-geostat/spatial_domain.html) step.  
+  
+**Note:** A similar file is included in initial download from OSF above.   
+```{r eval=FALSE, warning=FALSE, message=TRUE}
+write_csv(nws_point_latlong_df, here("demo/sim_locations_demo.csv"))
 
 ```
 
@@ -214,6 +220,11 @@ quick_point_map(target_year=2026, target_week=2,
                 point_data=sim_points)
 ```
 
+
+::: {.callout-tip icon=false} 
+#### Next Step
+Once supporting data has been downloaded and NWS case detections have been simulated, proceed to the  [Tessellation](https://geoepi.github.io/hominivorax-geostat/spatial_domain.html) page of this site. 
+:::
 
 
 

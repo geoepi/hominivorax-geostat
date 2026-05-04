@@ -12,6 +12,8 @@ website:
         text: Simulation
       - href: spatial_domain.qmd
         text: Tessellation
+      - href: response.qmd
+        text: Response
       - href: model.qmd
         text: Model
     right:

@@ -172,6 +172,10 @@ code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warni
  <span class="menu-text">Tessellation</span></a>
   </li>  
   <li class="nav-item">
+    <a class="nav-link" href="./response.html">
+ <span class="menu-text">Response</span></a>
+  </li>  
+  <li class="nav-item">
     <a class="nav-link" href="./model.html">
  <span class="menu-text">Model</span></a>
   </li>  
@@ -250,8 +254,9 @@ pre {
 </style>
 <section id="overview" class="level2">
 <h2 class="anchored" data-anchor-id="overview">Overview</h2>
-<p>The script demonstrates how to download model results archived on the Open Science Framework (OSF) and simulate New World screwworm (NWS) case detections.</p>
-<p>The downloaded data includes spatial GeoTiff files depicting potential abundance and estimated spread for each week between January 2022 and February 2026, spatial boundaries for analysis and visualization, and a copy of previously simulated NWS case point locations.</p>
+<p>The script demonstrates how to interactively download model results and supporting information archived on the Open Science Framework (OSF) and then simulate New World Screwworm (NWS) case detections.</p>
+<p>The downloaded data includes spatial GeoTiff files depicting potential NWS abundance and estimated spread for each week between January 2022 and February 2026, spatial boundaries for analysis and visualization, and a copy of previously simulated NWS case point locations.</p>
+<hr>
 </section>
 <section id="libraries" class="level2">
 <h2 class="anchored" data-anchor-id="libraries">Libraries</h2>
@@ -283,7 +288,7 @@ pre {
 </section>
 <section id="download-osf-data" class="level2">
 <h2 class="anchored" data-anchor-id="download-osf-data">Download OSF Data</h2>
-<p>Spatial GeoTIFF files (.tif) depicting NWS estimated niche capacity and spread are available on the <a href="https://osf.io/uvqmw/">Open Science Framework</a>. Here we link the location and download the files to a demonstration directory (<code>/demo</code>).</p>
+<p>Spatial GeoTIFF files (.tif) depicting NWS estimated potential abundance and spread are available on the <a href="https://osf.io/uvqmw/">Open Science Framework</a>. Here we link the location and download the files to a demonstration directory (<code>/demo</code>).</p>
 <p><strong>Downloaded Files:</strong><br>
 - <em>spread_GeoTIFF_2026-03-24.zip</em>: Zipped folder containing rasters showing estimated NWS spread.<br>
 - <em>niche_GeoTIFF_2026-03-24.zip</em>: Zipped folder containing rasters showing potential NWS abundance.<br>
@@ -337,25 +342,25 @@ pre {
 <td style="text-align: left;">spread_GeoTIFF_2026-03-24.zip</td>
 <td style="text-align: left;">69c2d3a4e03dca33dc229717</td>
 <td style="text-align: left;">demo/spread_GeoTIFF_2026-03-24.zip</td>
-<td style="text-align: left;">spread_GeoTIFF_2026-03-24.zip , file , /69c2d3a4e03dca33dc229717 , 2465016 , osfstorage , /spread_GeoTIFF_2026-03-24.zip , 1774375844 , 1774375844 , 09634b49a5a4cf7152e86cceaee889e0 , d1b3407a37034b84c5e5e62dd39fce63f265b92ec42b0f7e8d1e4119aee1546c , 9 , FALSE , 1 , FALSE , https://api.osf.io/v2/files/69c2d3a4e03dca33dc229717/ , https://files.osf.io/v1/resources/uvqmw/providers/osfstorage/69c2d3a4e03dca33dc229717 , https://files.osf.io/v1/resources/uvqmw/providers/osfstorage/69c2d3a4e03dca33dc229717 , https://files.osf.io/v1/resources/uvqmw/providers/osfstorage/69c2d3a4e03dca33dc229717 , https://osf.io/download/69c2d3a4e03dca33dc229717/ , https://mfr.osf.io/render?url=https%3A%2F%2Fosf.io%2Fdownload%2F69c2d3a4e03dca33dc229717%2F%3Fdirect%26mode%3Drender, https://osf.io/uvqmw/files/osfstorage/69c2d3a4e03dca33dc229717 , https://api.osf.io/v2/files/69c2d3a4e03dca33dc229717/ , https://api.osf.io/v2/files/69c2b365ae03e5ce6d107b09/ , 69c2b365ae03e5ce6d107b09 , files , https://api.osf.io/v2/files/69c2d3a4e03dca33dc229717/versions/ , https://api.osf.io/v2/nodes/uvqmw/ , uvqmw , nodes , https://api.osf.io/v2/nodes/uvqmw/ , nodes , nodes , uvqmw , https://api.osf.io/v2/files/69c2d3a4e03dca33dc229717/cedar_metadata_records/</td>
+<td style="text-align: left;">spread_GeoTIFF_2026-03-24.zip , file , /69c2d3a4e03dca33dc229717 , 2465016 , osfstorage , /spread_GeoTIFF_2026-03-24.zip , 1774375844 , 1774375844 , 09634b49a5a4cf7152e86cceaee889e0 , d1b3407a37034b84c5e5e62dd39fce63f265b92ec42b0f7e8d1e4119aee1546c , 10 , FALSE , 1 , FALSE , https://api.osf.io/v2/files/69c2d3a4e03dca33dc229717/ , https://files.osf.io/v1/resources/uvqmw/providers/osfstorage/69c2d3a4e03dca33dc229717 , https://files.osf.io/v1/resources/uvqmw/providers/osfstorage/69c2d3a4e03dca33dc229717 , https://files.osf.io/v1/resources/uvqmw/providers/osfstorage/69c2d3a4e03dca33dc229717 , https://osf.io/download/69c2d3a4e03dca33dc229717/ , https://mfr.osf.io/render?url=https%3A%2F%2Fosf.io%2Fdownload%2F69c2d3a4e03dca33dc229717%2F%3Fdirect%26mode%3Drender, https://osf.io/uvqmw/files/osfstorage/69c2d3a4e03dca33dc229717 , https://api.osf.io/v2/files/69c2d3a4e03dca33dc229717/ , https://api.osf.io/v2/files/69c2b365ae03e5ce6d107b09/ , 69c2b365ae03e5ce6d107b09 , files , https://api.osf.io/v2/files/69c2d3a4e03dca33dc229717/versions/ , https://api.osf.io/v2/nodes/uvqmw/ , uvqmw , nodes , https://api.osf.io/v2/nodes/uvqmw/ , nodes , nodes , uvqmw , https://api.osf.io/v2/files/69c2d3a4e03dca33dc229717/cedar_metadata_records/</td>
 </tr>
 <tr class="even">
 <td style="text-align: left;">niche_GeoTIFF_2026-03-24.zip</td>
 <td style="text-align: left;">69c3204a686690fea0927d64</td>
 <td style="text-align: left;">demo/niche_GeoTIFF_2026-03-24.zip</td>
-<td style="text-align: left;">niche_GeoTIFF_2026-03-24.zip , file , /69c3204a686690fea0927d64 , 12205660 , osfstorage , /niche_GeoTIFF_2026-03-24.zip , 1774395466 , 1774395466 , eb0bbf520ebbb15df84d02ad2222e6c3 , 28dd79fcc7f42242a3e9b1b68ba6598875452d77de9a5453e1bf5e791f76baaa , 8 , FALSE , 1 , FALSE , https://api.osf.io/v2/files/69c3204a686690fea0927d64/ , https://files.osf.io/v1/resources/uvqmw/providers/osfstorage/69c3204a686690fea0927d64 , https://files.osf.io/v1/resources/uvqmw/providers/osfstorage/69c3204a686690fea0927d64 , https://files.osf.io/v1/resources/uvqmw/providers/osfstorage/69c3204a686690fea0927d64 , https://osf.io/download/69c3204a686690fea0927d64/ , https://mfr.osf.io/render?url=https%3A%2F%2Fosf.io%2Fdownload%2F69c3204a686690fea0927d64%2F%3Fdirect%26mode%3Drender, https://osf.io/uvqmw/files/osfstorage/69c3204a686690fea0927d64 , https://api.osf.io/v2/files/69c3204a686690fea0927d64/ , https://api.osf.io/v2/files/69c2b365ae03e5ce6d107b09/ , 69c2b365ae03e5ce6d107b09 , files , https://api.osf.io/v2/files/69c3204a686690fea0927d64/versions/ , https://api.osf.io/v2/nodes/uvqmw/ , uvqmw , nodes , https://api.osf.io/v2/nodes/uvqmw/ , nodes , nodes , uvqmw , https://api.osf.io/v2/files/69c3204a686690fea0927d64/cedar_metadata_records/</td>
+<td style="text-align: left;">niche_GeoTIFF_2026-03-24.zip , file , /69c3204a686690fea0927d64 , 12205660 , osfstorage , /niche_GeoTIFF_2026-03-24.zip , 1774395466 , 1774395466 , eb0bbf520ebbb15df84d02ad2222e6c3 , 28dd79fcc7f42242a3e9b1b68ba6598875452d77de9a5453e1bf5e791f76baaa , 9 , FALSE , 1 , FALSE , https://api.osf.io/v2/files/69c3204a686690fea0927d64/ , https://files.osf.io/v1/resources/uvqmw/providers/osfstorage/69c3204a686690fea0927d64 , https://files.osf.io/v1/resources/uvqmw/providers/osfstorage/69c3204a686690fea0927d64 , https://files.osf.io/v1/resources/uvqmw/providers/osfstorage/69c3204a686690fea0927d64 , https://osf.io/download/69c3204a686690fea0927d64/ , https://mfr.osf.io/render?url=https%3A%2F%2Fosf.io%2Fdownload%2F69c3204a686690fea0927d64%2F%3Fdirect%26mode%3Drender, https://osf.io/uvqmw/files/osfstorage/69c3204a686690fea0927d64 , https://api.osf.io/v2/files/69c3204a686690fea0927d64/ , https://api.osf.io/v2/files/69c2b365ae03e5ce6d107b09/ , 69c2b365ae03e5ce6d107b09 , files , https://api.osf.io/v2/files/69c3204a686690fea0927d64/versions/ , https://api.osf.io/v2/nodes/uvqmw/ , uvqmw , nodes , https://api.osf.io/v2/nodes/uvqmw/ , nodes , nodes , uvqmw , https://api.osf.io/v2/files/69c3204a686690fea0927d64/cedar_metadata_records/</td>
 </tr>
 <tr class="odd">
 <td style="text-align: left;">study_polygons.gpkg</td>
 <td style="text-align: left;">69c2c12bcf7cb14d7b48c456</td>
 <td style="text-align: left;">demo/study_polygons.gpkg</td>
-<td style="text-align: left;">study_polygons.gpkg , file , /69c2c12bcf7cb14d7b48c456 , 2670592 , osfstorage , /study_polygons.gpkg , 1774371115 , 1774371115 , 08c72aa055cb38b1473caa3a8063527c , 6734b6f66ebf27962f003e81962bd391cf1381fc74660ddabe64b01fc68b8160 , 10 , FALSE , 1 , FALSE , https://api.osf.io/v2/files/69c2c12bcf7cb14d7b48c456/ , https://files.osf.io/v1/resources/uvqmw/providers/osfstorage/69c2c12bcf7cb14d7b48c456 , https://files.osf.io/v1/resources/uvqmw/providers/osfstorage/69c2c12bcf7cb14d7b48c456 , https://files.osf.io/v1/resources/uvqmw/providers/osfstorage/69c2c12bcf7cb14d7b48c456 , https://osf.io/download/69c2c12bcf7cb14d7b48c456/ , https://mfr.osf.io/render?url=https%3A%2F%2Fosf.io%2Fdownload%2F69c2c12bcf7cb14d7b48c456%2F%3Fdirect%26mode%3Drender, https://osf.io/uvqmw/files/osfstorage/69c2c12bcf7cb14d7b48c456 , https://api.osf.io/v2/files/69c2c12bcf7cb14d7b48c456/ , https://api.osf.io/v2/files/69c2b365ae03e5ce6d107b09/ , 69c2b365ae03e5ce6d107b09 , files , https://api.osf.io/v2/files/69c2c12bcf7cb14d7b48c456/versions/ , https://api.osf.io/v2/nodes/uvqmw/ , uvqmw , nodes , https://api.osf.io/v2/nodes/uvqmw/ , nodes , nodes , uvqmw , https://api.osf.io/v2/files/69c2c12bcf7cb14d7b48c456/cedar_metadata_records/</td>
+<td style="text-align: left;">study_polygons.gpkg , file , /69c2c12bcf7cb14d7b48c456 , 2670592 , osfstorage , /study_polygons.gpkg , 1774371115 , 1774371115 , 08c72aa055cb38b1473caa3a8063527c , 6734b6f66ebf27962f003e81962bd391cf1381fc74660ddabe64b01fc68b8160 , 11 , FALSE , 1 , FALSE , https://api.osf.io/v2/files/69c2c12bcf7cb14d7b48c456/ , https://files.osf.io/v1/resources/uvqmw/providers/osfstorage/69c2c12bcf7cb14d7b48c456 , https://files.osf.io/v1/resources/uvqmw/providers/osfstorage/69c2c12bcf7cb14d7b48c456 , https://files.osf.io/v1/resources/uvqmw/providers/osfstorage/69c2c12bcf7cb14d7b48c456 , https://osf.io/download/69c2c12bcf7cb14d7b48c456/ , https://mfr.osf.io/render?url=https%3A%2F%2Fosf.io%2Fdownload%2F69c2c12bcf7cb14d7b48c456%2F%3Fdirect%26mode%3Drender, https://osf.io/uvqmw/files/osfstorage/69c2c12bcf7cb14d7b48c456 , https://api.osf.io/v2/files/69c2c12bcf7cb14d7b48c456/ , https://api.osf.io/v2/files/69c2b365ae03e5ce6d107b09/ , 69c2b365ae03e5ce6d107b09 , files , https://api.osf.io/v2/files/69c2c12bcf7cb14d7b48c456/versions/ , https://api.osf.io/v2/nodes/uvqmw/ , uvqmw , nodes , https://api.osf.io/v2/nodes/uvqmw/ , nodes , nodes , uvqmw , https://api.osf.io/v2/files/69c2c12bcf7cb14d7b48c456/cedar_metadata_records/</td>
 </tr>
 <tr class="even">
 <td style="text-align: left;">sim_locations_2026-03-24.csv</td>
 <td style="text-align: left;">69c2f06142e811a7159282bc</td>
 <td style="text-align: left;">demo/sim_locations_2026-03-24.csv</td>
-<td style="text-align: left;">sim_locations_2026-03-24.csv , file , /69c2f06142e811a7159282bc , 17625680 , osfstorage , /sim_locations_2026-03-24.csv , 1774383201 , 1774383201 , 90d4cf68473c797fb0d4b8b007fa9519 , 852f7fc148ea5051bc70337ac34ad51f5f8c59f536d88a6f2a555ab8c9cf956d , 8 , FALSE , 1 , FALSE , https://api.osf.io/v2/files/69c2f06142e811a7159282bc/ , https://files.osf.io/v1/resources/uvqmw/providers/osfstorage/69c2f06142e811a7159282bc , https://files.osf.io/v1/resources/uvqmw/providers/osfstorage/69c2f06142e811a7159282bc , https://files.osf.io/v1/resources/uvqmw/providers/osfstorage/69c2f06142e811a7159282bc , https://osf.io/download/69c2f06142e811a7159282bc/ , https://mfr.osf.io/render?url=https%3A%2F%2Fosf.io%2Fdownload%2F69c2f06142e811a7159282bc%2F%3Fdirect%26mode%3Drender, https://osf.io/uvqmw/files/osfstorage/69c2f06142e811a7159282bc , https://api.osf.io/v2/files/69c2f06142e811a7159282bc/ , https://api.osf.io/v2/files/69c2b365ae03e5ce6d107b09/ , 69c2b365ae03e5ce6d107b09 , files , https://api.osf.io/v2/files/69c2f06142e811a7159282bc/versions/ , https://api.osf.io/v2/nodes/uvqmw/ , uvqmw , nodes , https://api.osf.io/v2/nodes/uvqmw/ , nodes , nodes , uvqmw , https://api.osf.io/v2/files/69c2f06142e811a7159282bc/cedar_metadata_records/</td>
+<td style="text-align: left;">sim_locations_2026-03-24.csv , file , /69c2f06142e811a7159282bc , 17625680 , osfstorage , /sim_locations_2026-03-24.csv , 1774383201 , 1774383201 , 90d4cf68473c797fb0d4b8b007fa9519 , 852f7fc148ea5051bc70337ac34ad51f5f8c59f536d88a6f2a555ab8c9cf956d , 9 , FALSE , 1 , FALSE , https://api.osf.io/v2/files/69c2f06142e811a7159282bc/ , https://files.osf.io/v1/resources/uvqmw/providers/osfstorage/69c2f06142e811a7159282bc , https://files.osf.io/v1/resources/uvqmw/providers/osfstorage/69c2f06142e811a7159282bc , https://files.osf.io/v1/resources/uvqmw/providers/osfstorage/69c2f06142e811a7159282bc , https://osf.io/download/69c2f06142e811a7159282bc/ , https://mfr.osf.io/render?url=https%3A%2F%2Fosf.io%2Fdownload%2F69c2f06142e811a7159282bc%2F%3Fdirect%26mode%3Drender, https://osf.io/uvqmw/files/osfstorage/69c2f06142e811a7159282bc , https://api.osf.io/v2/files/69c2f06142e811a7159282bc/ , https://api.osf.io/v2/files/69c2b365ae03e5ce6d107b09/ , 69c2b365ae03e5ce6d107b09 , files , https://api.osf.io/v2/files/69c2f06142e811a7159282bc/versions/ , https://api.osf.io/v2/nodes/uvqmw/ , uvqmw , nodes , https://api.osf.io/v2/nodes/uvqmw/ , nodes , nodes , uvqmw , https://api.osf.io/v2/files/69c2f06142e811a7159282bc/cedar_metadata_records/</td>
 </tr>
 </tbody>
 </table>
@@ -377,7 +382,7 @@ pre {
 <details open="">
 <summary>Hide code</summary>
 <div class="sourceCode cell-code" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="fu">unzip</span>(<span class="fu">file.path</span>(<span class="fu">here</span>(<span class="st">"demo"</span>),<span class="st">"spread_GeoTIFF_2026-03-24.zip"</span>), <span class="at">exdir =</span> <span class="fu">here</span>(<span class="st">"demo"</span>)) <span class="co"># spread grids</span></span>
-<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a><span class="fu">unzip</span>(<span class="fu">file.path</span>(<span class="fu">here</span>(<span class="st">"demo"</span>), <span class="st">"niche_GeoTIFF_2026-03-24.zip"</span>), <span class="at">exdir =</span> <span class="fu">here</span>(<span class="st">"demo"</span>)) <span class="co"># niche grids</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a><span class="fu">unzip</span>(<span class="fu">file.path</span>(<span class="fu">here</span>(<span class="st">"demo"</span>), <span class="st">"niche_GeoTIFF_2026-03-24.zip"</span>), <span class="at">exdir =</span> <span class="fu">here</span>(<span class="st">"demo"</span>)) <span class="co"># potential abundance grids</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 </div>
 </section>
@@ -408,23 +413,23 @@ Projected CRS: +proj=aea +lat_0=20 +lon_0=-75 +lat_1=10 +lat_2=30 +x_0=0 +y_0=0 
 <div class="cell">
 <details open="">
 <summary>Hide code</summary>
-<div class="sourceCode cell-code" id="cb11"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a>niche_stk <span class="ot">&lt;-</span> <span class="fu">stack_rasters</span>(<span class="fu">here</span>(<span class="st">"demo/niche"</span>)) <span class="co"># reflecting niche conditions, limits, or capacity</span></span>
+<div class="sourceCode cell-code" id="cb11"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a>abundance_stk <span class="ot">&lt;-</span> <span class="fu">stack_rasters</span>(<span class="fu">here</span>(<span class="st">"demo/niche"</span>)) <span class="co"># potential abundance given niche conditions, limits, or capacity</span></span>
 <span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>spread_stk <span class="ot">&lt;-</span> <span class="fu">stack_rasters</span>(<span class="fu">here</span>(<span class="st">"demo/spread"</span>)) <span class="co"># reflecting invasion/spread</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 </div>
-<section id="example-niche-maps" class="level4">
-<h4 class="anchored" data-anchor-id="example-niche-maps">Example Niche Maps</h4>
+<section id="example-potential-abundance-maps" class="level4">
+<h4 class="anchored" data-anchor-id="example-potential-abundance-maps">Example Potential Abundance Maps</h4>
 <div class="cell">
 <details open="">
 <summary>Hide code</summary>
-<div class="sourceCode cell-code" id="cb12"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="fu">quick_map_plot</span>(<span class="at">grid_stk=</span>niche_stk, <span class="at">target_year=</span><span class="dv">2024</span>, <span class="at">target_week=</span><span class="dv">10</span>, <span class="at">boundary_polys=</span>states_proj)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb12"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="fu">quick_map_plot</span>(<span class="at">grid_stk=</span>abundance_stk, <span class="at">target_year=</span><span class="dv">2024</span>, <span class="at">target_week=</span><span class="dv">10</span>, <span class="at">boundary_polys=</span>states_proj)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 <div class="cell-output-display">
 <p><img src="simulation_files/figure-html/unnamed-chunk-7-1.png" class="img-fluid" width="1440"></p>
 </div>
 <details open="">
 <summary>Hide code</summary>
-<div class="sourceCode cell-code" id="cb13"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="fu">quick_map_plot</span>(<span class="at">grid_stk=</span>niche_stk, <span class="at">target_year=</span><span class="dv">2025</span>, <span class="at">target_week=</span><span class="dv">30</span>, <span class="at">boundary_polys=</span>states_proj)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb13"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="fu">quick_map_plot</span>(<span class="at">grid_stk=</span>abundance_stk, <span class="at">target_year=</span><span class="dv">2025</span>, <span class="at">target_week=</span><span class="dv">30</span>, <span class="at">boundary_polys=</span>states_proj)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 <div class="cell-output-display">
 <p><img src="simulation_files/figure-html/unnamed-chunk-7-2.png" class="img-fluid" width="1440"></p>
@@ -494,9 +499,9 @@ Projected CRS: +proj=aea +lat_0=20 +lon_0=-75 +lat_1=10 +lat_2=30 +x_0=0 +y_0=0 
 <div class="cell">
 <details open="">
 <summary>Hide code</summary>
-<div class="sourceCode cell-code" id="cb17"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a>sim_points <span class="ot">&lt;-</span> <span class="fu">simulate_detection_points</span>(<span class="at">raster_stack=</span>spread_stk,</span>
-<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a>                                        <span class="at">obs_df=</span>weekly_counts, </span>
-<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a>                                        <span class="at">rseed=</span><span class="dv">1976</span></span>
+<div class="sourceCode cell-code" id="cb17"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a>sim_points <span class="ot">&lt;-</span> <span class="fu">simulate_detection_points</span>(<span class="at">raster_stack=</span>spread_stk, <span class="co"># weights for location assignment</span></span>
+<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a>                                        <span class="at">obs_df=</span>weekly_counts, <span class="co"># how many to simulate per week</span></span>
+<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a>                                        <span class="at">rseed=</span><span class="dv">1976</span> <span class="co"># change to alter assignment probability</span></span>
 <span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a>                                        )</span>
 <span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb17-6"><a href="#cb17-6" aria-hidden="true" tabindex="-1"></a>n_sim_points <span class="ot">&lt;-</span> <span class="fu">dim</span>(sim_points)[<span class="dv">1</span>] <span class="co"># number simulated</span></span>
@@ -626,11 +631,12 @@ Projected CRS: +proj=aea +lat_0=20 +lon_0=-75 +lat_1=10 +lat_2=30 +x_0=0 +y_0=0 
 </div>
 </div>
 </div>
-<p>Save a copy of simulated point locations. <strong>Note:</strong> This file is included in initial download from OSF above.</p>
+<p>Save a copy of simulated point locations. This file will be needed to run the <a href="https://geoepi.github.io/hominivorax-geostat/spatial_domain.html">Tessellation</a> step.</p>
+<p><strong>Note:</strong> A similar file is included in initial download from OSF above.</p>
 <div class="cell">
 <details open="">
 <summary>Hide code</summary>
-<div class="sourceCode cell-code" id="cb21"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="fu">write_csv</span>(nws_point_latlong_df, <span class="fu">here</span>(<span class="st">"demo/sim_locations_2026-04-30.csv"</span>))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb21"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="fu">write_csv</span>(nws_point_latlong_df, <span class="fu">here</span>(<span class="st">"demo/sim_locations_demo.csv"</span>))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 </div>
 <section id="map-points" class="level4">
@@ -667,6 +673,19 @@ Projected CRS: +proj=aea +lat_0=20 +lon_0=-75 +lat_1=10 +lat_2=30 +x_0=0 +y_0=0 
 </details>
 <div class="cell-output-display">
 <p><img src="simulation_files/figure-html/unnamed-chunk-14-1.png" class="img-fluid" width="1440"></p>
+</div>
+</div>
+<div class="callout-tip callout callout-style-default no-icon callout-captioned">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon no-icon"></i>
+</div>
+<div class="callout-caption-container flex-fill">
+Next Step
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Once supporting data has been downloaded and NWS case detections have been simulated, proceed to the <a href="https://geoepi.github.io/hominivorax-geostat/spatial_domain.html">Tessellation</a> page of this site.</p>
 </div>
 </div>
 

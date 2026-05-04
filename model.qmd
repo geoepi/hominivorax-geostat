@@ -98,16 +98,17 @@ We utilize the **Stochastic Partial Differential Equation (SPDE)** approach with
 # SPDE for Tier 1: Detection (xi_1)
 spde.t1 <- inla.spde2.pcmatern(mesh.dom, 
                                alpha = 2,
-                               prior.range = c(150, 0.05),  
-                               prior.sigma = c(0.5, 0.05),
+                               prior.range = c(90, 0.5),  
+                               prior.sigma = c(1, 0.5),
                                constr = TRUE)
 
 # SPDE for Tier 2: Abundance (xi_2)
 spde.t2 <- inla.spde2.pcmatern(mesh.dom, 
                                alpha = 2,
-                               prior.range = c(90, 0.5),  
-                               prior.sigma = c(1, 0.5),
+                               prior.range = c(150, 0.05),  
+                               prior.sigma = c(0.5, 0.05),
                                constr = TRUE)
+
 
 # Temporal steps
 t_steps <- length(unique(tier_1.set$time_index))

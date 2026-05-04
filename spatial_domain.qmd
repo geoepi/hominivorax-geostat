@@ -35,10 +35,17 @@ pre {
 
 
 ## Overview
-The script demonstrates spatial discretization of the study area as detailed in the associated manuscript. First, a triangulated mesh is constructed using administrative boundaries and simulated case point locations. Next, *natural neighborhoods* are defined using Voronoi tessellation around simulated case points, such that each cell represents the area closest to a given detection point. The resulting polygons define the spatial support and associated integration weights for numerical approximation of the spatial point-process model.  
+The script demonstrates spatial discretization of the study area as detailed in the associated manuscript. First, a triangulated mesh is constructed using administrative boundaries and simulated case point locations. Next, *natural neighborhoods* are defined using Voronoi tessellation around mesh vertices, such that each cell encapsulates the area each vertex. The resulting polygons define the spatial support and associated integration weights for numerical approximation of the spatial point-process model.  
   
-**Note:** This script assumes that supporting data has already been downloaded to a directory called `/demo` as described on the [Simulation]() page of this site.   
-   
+::: {.callout-tip icon=false} 
+#### Note
+This script assumes that supporting data has already been downloaded to a directory called `/demo` and that NWS case detections have been simulated as described on the [Simulation](https://geoepi.github.io/hominivorax-geostat/simulation.html) page of this site. 
+:::
+
+
+---
+
+
 ## Libraries  
 Load needed libraries and packages.  
 ```{r, warning=FALSE, message=FALSE}
@@ -91,9 +98,9 @@ states_simple <- poly_single[areas > threshold, ]
 
 
 ## Simulated NWS Cases
-These are simulated NWS cases as simulated in the [Simulation tab]() of this site.
+These are NWS cases as simulated in the [Simulation tab](https://geoepi.github.io/hominivorax-geostat/simulation.html) of this site.
 ```{r warning=FALSE, message=FALSE}
-sim_data_df <- read_csv(here("demo/sim_locations_2026-03-24.csv"))
+sim_data_df <- read_csv(here("demo/sim_locations_demo.csv"))
 
 nws_points <- vect(sim_data_df, geom = c("x", "y"), crs = "EPSG:4326") # raw are unprojected
 nws_points <- project(nws_points, crs(states_proj)) # project to aea, units km
@@ -173,4 +180,19 @@ plot_duel_mesh(mesh_polys_sf_crop, mesh.dom,
                         ymax = -50))
 ```
 
+### Save Mesh and Tesselation  
+Save the triangulated mesh and areal tessellation for the next step. 
+```{r warning=FALSE, message=FALSE, fig.width=15, fig.height=15}
+# save mesh
+saveRDS(mesh.dom, here("demo/mesh.rds"))
+
+# copy of natural neighborhoods
+writeVector(mesh_polys, here("demo/neighboorhoods.gpkg"), overwrite = TRUE)
+
+```
+
+::: {.callout-tip icon=false} 
+#### Next Step
+Once the triangulated mesh and natural neighborhoods have been created and saved, proceed to proceed to the [Response]() page of this site. 
+:::
 

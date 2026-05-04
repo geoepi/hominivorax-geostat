@@ -1,0 +1,285 @@
+---
+title: "Response"
+description: "Construct bivariate response variable"
+format:
+  html: 
+    df-print: kable
+    code-fold: show
+    code-summary: "Hide code"
+    code-overflow: wrap
+    toc-title: Page Contents
+    toc: true
+    toc-depth: 2
+    toc-location: right
+    number-sections: false
+    html-math-method: katex
+    smooth-scroll: true
+editor: source
+editor_options: 
+  chunk_output_type: console
+---
+```{=html}
+<style type="text/css">
+
+body, td {
+   font-size: 11pt;
+}
+code.r{
+  font-size: 9pt;
+}
+pre {
+  font-size: 11pt
+}
+</style>
+```
+
+
+## Overview
+The script demonstrates how to expand and index reported NWS case detections and mesh nodes to ensure that all weeks are represented in the data set.  Additionally, the script shows how to aggregate individual detection counts to natural natural neighborhoods as needed for the abundance tier in the joint model described in the associated paper. 
+
+Once data has been formatted correctly, it can be organized as a bivariate response variable such that **Tier 1** describes point-level NWS case detections:  
+$$
+y_{1it} =
+\begin{cases}
+1, & \text{NWS detection reported at location } i \text{ and time } t \\
+0, & \text{NWS not detected or reported at location } i \text{ and time } t
+\end{cases}
+$$
+  
+and, **Tier 2** represents the number of NWS Cases reported in each neighborhood:   
+$$
+y_{2it} =
+\begin{cases}
+NA, & \text{NWS detections not reported in neighborhood } i \text{ and time } t \\
+\text{Count}, & \text{Sum of all NWS detections in neighboorhood } i \text{ and time } t
+\end{cases}
+$$
+  
+  
+
+    
+::: {.callout-tip icon=false}   
+#### Note
+This script assumes that supporting data has already been downloaded to a directory called `/demo`, that NWS case detections have been simulated as described on the [Simulation tab](https://geoepi.github.io/hominivorax-geostat/simulation.html), and that the triangulated mesh and areal tessellation presented on the [tessellation tab](https://geoepi.github.io/hominivorax-geostat/spatial_domain.html) have been constructed and saved. 
+:::
+  
+---
+   
+## Libraries  
+Load needed libraries and packages.  
+```{r, warning=FALSE, message=FALSE}
+library(tidyverse) # data wrangling
+options(dplyr.summarise.inform = FALSE)
+library(here) # directory management
+library(patchwork)# combine ggplots
+library(pals) # color palettes
+library(osfr) # interact with Open Science Framework (OSF, data repository)
+library(terra) # spatial data manipulation
+library(sf) # spatial data manipulation
+library(spatstat) # spatial data manipulation
+library(raster) # spatial data manipulation
+select <- dplyr::select # deconflict dplyr w/raster  
+
+# see https://www.r-inla.org/home
+# install.packages("INLA",repos=c(getOption("repos"),INLA="https://inla.r-inla-download.org/R/stable"), dep=TRUE)
+library(INLA) # mesh construction, inference
+```
+
+## Custom Functions 
+Load customized functions.  
+```{r, warning=FALSE, message=FALSE}
+source(here("R/utilities.R"))
+source_dir(here("R"))
+```
+
+## Load Preprocessed Data
+```{r warning=FALSE, message=FALSE}
+# simulated case detections
+sim_data_df <- read_csv(here("demo/sim_locations_demo.csv"))
+
+# triangulated mesh
+mesh.dom <- readRDS(here("demo/mesh.rds"))
+
+# tessellation
+mesh_polys <- st_read(here("demo/neighboorhoods.gpkg"))
+
+# study area administrative boundaries
+states_proj <- st_read(here("demo/study_polygons.gpkg"))
+```
+  
+  
+Geographic projection of simulated NWS detections (currently unprojected)
+```{r warning=FALSE, message=FALSE}
+sim_data_pnts <- vect(sim_data_df, geom = c("x", "y"), "EPSG:4326") # to points
+sim_data_pnts <- project(sim_data_pnts, states_proj) # match other data projection
+
+# back to dataframe
+sim_data_df <- as.data.frame(sim_data_pnts, geom = "xy")
+
+
+```
+
+   
+## Prepare Node Locations  
+```{r warning=FALSE, message=FALSE}
+# get node coordinates
+int_pnts <- as.data.frame(cbind(mesh.dom$loc[,1],
+                                mesh.dom$loc[,2]))
+
+names(int_pnts) <- c("x", "y")
+
+# convert to points
+int_pnts <- vect(int_pnts, geom = c("x", "y"), crs = states_proj)
+```
+
+Identify and remove nodes located in oceans (non-NWS habitat)
+```{r warning=FALSE, message=FALSE}
+states_simple <- vect(states_proj)
+states_simple$inside <- 1
+int_pnts$inside <- extract(states_simple["inside"], int_pnts)$inside
+
+# back to dataframe
+integ_df <- as.data.frame(int_pnts, geom="xy") %>%
+  filter(!is.na(inside)) %>% # remove ocean nodes
+  mutate(Y1 = 0, # no detection
+         Exp = NA) %>% # no exposure (point locations, no area)
+  select(Y1, Exp, x, y)
+```
+
+
+## Time Expansion
+Create dataframe with all years and weeks for the study period, weeks between `2022-01-01` and `2026-03-01`.  
+```{r}
+study_start <- as_date("2022-01-01")
+study_end <- as_date("2026-03-01")
+
+data_weeks <- sim_data_df %>%
+  distinct(year, week)
+
+# date sequence to fill gaps with no NWS
+calendar_weeks <- data.frame(date = seq(study_start, study_end, by = "day")) %>%
+  mutate(
+    year = epiyear(date),
+    week = epiweek(date)
+  ) %>%
+  distinct(year, week)
+
+time_index <- bind_rows(data_weeks, calendar_weeks) %>%
+  distinct(year, week) %>%
+  mutate(year = as.numeric(year), week = as.numeric(week)) %>%
+  filter(year >= 2022) %>%
+  arrange(year, week)
+
+```
+
+Replicate nodes to ensure a copy for each week in the study period.  
+```{r}
+quad_expand <- crossing(integ_df, time_index)
+
+dim(quad_expand) # dimensions
+
+head(quad_expand)
+tail(quad_expand)
+```
+
+## Clean Detections
+```{r}
+nws_detections_df <- sim_data_df %>%
+  mutate(Y1 = 1, # NWS detection was reported
+         Exp = NA) %>% # no exposure (point locations, no area)
+  select(Y1, Exp, x, y, year, week)
+```
+
+## Combine Detection Tier
+Combine mesh nodes (quadrature) with NWS detections (simulated)
+```{r}
+tier1_df <- rbind(nws_detections_df, quad_expand)
+
+# check
+sum(tier1_df$Y1) == nrow(nws_detections_df)
+
+dim(tier1_df)
+```
+
+
+## Aggregate Counts
+Summing NWS detections within each neighborhood.
+```{r}
+# assign unique polygon ID
+mesh_polys$poly_id <- 1:nrow(mesh_polys)
+
+# get the polygon ID for each NWS reported detection (or node)
+tier1_pnts <- vect(tier1_df, geom = c("x", "y"), crs = states_proj) # to spatial points
+mesh_polys <- vect(mesh_polys) # convert to SpatVector
+extracted <- extract(mesh_polys, tier1_pnts) 
+
+# add ID to dataframe
+tier1_df$poly_id <- extracted$poly_id
+
+# count points in each polygon by year-week
+counts <- tier1_df %>%
+  filter(Y1 == 1) %>% # only count detections, not nodes (Y1==0)
+  count(poly_id, year, week, name = "n_points")
+
+range(counts$n_points) # max simulated detections in neighborhood and week
+```
+
+## Match to Neighborhood
+Lastly, aggregate counts per neighborhood are match to the location of that neighborhood centroid.  
+```{r warning=FALSE, message=FALSE}
+# get centroid coordinates
+centroids <- centroids(mesh_polys)
+mesh_centroids_df <- as.data.frame(geom(centroids)[, c("x", "y")])
+mesh_centroids_df$poly_id <- mesh_polys$poly_id
+
+# all combinations of poly_id and time
+# making a copy for each week in the study period
+all_combos <- mesh_centroids_df %>%
+  select(poly_id, x, y) %>%
+  crossing(time_index)
+
+
+# match with aggregate counts
+# fill with NA if no NWS at location of time step
+weekly_counts <- all_combos %>%
+  left_join(counts, by = c("poly_id", "year", "week")) %>%
+  arrange(poly_id, year, week)
+
+
+sum(weekly_counts$n_points, na.rm=TRUE) == sum(counts$n_points) #verify all counts were matched
+```
+
+## Map Response
+Viewing the detection and count data for a select year and week.  
+```{r warning=FALSE, message=FALSE, fig.width=20, fig.height=10}
+# convert to SF for plotting
+tier1_sf <- st_as_sf(tier1_df, coords = c("x", "y"), crs = st_crs(states_proj))
+
+tier2_sf <- mesh_polys %>% 
+  st_as_sf() %>% 
+  inner_join(weekly_counts, by = "poly_id")
+
+
+plot_bivariate_response(
+  tier1_sf = tier1_sf,
+  tier2_sf = tier2_sf,
+  states_sf = states_proj,
+  yr = 2025,
+  wk = 35
+)
+```
+
+
+
+::: {.callout-tip icon=false} 
+#### Next Step
+Proceed to the next step to view the [model](https://geoepi.github.io/hominivorax-geostat/model.html) specification. 
+:::
+
+
+
+
+
+
+
+
