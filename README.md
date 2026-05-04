@@ -25,7 +25,8 @@ hominivorax-geostat/
 |- _quarto.yml             # Quarto site configuration
 |- home.qmd                # Supporting information landing page
 |- index.qmd               # Site index page
-|- model.qmd               # Model description and examples
+|- model.qmd               # Model description and example
+|- response.qmd            # Construct bivariate response variable
 |- simulation.qmd          # Simulation workflow and outputs
 |- spatial_domain.qmd      # Spatial domain setup and diagnostics
 |- README.md
