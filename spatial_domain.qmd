@@ -193,6 +193,6 @@ writeVector(mesh_polys, here("demo/neighboorhoods.gpkg"), overwrite = TRUE)
 
 ::: {.callout-tip icon=false} 
 #### Next Step
-Once the triangulated mesh and natural neighborhoods have been created and saved, proceed to proceed to the [Response]() page of this site. 
+Once the triangulated mesh and natural neighborhoods have been created and saved, proceed to proceed to the [Response](https://geoepi.github.io/hominivorax-geostat/response.html) page of this site. 
 :::
 

@@ -92,20 +92,22 @@ $$\log(\mu_{it}) = \log(\text{Area}_i) + \beta_{0}^{(2)} + \sum \beta_{2} \mathb
 ---
 
 ## Spatial Projection
-We utilize the **Stochastic Partial Differential Equation (SPDE)** approach with Penalized Complexity (PC) priors to prevent overfitting.
+We utilize the **Stochastic Partial Differential Equation (SPDE)** approach with Penalized Complexity (PC) priors to prevent overfitting.  
+
+Set priors for each model tier`s spatial range and index locations to replicate spatial fields by timestep.   
 
 ```{r eval=FALSE}
 # SPDE for Tier 1: Detection (xi_1)
 spde.t1 <- inla.spde2.pcmatern(mesh.dom, 
                                alpha = 2,
-                               prior.range = c(90, 0.5),  
+                               prior.range = c(90, 0.5),  # 50% probability that range is 90km or less
                                prior.sigma = c(1, 0.5),
                                constr = TRUE)
 
 # SPDE for Tier 2: Abundance (xi_2)
 spde.t2 <- inla.spde2.pcmatern(mesh.dom, 
                                alpha = 2,
-                               prior.range = c(150, 0.05),  
+                               prior.range = c(150, 0.05), # 5% probability that range is 150km or less 
                                prior.sigma = c(0.5, 0.05),
                                constr = TRUE)
 
@@ -120,52 +122,74 @@ field.xi2 <- inla.spde.make.index("field.xi2", n.spde = spde.t2$n.spde, n.group 
 
 ## Data Integration
 
-### Detection Stack
+### Detection Stack  
+Organize model input data as a *list()* object. In this example, all data for the Detection tier is stored in the `tier_1.set` dataframe.
 ```{r eval=FALSE}
-A.xi1 <- inla.spde.make.A(mesh.dom, loc = locs_t1, group = tier_1.set$time_index)
+locs_t1 <- cbind(tier_1.set$x, tier_1.set$y) # geographic coordinates
+
+A.xi1 <- inla.spde.make.A(mesh.dom, # triangulated mesh
+                          loc = locs_t1, # locations
+                          group = tier_1.set$time_index) # timesteps
 
 eff_t1 <- list(
-  c(field.xi1, list(intercept1 = 1)), 
-  list(north = tier_1.set$northing_km_s,
-       road_dens = tier_1.set$road_dens_s,
-       night_illum = tier_1.set$night_illum_s,
-       admin_gamma = as.integer(as.factor(tier_1.set$admin_u)),
-       week_w1 = tier_1.set$timestep)
+  c(field.xi1, list(intercept1 = 1)), # intercept
+  list(north = tier_1.set$northing_km_s, # distance to origin
+       road_dens = tier_1.set$road_dens_s, # road density
+       night_illum = tier_1.set$night_illum_s, # nighttime illumination
+       admin_gamma = as.integer(as.factor(tier_1.set$admin_u)), # administrative unit (ID)
+       week_w1 = tier_1.set$timestep) # weekly time steps
 )
 
+
+# Yi_cens_test is the censored version of the Y1 response demonstrated in the "response" tab
 jtier1.stk <- inla.stack(
-  data = list(Y = cbind(tier_1.set$Yi_cens_test, NA), link = 1, e = rep(NA, nrow(tier_1.set))),
-  A = list(A.xi1, 1), 
-  effects = eff_t1,   
-  tag = "det.stack"
+  data = list(Y = cbind(tier_1.set$Yi_cens_test, NA), # bivariate response; column 1 for detection, second for abundance
+              link = 1, # link function
+              e = rep(NA, nrow(tier_1.set))), # no geographic exposure in detection tier
+  A = list(A.xi1, 1), # projection matrix
+  effects = eff_t1, # covariates
+  tag = "det.stack" # arbitrary label
 )
 ```
 
 ### Abundance Stack
 ```{r eval=FALSE}
-A.xi2 <- inla.spde.make.A(mesh.dom, loc = locs_t2, group = tier_2.set$time_index)
+locs_t2 <- cbind(tier_1.set$x, tier_1.set$y) # geographic coordinates
+
+A.xi2 <- inla.spde.make.A(mesh.dom, # same as prior chunk
+                          loc = locs_t2, 
+                          group = tier_2.set$time_index)
 
 eff_t2 <- list(
-  c(field.xi2, list(field.xi1.copy = field.xi1$field.xi1), list(intercept2 = 1)), 
-  list(mintemp = tier_2.set$mintemp_s,
-       soilmoist = tier_2.set$soilmoist_s,
-       leafarea = tier_2.set$leafarea_s,
-       livestock_H = tier_2.set$cattle20_q,
-       week_w2 = tier_2.set$timestep)
+  c(field.xi2, # spatial effect for tier
+    list(field.xi1.copy = field.xi1$field.xi1), # spatial effect to copy detection tier
+    list(intercept2 = 1)), # intercept
+  list(mintemp = tier_2.set$mintemp_s, # minimum temperature
+       soilmoist = tier_2.set$soilmoist_s, # soial moisture
+       leafarea = tier_2.set$leafarea_s, # leaf area
+       livestock_H = tier_2.set$cattle20_q, # cattle density, non-linear 
+       horses_s = tier_2.set$horses_s, # linear
+       pigs_s = tier_2.set$pigs_s, # linear
+       goats_s = tier_2.set$goats_s, # linear
+       sheep_s = tier_2.set$sheep_s, # linear
+       cattle_s = tier_2.set$cattle_s, # linear
+       week_w2 = tier_2.set$timestep) # weekly timesteps
 )
 
+# Count_cens_test is the censored version of the Y1 response demonstrated in the "response" tab
 jtier2.stk <- inla.stack(
-  data = list(Y = cbind(NA, tier_2.set$Count_cens_test), link = 2, e = tier_2.set$area),
-  A = list(A.xi2, 1), 
-  effects = eff_t2,   
-  tag = "abun.stack"
+  data = list(Y = cbind(NA, tier_2.set$Count_cens_test), # bivaraite response
+              link = 2, # link
+              e = tier_2.set$area), # geographic exposure
+  A = list(A.xi2, 1), # projection matrix
+  effects = eff_t2, # covariates
+  tag = "abun.stack" # label
 )
 ```
 
 ### Join Data  
 The tier specific stacks are merged into a single object for the *inla()* call. This allows the model to estimate both processes simultaneously, propagating uncertainty from the detection tier to the abundance tier.
 ```{r eval=FALSE}
-
 joint_stk <- inla.stack(jtier1.stk, jtier2.stk)
 ```
 
@@ -192,43 +216,45 @@ The formula  couples the two tiers, using `f(..., copy = "field.xi1")` to repres
 ```{r eval=FALSE}
 formula_nws <- Y ~ -1 + intercept1 + intercept2 + # response and intercepts for each tier
   # Tier 1 Components
-  f(field.xi1, # tier 1 field
-    model = spde.t1, 
-    group = field.xi1.group, 
-    control.group = list(model = "iid", 
+  f(field.xi1, # tier 1 spatial field
+    model = spde.t1, # prior
+    group = field.xi1.group, # timesteps to replicate
+    control.group = list(model = "iid", # among-field prior specification
                          hyper = pc_rw)) +
-  f(week_w1, 
+  f(week_w1, # weekly timesteps
     model = "rw1", 
     constr = TRUE, 
     scale.model = TRUE, 
     hyper = pc_rw) +
-  f(admin_gamma, 
+  f(admin_gamma, # administrative regions
     model = "iid", 
     constr = TRUE, 
     hyper = pc_rw_strong) +
-  north + road_dens + night_illum + 
+  north + road_dens + night_illum + # linear effects for human access
   
   # Tier 2 Components
-  f(field.xi2, 
+  f(field.xi2, # tier 2 spatial field
     model = spde.t2, 
     group = field.xi2.group, 
     control.group = list(model = "iid", 
                          hyper = pc_rw)) +
-  f(field.xi1.copy, 
+  f(field.xi1.copy, # copy of spatial field from detection tier
     copy = "field.xi1", 
     group = field.xi1.copy.group, 
     fixed = FALSE, 
     hyper = hyper_alpha) +
-  f(week_w2, model = "rw1", 
+  f(week_w2, #weekly time correlation
+    model = "rw1", 
     constr = TRUE, 
     scale.model = TRUE, 
     hyper = pc_rw) +
-  f(livestock_H, 
+  f(livestock_H, #non-lieanr livestock (cattle in this example)
     model = "rw2", 
     constr = TRUE, 
     scale.model = TRUE, 
     hyper = pc_rw_cat) +
-  mintemp + soilmoist + leafarea + rhum + cattle_s + horses_s + pigs_s + goats_s + sheep_s
+  mintemp + soilmoist + leafarea + rhum + cattle_s + horses_s + # linear effects
+  pigs_s + goats_s + sheep_s + mintemp:soilmoist + mintemp:leafarea
 ```
 
 ### Run Model
@@ -246,10 +272,10 @@ model_joint <- inla(formula_nws,# formula
                 control.predictor = list(A = inla.stack.A(joint_stk), 
                                          compute = TRUE, #return fitted values
                                          link = 1), 
-                control.inla = list(strategy = "adaptive", 
+                control.inla = list(strategy = "adaptive", # integration strategy
                                     int.strategy = "eb"), # Empirical Bayes strategy
                 control.mode = list(restart = TRUE, theta = theta_init), # initial values
                 num.threads = 12, # run using 16 cores, others reserved for background processes
-                quantiles = return_quants,
+                quantiles = return_quants, # quanties to return
                 verbose = TRUE)
 ```

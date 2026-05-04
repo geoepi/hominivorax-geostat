@@ -323,20 +323,21 @@ y_{2,it} &amp;\sim \text{NegBinom}(\mu_{it}, n) &amp;&amp; \text{(Abundance Tier
 <section id="spatial-projection" class="level2" data-number="5">
 <h2 data-number="5" class="anchored" data-anchor-id="spatial-projection"><span class="header-section-number">5</span> Spatial Projection</h2>
 <p>We utilize the <strong>Stochastic Partial Differential Equation (SPDE)</strong> approach with Penalized Complexity (PC) priors to prevent overfitting.</p>
+<p>Set priors for each model tier`s spatial range and index locations to replicate spatial fields by timestep.</p>
 <div class="cell">
 <details open="">
 <summary>Show R Code</summary>
 <div class="sourceCode cell-code" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co"># SPDE for Tier 1: Detection (xi_1)</span></span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>spde.t1 <span class="ot">&lt;-</span> <span class="fu">inla.spde2.pcmatern</span>(mesh.dom, </span>
 <span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>                               <span class="at">alpha =</span> <span class="dv">2</span>,</span>
-<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>                               <span class="at">prior.range =</span> <span class="fu">c</span>(<span class="dv">90</span>, <span class="fl">0.5</span>),  </span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>                               <span class="at">prior.range =</span> <span class="fu">c</span>(<span class="dv">90</span>, <span class="fl">0.5</span>),  <span class="co"># 50% probability that range is 90km or less</span></span>
 <span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>                               <span class="at">prior.sigma =</span> <span class="fu">c</span>(<span class="dv">1</span>, <span class="fl">0.5</span>),</span>
 <span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>                               <span class="at">constr =</span> <span class="cn">TRUE</span>)</span>
 <span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a><span class="co"># SPDE for Tier 2: Abundance (xi_2)</span></span>
 <span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>spde.t2 <span class="ot">&lt;-</span> <span class="fu">inla.spde2.pcmatern</span>(mesh.dom, </span>
 <span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>                               <span class="at">alpha =</span> <span class="dv">2</span>,</span>
-<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>                               <span class="at">prior.range =</span> <span class="fu">c</span>(<span class="dv">150</span>, <span class="fl">0.05</span>),  </span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>                               <span class="at">prior.range =</span> <span class="fu">c</span>(<span class="dv">150</span>, <span class="fl">0.05</span>), <span class="co"># 5% probability that range is 150km or less </span></span>
 <span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>                               <span class="at">prior.sigma =</span> <span class="fu">c</span>(<span class="fl">0.5</span>, <span class="fl">0.05</span>),</span>
 <span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>                               <span class="at">constr =</span> <span class="cn">TRUE</span>)</span>
 <span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a></span>
@@ -354,26 +355,35 @@ y_{2,it} &amp;\sim \text{NegBinom}(\mu_{it}, n) &amp;&amp; \text{(Abundance Tier
 <h2 data-number="6" class="anchored" data-anchor-id="data-integration"><span class="header-section-number">6</span> Data Integration</h2>
 <section id="detection-stack" class="level3" data-number="6.1">
 <h3 data-number="6.1" class="anchored" data-anchor-id="detection-stack"><span class="header-section-number">6.1</span> Detection Stack</h3>
+<p>Organize model input data as a <em>list()</em> object. In this example, all data for the Detection tier is stored in the <code>tier_1.set</code> dataframe.</p>
 <div class="cell">
 <details open="">
 <summary>Show R Code</summary>
-<div class="sourceCode cell-code" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>A.xi1 <span class="ot">&lt;-</span> <span class="fu">inla.spde.make.A</span>(mesh.dom, <span class="at">loc =</span> locs_t1, <span class="at">group =</span> tier_1.set<span class="sc">$</span>time_index)</span>
+<div class="sourceCode cell-code" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>locs_t1 <span class="ot">&lt;-</span> <span class="fu">cbind</span>(tier_1.set<span class="sc">$</span>x, tier_1.set<span class="sc">$</span>y) <span class="co"># geographic coordinates</span></span>
 <span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>eff_t1 <span class="ot">&lt;-</span> <span class="fu">list</span>(</span>
-<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">c</span>(field.xi1, <span class="fu">list</span>(<span class="at">intercept1 =</span> <span class="dv">1</span>)), </span>
-<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">list</span>(<span class="at">north =</span> tier_1.set<span class="sc">$</span>northing_km_s,</span>
-<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>       <span class="at">road_dens =</span> tier_1.set<span class="sc">$</span>road_dens_s,</span>
-<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>       <span class="at">night_illum =</span> tier_1.set<span class="sc">$</span>night_illum_s,</span>
-<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>       <span class="at">admin_gamma =</span> <span class="fu">as.integer</span>(<span class="fu">as.factor</span>(tier_1.set<span class="sc">$</span>admin_u)),</span>
-<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>       <span class="at">week_w1 =</span> tier_1.set<span class="sc">$</span>timestep)</span>
-<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a>jtier1.stk <span class="ot">&lt;-</span> <span class="fu">inla.stack</span>(</span>
-<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a>  <span class="at">data =</span> <span class="fu">list</span>(<span class="at">Y =</span> <span class="fu">cbind</span>(tier_1.set<span class="sc">$</span>Yi_cens_test, <span class="cn">NA</span>), <span class="at">link =</span> <span class="dv">1</span>, <span class="at">e =</span> <span class="fu">rep</span>(<span class="cn">NA</span>, <span class="fu">nrow</span>(tier_1.set))),</span>
-<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a>  <span class="at">A =</span> <span class="fu">list</span>(A.xi1, <span class="dv">1</span>), </span>
-<span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a>  <span class="at">effects =</span> eff_t1,   </span>
-<span id="cb3-16"><a href="#cb3-16" aria-hidden="true" tabindex="-1"></a>  <span class="at">tag =</span> <span class="st">"det.stack"</span></span>
-<span id="cb3-17"><a href="#cb3-17" aria-hidden="true" tabindex="-1"></a>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>A.xi1 <span class="ot">&lt;-</span> <span class="fu">inla.spde.make.A</span>(mesh.dom, <span class="co"># triangulated mesh</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>                          <span class="at">loc =</span> locs_t1, <span class="co"># locations</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>                          <span class="at">group =</span> tier_1.set<span class="sc">$</span>time_index) <span class="co"># timesteps</span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>eff_t1 <span class="ot">&lt;-</span> <span class="fu">list</span>(</span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">c</span>(field.xi1, <span class="fu">list</span>(<span class="at">intercept1 =</span> <span class="dv">1</span>)), <span class="co"># intercept</span></span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">list</span>(<span class="at">north =</span> tier_1.set<span class="sc">$</span>northing_km_s, <span class="co"># distance to origin</span></span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a>       <span class="at">road_dens =</span> tier_1.set<span class="sc">$</span>road_dens_s, <span class="co"># road density</span></span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a>       <span class="at">night_illum =</span> tier_1.set<span class="sc">$</span>night_illum_s, <span class="co"># nighttime illumination</span></span>
+<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a>       <span class="at">admin_gamma =</span> <span class="fu">as.integer</span>(<span class="fu">as.factor</span>(tier_1.set<span class="sc">$</span>admin_u)), <span class="co"># administrative unit (ID)</span></span>
+<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a>       <span class="at">week_w1 =</span> tier_1.set<span class="sc">$</span>timestep) <span class="co"># weekly time steps</span></span>
+<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-16"><a href="#cb3-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-17"><a href="#cb3-17" aria-hidden="true" tabindex="-1"></a><span class="co"># Yi_cens_test is the censored version of the Y1 response demonstrated in the "response" tab</span></span>
+<span id="cb3-18"><a href="#cb3-18" aria-hidden="true" tabindex="-1"></a>jtier1.stk <span class="ot">&lt;-</span> <span class="fu">inla.stack</span>(</span>
+<span id="cb3-19"><a href="#cb3-19" aria-hidden="true" tabindex="-1"></a>  <span class="at">data =</span> <span class="fu">list</span>(<span class="at">Y =</span> <span class="fu">cbind</span>(tier_1.set<span class="sc">$</span>Yi_cens_test, <span class="cn">NA</span>), <span class="co"># bivariate response; column 1 for detection, second for abundance</span></span>
+<span id="cb3-20"><a href="#cb3-20" aria-hidden="true" tabindex="-1"></a>              <span class="at">link =</span> <span class="dv">1</span>, <span class="co"># link function</span></span>
+<span id="cb3-21"><a href="#cb3-21" aria-hidden="true" tabindex="-1"></a>              <span class="at">e =</span> <span class="fu">rep</span>(<span class="cn">NA</span>, <span class="fu">nrow</span>(tier_1.set))), <span class="co"># no geographic exposure in detection tier</span></span>
+<span id="cb3-22"><a href="#cb3-22" aria-hidden="true" tabindex="-1"></a>  <span class="at">A =</span> <span class="fu">list</span>(A.xi1, <span class="dv">1</span>), <span class="co"># projection matrix</span></span>
+<span id="cb3-23"><a href="#cb3-23" aria-hidden="true" tabindex="-1"></a>  <span class="at">effects =</span> eff_t1, <span class="co"># covariates</span></span>
+<span id="cb3-24"><a href="#cb3-24" aria-hidden="true" tabindex="-1"></a>  <span class="at">tag =</span> <span class="st">"det.stack"</span> <span class="co"># arbitrary label</span></span>
+<span id="cb3-25"><a href="#cb3-25" aria-hidden="true" tabindex="-1"></a>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 </div>
 </section>
@@ -382,23 +392,37 @@ y_{2,it} &amp;\sim \text{NegBinom}(\mu_{it}, n) &amp;&amp; \text{(Abundance Tier
 <div class="cell">
 <details open="">
 <summary>Show R Code</summary>
-<div class="sourceCode cell-code" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>A.xi2 <span class="ot">&lt;-</span> <span class="fu">inla.spde.make.A</span>(mesh.dom, <span class="at">loc =</span> locs_t2, <span class="at">group =</span> tier_2.set<span class="sc">$</span>time_index)</span>
+<div class="sourceCode cell-code" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>locs_t2 <span class="ot">&lt;-</span> <span class="fu">cbind</span>(tier_1.set<span class="sc">$</span>x, tier_1.set<span class="sc">$</span>y) <span class="co"># geographic coordinates</span></span>
 <span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>eff_t2 <span class="ot">&lt;-</span> <span class="fu">list</span>(</span>
-<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">c</span>(field.xi2, <span class="fu">list</span>(<span class="at">field.xi1.copy =</span> field.xi1<span class="sc">$</span>field.xi1), <span class="fu">list</span>(<span class="at">intercept2 =</span> <span class="dv">1</span>)), </span>
-<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">list</span>(<span class="at">mintemp =</span> tier_2.set<span class="sc">$</span>mintemp_s,</span>
-<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>       <span class="at">soilmoist =</span> tier_2.set<span class="sc">$</span>soilmoist_s,</span>
-<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>       <span class="at">leafarea =</span> tier_2.set<span class="sc">$</span>leafarea_s,</span>
-<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>       <span class="at">livestock_H =</span> tier_2.set<span class="sc">$</span>cattle20_q,</span>
-<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a>       <span class="at">week_w2 =</span> tier_2.set<span class="sc">$</span>timestep)</span>
-<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a>jtier2.stk <span class="ot">&lt;-</span> <span class="fu">inla.stack</span>(</span>
-<span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a>  <span class="at">data =</span> <span class="fu">list</span>(<span class="at">Y =</span> <span class="fu">cbind</span>(<span class="cn">NA</span>, tier_2.set<span class="sc">$</span>Count_cens_test), <span class="at">link =</span> <span class="dv">2</span>, <span class="at">e =</span> tier_2.set<span class="sc">$</span>area),</span>
-<span id="cb4-14"><a href="#cb4-14" aria-hidden="true" tabindex="-1"></a>  <span class="at">A =</span> <span class="fu">list</span>(A.xi2, <span class="dv">1</span>), </span>
-<span id="cb4-15"><a href="#cb4-15" aria-hidden="true" tabindex="-1"></a>  <span class="at">effects =</span> eff_t2,   </span>
-<span id="cb4-16"><a href="#cb4-16" aria-hidden="true" tabindex="-1"></a>  <span class="at">tag =</span> <span class="st">"abun.stack"</span></span>
-<span id="cb4-17"><a href="#cb4-17" aria-hidden="true" tabindex="-1"></a>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>A.xi2 <span class="ot">&lt;-</span> <span class="fu">inla.spde.make.A</span>(mesh.dom, <span class="co"># same as prior chunk</span></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>                          <span class="at">loc =</span> locs_t2, </span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>                          <span class="at">group =</span> tier_2.set<span class="sc">$</span>time_index)</span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>eff_t2 <span class="ot">&lt;-</span> <span class="fu">list</span>(</span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">c</span>(field.xi2, <span class="co"># spatial effect for tier</span></span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a>    <span class="fu">list</span>(<span class="at">field.xi1.copy =</span> field.xi1<span class="sc">$</span>field.xi1), <span class="co"># spatial effect to copy detection tier</span></span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a>    <span class="fu">list</span>(<span class="at">intercept2 =</span> <span class="dv">1</span>)), <span class="co"># intercept</span></span>
+<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">list</span>(<span class="at">mintemp =</span> tier_2.set<span class="sc">$</span>mintemp_s, <span class="co"># minimum temperature</span></span>
+<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a>       <span class="at">soilmoist =</span> tier_2.set<span class="sc">$</span>soilmoist_s, <span class="co"># soial moisture</span></span>
+<span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a>       <span class="at">leafarea =</span> tier_2.set<span class="sc">$</span>leafarea_s, <span class="co"># leaf area</span></span>
+<span id="cb4-14"><a href="#cb4-14" aria-hidden="true" tabindex="-1"></a>       <span class="at">livestock_H =</span> tier_2.set<span class="sc">$</span>cattle20_q, <span class="co"># cattle density, non-linear </span></span>
+<span id="cb4-15"><a href="#cb4-15" aria-hidden="true" tabindex="-1"></a>       <span class="at">horses_s =</span> tier_2.set<span class="sc">$</span>horses_s, <span class="co"># linear</span></span>
+<span id="cb4-16"><a href="#cb4-16" aria-hidden="true" tabindex="-1"></a>       <span class="at">pigs_s =</span> tier_2.set<span class="sc">$</span>pigs_s, <span class="co"># linear</span></span>
+<span id="cb4-17"><a href="#cb4-17" aria-hidden="true" tabindex="-1"></a>       <span class="at">goats_s =</span> tier_2.set<span class="sc">$</span>goats_s, <span class="co"># linear</span></span>
+<span id="cb4-18"><a href="#cb4-18" aria-hidden="true" tabindex="-1"></a>       <span class="at">sheep_s =</span> tier_2.set<span class="sc">$</span>sheep_s, <span class="co"># linear</span></span>
+<span id="cb4-19"><a href="#cb4-19" aria-hidden="true" tabindex="-1"></a>       <span class="at">cattle_s =</span> tier_2.set<span class="sc">$</span>cattle_s, <span class="co"># linear</span></span>
+<span id="cb4-20"><a href="#cb4-20" aria-hidden="true" tabindex="-1"></a>       <span class="at">week_w2 =</span> tier_2.set<span class="sc">$</span>timestep) <span class="co"># weekly timesteps</span></span>
+<span id="cb4-21"><a href="#cb4-21" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb4-22"><a href="#cb4-22" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-23"><a href="#cb4-23" aria-hidden="true" tabindex="-1"></a><span class="co"># Count_cens_test is the censored version of the Y1 response demonstrated in the "response" tab</span></span>
+<span id="cb4-24"><a href="#cb4-24" aria-hidden="true" tabindex="-1"></a>jtier2.stk <span class="ot">&lt;-</span> <span class="fu">inla.stack</span>(</span>
+<span id="cb4-25"><a href="#cb4-25" aria-hidden="true" tabindex="-1"></a>  <span class="at">data =</span> <span class="fu">list</span>(<span class="at">Y =</span> <span class="fu">cbind</span>(<span class="cn">NA</span>, tier_2.set<span class="sc">$</span>Count_cens_test), <span class="co"># bivaraite response</span></span>
+<span id="cb4-26"><a href="#cb4-26" aria-hidden="true" tabindex="-1"></a>              <span class="at">link =</span> <span class="dv">2</span>, <span class="co"># link</span></span>
+<span id="cb4-27"><a href="#cb4-27" aria-hidden="true" tabindex="-1"></a>              <span class="at">e =</span> tier_2.set<span class="sc">$</span>area), <span class="co"># geographic exposure</span></span>
+<span id="cb4-28"><a href="#cb4-28" aria-hidden="true" tabindex="-1"></a>  <span class="at">A =</span> <span class="fu">list</span>(A.xi2, <span class="dv">1</span>), <span class="co"># projection matrix</span></span>
+<span id="cb4-29"><a href="#cb4-29" aria-hidden="true" tabindex="-1"></a>  <span class="at">effects =</span> eff_t2, <span class="co"># covariates</span></span>
+<span id="cb4-30"><a href="#cb4-30" aria-hidden="true" tabindex="-1"></a>  <span class="at">tag =</span> <span class="st">"abun.stack"</span> <span class="co"># label</span></span>
+<span id="cb4-31"><a href="#cb4-31" aria-hidden="true" tabindex="-1"></a>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 </div>
 </section>
@@ -440,43 +464,45 @@ y_{2,it} &amp;\sim \text{NegBinom}(\mu_{it}, n) &amp;&amp; \text{(Abundance Tier
 <summary>Show R Code</summary>
 <div class="sourceCode cell-code" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>formula_nws <span class="ot">&lt;-</span> Y <span class="sc">~</span> <span class="sc">-</span><span class="dv">1</span> <span class="sc">+</span> intercept1 <span class="sc">+</span> intercept2 <span class="sc">+</span> <span class="co"># response and intercepts for each tier</span></span>
 <span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>  <span class="co"># Tier 1 Components</span></span>
-<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">f</span>(field.xi1, <span class="co"># tier 1 field</span></span>
-<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>    <span class="at">model =</span> spde.t1, </span>
-<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">group =</span> field.xi1.group, </span>
-<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>    <span class="at">control.group =</span> <span class="fu">list</span>(<span class="at">model =</span> <span class="st">"iid"</span>, </span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">f</span>(field.xi1, <span class="co"># tier 1 spatial field</span></span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>    <span class="at">model =</span> spde.t1, <span class="co"># prior</span></span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">group =</span> field.xi1.group, <span class="co"># timesteps to replicate</span></span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>    <span class="at">control.group =</span> <span class="fu">list</span>(<span class="at">model =</span> <span class="st">"iid"</span>, <span class="co"># among-field prior specification</span></span>
 <span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a>                         <span class="at">hyper =</span> pc_rw)) <span class="sc">+</span></span>
-<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">f</span>(week_w1, </span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">f</span>(week_w1, <span class="co"># weekly timesteps</span></span>
 <span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">model =</span> <span class="st">"rw1"</span>, </span>
 <span id="cb7-10"><a href="#cb7-10" aria-hidden="true" tabindex="-1"></a>    <span class="at">constr =</span> <span class="cn">TRUE</span>, </span>
 <span id="cb7-11"><a href="#cb7-11" aria-hidden="true" tabindex="-1"></a>    <span class="at">scale.model =</span> <span class="cn">TRUE</span>, </span>
 <span id="cb7-12"><a href="#cb7-12" aria-hidden="true" tabindex="-1"></a>    <span class="at">hyper =</span> pc_rw) <span class="sc">+</span></span>
-<span id="cb7-13"><a href="#cb7-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">f</span>(admin_gamma, </span>
+<span id="cb7-13"><a href="#cb7-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">f</span>(admin_gamma, <span class="co"># administrative regions</span></span>
 <span id="cb7-14"><a href="#cb7-14" aria-hidden="true" tabindex="-1"></a>    <span class="at">model =</span> <span class="st">"iid"</span>, </span>
 <span id="cb7-15"><a href="#cb7-15" aria-hidden="true" tabindex="-1"></a>    <span class="at">constr =</span> <span class="cn">TRUE</span>, </span>
 <span id="cb7-16"><a href="#cb7-16" aria-hidden="true" tabindex="-1"></a>    <span class="at">hyper =</span> pc_rw_strong) <span class="sc">+</span></span>
-<span id="cb7-17"><a href="#cb7-17" aria-hidden="true" tabindex="-1"></a>  north <span class="sc">+</span> road_dens <span class="sc">+</span> night_illum <span class="sc">+</span> </span>
+<span id="cb7-17"><a href="#cb7-17" aria-hidden="true" tabindex="-1"></a>  north <span class="sc">+</span> road_dens <span class="sc">+</span> night_illum <span class="sc">+</span> <span class="co"># linear effects for human access</span></span>
 <span id="cb7-18"><a href="#cb7-18" aria-hidden="true" tabindex="-1"></a>  </span>
 <span id="cb7-19"><a href="#cb7-19" aria-hidden="true" tabindex="-1"></a>  <span class="co"># Tier 2 Components</span></span>
-<span id="cb7-20"><a href="#cb7-20" aria-hidden="true" tabindex="-1"></a>  <span class="fu">f</span>(field.xi2, </span>
+<span id="cb7-20"><a href="#cb7-20" aria-hidden="true" tabindex="-1"></a>  <span class="fu">f</span>(field.xi2, <span class="co"># tier 2 spatial field</span></span>
 <span id="cb7-21"><a href="#cb7-21" aria-hidden="true" tabindex="-1"></a>    <span class="at">model =</span> spde.t2, </span>
 <span id="cb7-22"><a href="#cb7-22" aria-hidden="true" tabindex="-1"></a>    <span class="at">group =</span> field.xi2.group, </span>
 <span id="cb7-23"><a href="#cb7-23" aria-hidden="true" tabindex="-1"></a>    <span class="at">control.group =</span> <span class="fu">list</span>(<span class="at">model =</span> <span class="st">"iid"</span>, </span>
 <span id="cb7-24"><a href="#cb7-24" aria-hidden="true" tabindex="-1"></a>                         <span class="at">hyper =</span> pc_rw)) <span class="sc">+</span></span>
-<span id="cb7-25"><a href="#cb7-25" aria-hidden="true" tabindex="-1"></a>  <span class="fu">f</span>(field.xi1.copy, </span>
+<span id="cb7-25"><a href="#cb7-25" aria-hidden="true" tabindex="-1"></a>  <span class="fu">f</span>(field.xi1.copy, <span class="co"># copy of spatial field from detection tier</span></span>
 <span id="cb7-26"><a href="#cb7-26" aria-hidden="true" tabindex="-1"></a>    <span class="at">copy =</span> <span class="st">"field.xi1"</span>, </span>
 <span id="cb7-27"><a href="#cb7-27" aria-hidden="true" tabindex="-1"></a>    <span class="at">group =</span> field.xi1.copy.group, </span>
 <span id="cb7-28"><a href="#cb7-28" aria-hidden="true" tabindex="-1"></a>    <span class="at">fixed =</span> <span class="cn">FALSE</span>, </span>
 <span id="cb7-29"><a href="#cb7-29" aria-hidden="true" tabindex="-1"></a>    <span class="at">hyper =</span> hyper_alpha) <span class="sc">+</span></span>
-<span id="cb7-30"><a href="#cb7-30" aria-hidden="true" tabindex="-1"></a>  <span class="fu">f</span>(week_w2, <span class="at">model =</span> <span class="st">"rw1"</span>, </span>
-<span id="cb7-31"><a href="#cb7-31" aria-hidden="true" tabindex="-1"></a>    <span class="at">constr =</span> <span class="cn">TRUE</span>, </span>
-<span id="cb7-32"><a href="#cb7-32" aria-hidden="true" tabindex="-1"></a>    <span class="at">scale.model =</span> <span class="cn">TRUE</span>, </span>
-<span id="cb7-33"><a href="#cb7-33" aria-hidden="true" tabindex="-1"></a>    <span class="at">hyper =</span> pc_rw) <span class="sc">+</span></span>
-<span id="cb7-34"><a href="#cb7-34" aria-hidden="true" tabindex="-1"></a>  <span class="fu">f</span>(livestock_H, </span>
-<span id="cb7-35"><a href="#cb7-35" aria-hidden="true" tabindex="-1"></a>    <span class="at">model =</span> <span class="st">"rw2"</span>, </span>
-<span id="cb7-36"><a href="#cb7-36" aria-hidden="true" tabindex="-1"></a>    <span class="at">constr =</span> <span class="cn">TRUE</span>, </span>
-<span id="cb7-37"><a href="#cb7-37" aria-hidden="true" tabindex="-1"></a>    <span class="at">scale.model =</span> <span class="cn">TRUE</span>, </span>
-<span id="cb7-38"><a href="#cb7-38" aria-hidden="true" tabindex="-1"></a>    <span class="at">hyper =</span> pc_rw_cat) <span class="sc">+</span></span>
-<span id="cb7-39"><a href="#cb7-39" aria-hidden="true" tabindex="-1"></a>  mintemp <span class="sc">+</span> soilmoist <span class="sc">+</span> leafarea <span class="sc">+</span> rhum <span class="sc">+</span> cattle_s <span class="sc">+</span> horses_s <span class="sc">+</span> pigs_s <span class="sc">+</span> goats_s <span class="sc">+</span> sheep_s</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<span id="cb7-30"><a href="#cb7-30" aria-hidden="true" tabindex="-1"></a>  <span class="fu">f</span>(week_w2, <span class="co">#weekly time correlation</span></span>
+<span id="cb7-31"><a href="#cb7-31" aria-hidden="true" tabindex="-1"></a>    <span class="at">model =</span> <span class="st">"rw1"</span>, </span>
+<span id="cb7-32"><a href="#cb7-32" aria-hidden="true" tabindex="-1"></a>    <span class="at">constr =</span> <span class="cn">TRUE</span>, </span>
+<span id="cb7-33"><a href="#cb7-33" aria-hidden="true" tabindex="-1"></a>    <span class="at">scale.model =</span> <span class="cn">TRUE</span>, </span>
+<span id="cb7-34"><a href="#cb7-34" aria-hidden="true" tabindex="-1"></a>    <span class="at">hyper =</span> pc_rw) <span class="sc">+</span></span>
+<span id="cb7-35"><a href="#cb7-35" aria-hidden="true" tabindex="-1"></a>  <span class="fu">f</span>(livestock_H, <span class="co">#non-lieanr livestock (cattle in this example)</span></span>
+<span id="cb7-36"><a href="#cb7-36" aria-hidden="true" tabindex="-1"></a>    <span class="at">model =</span> <span class="st">"rw2"</span>, </span>
+<span id="cb7-37"><a href="#cb7-37" aria-hidden="true" tabindex="-1"></a>    <span class="at">constr =</span> <span class="cn">TRUE</span>, </span>
+<span id="cb7-38"><a href="#cb7-38" aria-hidden="true" tabindex="-1"></a>    <span class="at">scale.model =</span> <span class="cn">TRUE</span>, </span>
+<span id="cb7-39"><a href="#cb7-39" aria-hidden="true" tabindex="-1"></a>    <span class="at">hyper =</span> pc_rw_cat) <span class="sc">+</span></span>
+<span id="cb7-40"><a href="#cb7-40" aria-hidden="true" tabindex="-1"></a>  mintemp <span class="sc">+</span> soilmoist <span class="sc">+</span> leafarea <span class="sc">+</span> rhum <span class="sc">+</span> cattle_s <span class="sc">+</span> horses_s <span class="sc">+</span> <span class="co"># linear effects</span></span>
+<span id="cb7-41"><a href="#cb7-41" aria-hidden="true" tabindex="-1"></a>  pigs_s <span class="sc">+</span> goats_s <span class="sc">+</span> sheep_s <span class="sc">+</span> mintemp<span class="sc">:</span>soilmoist <span class="sc">+</span> mintemp<span class="sc">:</span>leafarea</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 </div>
 </section>
@@ -498,11 +524,11 @@ y_{2,it} &amp;\sim \text{NegBinom}(\mu_{it}, n) &amp;&amp; \text{(Abundance Tier
 <span id="cb8-11"><a href="#cb8-11" aria-hidden="true" tabindex="-1"></a>                <span class="at">control.predictor =</span> <span class="fu">list</span>(<span class="at">A =</span> <span class="fu">inla.stack.A</span>(joint_stk), </span>
 <span id="cb8-12"><a href="#cb8-12" aria-hidden="true" tabindex="-1"></a>                                         <span class="at">compute =</span> <span class="cn">TRUE</span>, <span class="co">#return fitted values</span></span>
 <span id="cb8-13"><a href="#cb8-13" aria-hidden="true" tabindex="-1"></a>                                         <span class="at">link =</span> <span class="dv">1</span>), </span>
-<span id="cb8-14"><a href="#cb8-14" aria-hidden="true" tabindex="-1"></a>                <span class="at">control.inla =</span> <span class="fu">list</span>(<span class="at">strategy =</span> <span class="st">"adaptive"</span>, </span>
+<span id="cb8-14"><a href="#cb8-14" aria-hidden="true" tabindex="-1"></a>                <span class="at">control.inla =</span> <span class="fu">list</span>(<span class="at">strategy =</span> <span class="st">"adaptive"</span>, <span class="co"># integration strategy</span></span>
 <span id="cb8-15"><a href="#cb8-15" aria-hidden="true" tabindex="-1"></a>                                    <span class="at">int.strategy =</span> <span class="st">"eb"</span>), <span class="co"># Empirical Bayes strategy</span></span>
 <span id="cb8-16"><a href="#cb8-16" aria-hidden="true" tabindex="-1"></a>                <span class="at">control.mode =</span> <span class="fu">list</span>(<span class="at">restart =</span> <span class="cn">TRUE</span>, <span class="at">theta =</span> theta_init), <span class="co"># initial values</span></span>
 <span id="cb8-17"><a href="#cb8-17" aria-hidden="true" tabindex="-1"></a>                <span class="at">num.threads =</span> <span class="dv">12</span>, <span class="co"># run using 16 cores, others reserved for background processes</span></span>
-<span id="cb8-18"><a href="#cb8-18" aria-hidden="true" tabindex="-1"></a>                <span class="at">quantiles =</span> return_quants,</span>
+<span id="cb8-18"><a href="#cb8-18" aria-hidden="true" tabindex="-1"></a>                <span class="at">quantiles =</span> return_quants, <span class="co"># quanties to return</span></span>
 <span id="cb8-19"><a href="#cb8-19" aria-hidden="true" tabindex="-1"></a>                <span class="at">verbose =</span> <span class="cn">TRUE</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 </div>

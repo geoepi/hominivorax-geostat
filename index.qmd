@@ -55,7 +55,7 @@ knitr::include_graphics(here::here("images/animation.gif"))
 Use the below links or tabs at the top of the page to navigate to different sections of the analysis.    
 - [**Simulation**](https://geoepi.github.io/hominivorax-geostat/simulation.html): Interactive download of supporting data and simulation of demonstrative case detections.     
 - [**Tessellation**](https://geoepi.github.io/hominivorax-geostat/spatial_domain.html): Spatial mesh construction, tessellation, and defining the spatial domain.  
-- [**Response**](https://geoepi.github.io/hominivorax-geostat/spatial_domain.html): Organize NWS detections to construct the bivariate response variable for the model.     
+- [**Response**](https://geoepi.github.io/hominivorax-geostat/response.html): Organize NWS detections to construct the bivariate response variable for the model.     
 - [**Model**](https://geoepi.github.io/hominivorax-geostat/model.html): Model description, data organization, and model execution.   
   
   

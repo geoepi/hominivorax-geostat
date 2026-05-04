@@ -136,7 +136,7 @@ quick_map_plot(grid_stk=spread_stk, target_year=2025, target_week=30, boundary_p
 The *sum_intensity_grid()* function, when applied to the estimated spread grids, will sum the estimated number of detections for each week.  This approximates the mean number of cases as predicted by the model described in the manuscript. Note that the function includes an input option `min_est=` that specifies the minimum cell value to consider a detection.  
    
 The dataframe returned by the function includes a column *count* that will be used to simulate spatial points in the next step.   
-```{r fig_width=15, fig.height=6, warning=FALSE, message=FALSE}
+```{r fig_width=15, fig.height=8, warning=FALSE, message=FALSE}
 weekly_counts <- sum_intensity_grid(spread_stk, min_est = 1)
 
 ggplot(data = weekly_counts, aes(x = date, y = count)) +

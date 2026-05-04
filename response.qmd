@@ -56,8 +56,10 @@ NA, & \text{NWS detections not reported in neighborhood } i \text{ and time } t 
 $$
   
   
-
-    
+   
+   
+   
+           
 ::: {.callout-tip icon=false}   
 #### Note
 This script assumes that supporting data has already been downloaded to a directory called `/demo`, that NWS case detections have been simulated as described on the [Simulation tab](https://geoepi.github.io/hominivorax-geostat/simulation.html), and that the triangulated mesh and areal tessellation presented on the [tessellation tab](https://geoepi.github.io/hominivorax-geostat/spatial_domain.html) have been constructed and saved. 
