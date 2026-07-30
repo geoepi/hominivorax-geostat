@@ -50,14 +50,18 @@ rsconnect/
 # secrets
 secrets.yaml
 
-# local data
-/local
-
-# code demo directory
-/demo
-
-# notes, to be added later
-/scripts
+# private and generated inputs/outputs
+/local/
+config/preprocessing.yml
+data/private/
+outputs/
+*.RData
+outputs/preprocessing_demo/
+/demo/
+/scripts/*
+!/scripts/run_preprocessing.R
+!/scripts/run_preprocessing_demo.R
+!/scripts/check_preprocessing_demo.R
 
 # quarto
 /.quarto/

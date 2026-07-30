@@ -2,6 +2,8 @@
 
 *Cochliomyia hominivorax* geostatistical model for biased sampling.
 
+The repository also provides a configuration-driven preprocessing reference implementation. It converts point observations and spatial covariates into audited Tier 1, Tier 2, and prediction objects. Copy `config/preprocessing.example.yml` to the ignored `config/preprocessing.yml` for private operational inputs, or run `Rscript scripts/run_preprocessing_demo.R` for the synthetic demonstration. Operational surveillance data and exact coordinates remain private.
+
 ## Supporting Information
 
 This repository provides supporting information for:
@@ -20,6 +22,9 @@ This repository provides supporting information for:
 ```text
 hominivorax-geostat/
 |- R/                      # analysis and plotting functions
+|- config/                 # example preprocessing configuration and host lookup
+|- scripts/                # explicit preprocessing entry points and checks
+|- preprocessing.qmd       # preprocessing workflow documentation
 |- docs/                   # Rendered GitHub Pages
 |- images/                 # Static images used by docs and examples
 |- _quarto.yml             # Quarto site configuration

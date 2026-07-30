@@ -1,0 +1,47 @@
+project:
+  seed: 1976
+  output_directory: outputs/preprocessing
+study:
+  start_date: '2022-01-01'
+  end_date: '2022-12-31'
+  projected_crs: 'EPSG:4326' # Replace with a projected CRS for operational data.
+inputs:
+  observations: data/private/observations.csv
+  study_boundary: data/private/study_boundary.gpkg
+  template_raster: data/private/template.tif
+dynamic_covariates:
+  minimum_temperature: data/private/mintemp_weekly
+  soil_moisture: data/private/soilmoist_weekly
+  leaf_area_low: data/private/leafarea_weekly
+  relative_humidity: data/private/humidity_weekly
+static_covariates:
+  cattle: data/private/cattle.tif
+  horses: data/private/horses.tif
+  pigs: data/private/pigs.tif
+  sheep: data/private/sheep.tif
+  goats: data/private/goats.tif
+  road_density: data/private/road_density.tif
+  night_illumination: data/private/night_illumination.tif
+mesh:
+  boundary_buffer: 20
+  cutoff: 25
+  max_edge: [50, 200]
+  offset: [100, 250]
+  minimum_angle: 30
+  island_area_threshold: 500 # km^2 when CRS units are metres.
+extraction:
+  search_radius: 75 # projected CRS units; verify before operational use.
+transformations:
+  temperature_hinge: 12
+  dynamic_missing_policy: fail
+  livestock_missing_policy: impute_zero
+tier1_thinning:
+  enabled: false
+  raster_resolution: 25000
+  seed: 1976
+outputs:
+  model_inputs: model_inputs.rds
+  observation_audit: observation_audit.csv
+  covariate_audit: covariate_audit.csv
+  excluded_observations: excluded_observations.csv
+# Copy this file to config/preprocessing.yml, edit it, and keep that file untracked.

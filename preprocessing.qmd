@@ -1,0 +1,16 @@
+---
+title: "Configurable preprocessing workflow"
+format: gfm
+---
+
+This source document describes the Stage 1 preprocessing workflow. Operational observations, boundaries, rasters, and coordinates remain outside version control. Copy `config/preprocessing.example.yml` to the ignored `config/preprocessing.yml` and edit its paths.
+
+The workflow reads observations with `date`, `lon`, `lat`, and `host`, validates dates and coordinates, transforms points to the configured CRS, excludes points outside the valid analysis domain, audits exact date-location duplicates, and preserves raw and standardized host fields. The reference behavior for concatenated hosts is retained: the lookup table records the first-species standardization.
+
+All dates use ISO epidemiological year and week (`lubridate::isoyear()` and `lubridate::isoweek()`), with a complete shared `time_index`. Points outside the terrestrial domain are excluded early and are recorded in the audit; the workflow does not claim that ocean points remain.
+
+Spatial inputs use `sf` and `terra`. CRS metadata are validated rather than overwritten. The support object contains the domain, mesh polygons, integration points, and metadata. Tier 1 combines positive detections with weekly quadrature points. Tier 2 creates every polygon-week combination and aggregates retained detections. Dynamic covariates are joined against an unchanged master key before one missingness decision; static covariates use one extraction interface.
+
+Transformations are estimated on training data once and applied to Tier 1, Tier 2, and prediction data. Northing, log-1p livestock/road terms, z-scores, imputation values, and the temperature hinge threshold are stored in the named transformation object. Prediction cells have stable `cell_id` values independent of space-time expansion.
+
+Run the synthetic demonstration with `Rscript scripts/run_preprocessing_demo.R`, then `Rscript scripts/check_preprocessing_demo.R`. Run operational preprocessing with `Rscript scripts/run_preprocessing.R --config=config/preprocessing.yml`. The output is one named RDS object containing model inputs, audits, transformations, configuration, and provenance. Do not commit operational outputs, private coordinates, or machine-specific paths.
