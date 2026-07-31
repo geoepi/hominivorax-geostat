@@ -8,6 +8,12 @@ read_preprocessing_config <- function(path, repo_root = getwd()) {
   cfg$inputs <- lapply(cfg$inputs, resolve_preprocessing_path, repo_root = repo_root)
   cfg$dynamic_covariates <- lapply(cfg$dynamic_covariates, resolve_preprocessing_path, repo_root = repo_root)
   cfg$static_covariates <- lapply(cfg$static_covariates, resolve_preprocessing_path, repo_root = repo_root)
+  if (is.null(names(cfg$dynamic_covariates)) || any(!nzchar(names(cfg$dynamic_covariates)))) {
+    names(cfg$dynamic_covariates) <- c("minimum_temperature", "soil_moisture", "leaf_area_low", "relative_humidity")
+  }
+  if (is.null(names(cfg$static_covariates)) || any(!nzchar(names(cfg$static_covariates)))) {
+    names(cfg$static_covariates) <- c("cattle", "horses", "pigs", "sheep", "goats", "road_density", "night_illumination")
+  }
   cfg$config_path <- normalizePath(path, mustWork = FALSE); cfg
 }
 validate_preprocessing_config <- function(cfg, require_inputs = TRUE) {

@@ -1,0 +1,43 @@
+run_preprocessing <- function(config_path, repo_root = normalizePath(file.path(dirname(config_path), ".."), mustWork = TRUE), write_outputs = TRUE) {
+  cfg <- read_preprocessing_config(config_path, repo_root)
+  validate_preprocessing_config(cfg)
+  dir.create(cfg$project$output_directory, recursive = TRUE, showWarnings = FALSE)
+  boundary <- sf::st_read(cfg$inputs$study_boundary, quiet = TRUE)
+  host_lookup <- read_host_lookup(file.path(repo_root, "config", "host_lookup.csv"))
+  cleaned <- preprocess_observations(read_observations(cfg$inputs$observations), boundary, cfg, host_lookup)
+  time_index <- make_week_index(cfg$study$start_date, cfg$study$end_date)
+  support <- build_spatial_support(boundary, cleaned$data, cfg)
+  tier1_raw <- build_tier1(cleaned$data, support$integration_points, time_index)
+  thinning <- thin_tier1(tier1_raw, cfg, terra::rast(cfg$inputs$template_raster))
+  tier2 <- build_tier2(cleaned$data, support, time_index)
+  prediction <- build_prediction_grid(support, time_index, cfg$inputs$template_raster, cfg$study$projected_crs)
+  dynamic_specs <- cfg$dynamic_covariates
+  dynamic_names <- c(minimum_temperature = "mintemp", soil_moisture = "soilmoist", leaf_area_low = "leafarea", relative_humidity = "rhum")
+  names(dynamic_specs) <- unname(dynamic_names[names(dynamic_specs)])
+  static_specs <- cfg$static_covariates
+  t2_dynamic <- extract_dynamic_covariates(tier2, dynamic_specs, cfg$study$projected_crs, time_index, cfg$transformations$dynamic_missing_policy)
+  pred_dynamic <- extract_dynamic_covariates(prediction, dynamic_specs, cfg$study$projected_crs, time_index, "retain")
+  t1_dynamic <- extract_dynamic_covariates(thinning$retained, dynamic_specs, cfg$study$projected_crs, time_index, "retain")
+  t2_static <- extract_static_covariates(t2_dynamic$data, static_specs, cfg$study$projected_crs)
+  pred_static <- extract_static_covariates(pred_dynamic$data, static_specs, cfg$study$projected_crs)
+  t1_static <- extract_static_covariates(t1_dynamic$data, static_specs, cfg$study$projected_crs)
+  tier2 <- join_covariates(t2_dynamic$data, t2_static$data)
+  prediction <- join_covariates(pred_dynamic$data, pred_static$data)
+  tier1 <- join_covariates(t1_dynamic$data, t1_static$data)
+  covariate_audit <- dplyr::bind_rows(t2_dynamic$audit, pred_dynamic$audit, t1_dynamic$audit, t2_static$audit, pred_static$audit, t1_static$audit)
+  tier2 <- apply_missing_policy(tier2, covariate_audit[covariate_audit$variable %in% c("mintemp", "soilmoist", "leafarea", "rhum"), ], cfg)
+  transformations <- estimate_transformations(tier2, cfg)
+  tier1 <- add_legacy_model_fields(apply_transformations(tier1, transformations, include_hinge = FALSE))
+  tier2 <- add_legacy_model_fields(apply_transformations(tier2, transformations, include_hinge = TRUE))
+  prediction <- add_legacy_model_fields(apply_transformations(prediction, transformations, include_hinge = TRUE))
+  model_inputs <- assemble_model_inputs(tier1, tier2, prediction, support, time_index, transformations, list(observation = cleaned$audit, covariate = covariate_audit, thinning = thinning$audit), cfg, cleaned$excluded, thinning$excluded)
+  if (isTRUE(write_outputs)) {
+    saveRDS(model_inputs, file.path(cfg$project$output_directory, cfg$outputs$model_inputs))
+    write.csv(cleaned$audit, file.path(cfg$project$output_directory, cfg$outputs$observation_audit), row.names = FALSE)
+    write.csv(covariate_audit, file.path(cfg$project$output_directory, cfg$outputs$covariate_audit), row.names = FALSE)
+    write.csv(cleaned$excluded, file.path(cfg$project$output_directory, cfg$outputs$excluded_observations), row.names = FALSE)
+    write.csv(thinning$excluded, file.path(cfg$project$output_directory, cfg$outputs$excluded_tier1_positives), row.names = FALSE)
+  }
+  message("Preprocessing complete: ", nrow(tier1), " Tier 1 rows; ", nrow(tier2), " Tier 2 rows; ", nrow(prediction), " prediction rows; ", support$mesh$n, " mesh vertices.")
+  model_inputs
+}

@@ -4,7 +4,7 @@ project:
 study:
   start_date: '2022-01-01'
   end_date: '2022-12-31'
-  projected_crs: 'EPSG:4326' # Replace with a projected CRS for operational data.
+  projected_crs: 'EPSG:5070' # Projected metres; choose a CRS appropriate to the study area.
 inputs:
   observations: data/private/observations.csv
   study_boundary: data/private/study_boundary.gpkg
@@ -23,14 +23,14 @@ static_covariates:
   road_density: data/private/road_density.tif
   night_illumination: data/private/night_illumination.tif
 mesh:
-  boundary_buffer: 20
-  cutoff: 25
-  max_edge: [50, 200]
-  offset: [100, 250]
-  minimum_angle: 30
-  island_area_threshold: 500 # km^2 when CRS units are metres.
+  boundary_buffer_km: 20
+  cutoff_km: 25
+  max_edge_km: [50, 200]
+  offset_km: [100, 250]
+  minimum_angle_degrees: 30
+  island_area_threshold_km2: 500
 extraction:
-  search_radius: 75 # projected CRS units; verify before operational use.
+  search_radius_m: 75
 transformations:
   temperature_hinge: 12
   dynamic_missing_policy: fail
@@ -44,4 +44,5 @@ outputs:
   observation_audit: observation_audit.csv
   covariate_audit: covariate_audit.csv
   excluded_observations: excluded_observations.csv
+  excluded_tier1_positives: excluded_tier1_positives.csv
 # Copy this file to config/preprocessing.yml, edit it, and keep that file untracked.

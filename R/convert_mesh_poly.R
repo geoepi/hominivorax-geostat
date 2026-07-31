@@ -36,10 +36,10 @@ convert_mesh_poly <- function(mesh) {
         yy <- p[,2]-mesh$loc[i, 2]
         xx <- p[,1]-mesh$loc[i, 1]
       }
-      Polygon(p[order(atan2(yy,xx)), ])
+          sp::Polygon(p[order(atan2(yy,xx)), ])
     })
-    return(SpatialPolygons(lapply(1:mesh$n, function(i)
-      Polygons(list(pls[[i]]), i))))
+    return(sp::SpatialPolygons(lapply(1:mesh$n, function(i)
+      sp::Polygons(list(pls[[i]]), i))))
   }
   else stop("It only works for R2!")
 }
