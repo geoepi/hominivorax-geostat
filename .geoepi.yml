@@ -1,0 +1,26 @@
+schema_version: 1
+
+project_id: nws-risk
+subproject_id: nws-bayes-geostat
+
+title: Bayesian NWS Geostatistical Model
+summary: >
+  Joint spatiotemporal modeling of NWS occurrence and intensity.
+
+lead:
+  name: John Humphreys
+  github: JMHumphreys
+
+status: active
+current_focus: Prospective validation
+
+repository:
+  canonical: geoepi/hominivorax-geostat
+  upstream: null
+
+compute:
+  - Atlas
+
+next_milestone:
+  description: Update all inputs
+  target: 2026-09-01
