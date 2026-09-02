@@ -11,11 +11,14 @@ estimate_transformations <- function(training, cfg) {
     logged <- log1p(replace(values, is.na(values), impute))
     c(impute = impute, center = mean(logged, na.rm = TRUE), scale = max(sd(logged, na.rm = TRUE), .Machine$double.eps))
   })
-  northing_values <- training$y
+  northing_offset_km <- 25
+  model_unit_to_m <- crs_linear_unit_to_m(cfg$study$projected_crs)
+  northing_origin <- min(training$y, na.rm = TRUE) - northing_offset_km * 1000 / model_unit_to_m
+  northing_values <- training$y - northing_origin
   list(
     dynamic = setNames(lapply(dynamic, function(nm) center_scale(training[[nm]])), dynamic),
     static = setNames(static_spec, static),
-    northing = c(origin = min(northing_values, na.rm = TRUE), center = mean(northing_values, na.rm = TRUE), scale = max(sd(northing_values, na.rm = TRUE), .Machine$double.eps)),
+    northing = c(origin = northing_origin, center = mean(northing_values, na.rm = TRUE), scale = max(sd(northing_values, na.rm = TRUE), .Machine$double.eps), offset_km = northing_offset_km),
     temperature_hinge = cfg$transformations$temperature_hinge,
     missing_policies = list(dynamic = cfg$transformations$dynamic_missing_policy, livestock = cfg$transformations$livestock_missing_policy),
     type = "training_only"

@@ -14,10 +14,16 @@ read_preprocessing_config <- function(path, repo_root = getwd()) {
   if (is.null(names(cfg$static_covariates)) || any(!nzchar(names(cfg$static_covariates)))) {
     names(cfg$static_covariates) <- c("cattle", "horses", "pigs", "sheep", "goats", "road_density", "night_illumination")
   }
+  if (is.null(cfg$extraction$search_radius_km) && !is.null(cfg$extraction$search_radius_m)) {
+    stop("extraction.search_radius_m is deprecated and ambiguous; use extraction.search_radius_km.")
+  }
   cfg$config_path <- normalizePath(path, mustWork = FALSE); cfg
 }
 validate_preprocessing_config <- function(cfg, require_inputs = TRUE) {
   stopifnot(all(c("project", "study", "inputs", "mesh", "extraction", "transformations", "outputs") %in% names(cfg)))
+  if (is.null(cfg$extraction$search_radius_km) || !is.finite(cfg$extraction$search_radius_km) || cfg$extraction$search_radius_km < 0) stop("extraction.search_radius_km must be a non-negative number")
+  if (is.null(cfg$extraction$dynamic_search_radius_km)) cfg$extraction$dynamic_search_radius_km <- cfg$extraction$search_radius_km
+  if (!is.finite(cfg$extraction$dynamic_search_radius_km) || cfg$extraction$dynamic_search_radius_km < 0) stop("extraction.dynamic_search_radius_km must be a non-negative number")
   if (as.Date(cfg$study$start_date) > as.Date(cfg$study$end_date)) stop("study start_date is after end_date")
   if (isTRUE(require_inputs)) { p <- unlist(c(cfg$inputs, cfg$dynamic_covariates, cfg$static_covariates)); p <- p[!vapply(p, file.exists, logical(1))]; if (length(p)) stop("Required input paths are absent: ", paste(p, collapse = ", ")) }
   invisible(TRUE)

@@ -30,7 +30,8 @@ mesh:
   minimum_angle_degrees: 30
   island_area_threshold_km2: 500
 extraction:
-  search_radius_m: 75
+  search_radius_km: 75
+  dynamic_search_radius_km: 25
 transformations:
   temperature_hinge: 12
   dynamic_missing_policy: fail

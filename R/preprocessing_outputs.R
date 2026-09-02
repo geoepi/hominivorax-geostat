@@ -21,7 +21,9 @@ thin_tier1 <- function(tier1, cfg, template = NULL) {
     return(list(retained = tier1, excluded = positives[0, , drop = FALSE], audit = data.frame(input_positive_count = nrow(positives), retained_positive_count = nrow(positives), excluded_positive_count = 0, seed = cfg$tier1_thinning$seed)))
   }
   if (is.null(template)) stop("Tier 1 thinning requires a template raster.")
-  positives$cell_id <- terra::cellFromXY(template, as.matrix(positives[c("x", "y")]))
+  points <- terra::vect(positives, geom = c("x", "y"), crs = cfg$study$projected_crs)
+  if (!terra::same.crs(points, template)) points <- terra::project(points, terra::crs(template))
+  positives$cell_id <- terra::cellFromXY(template, terra::crds(points))
   positives$selection_rank <- ave(seq_len(nrow(positives)), interaction(positives$epiyear, positives$epiweek, positives$cell_id, drop = TRUE), FUN = seq_along)
   set.seed(cfg$tier1_thinning$seed)
   retained_positive <- positives |>
@@ -37,11 +39,12 @@ thin_tier1 <- function(tier1, cfg, template = NULL) {
 }
 
 build_tier2 <- function(observations, support, time_index) {
+  polygons <- support$tier2_polygons
   points <- sf::st_as_sf(observations, coords = c("x", "y"), crs = sf::st_crs(support$domain), remove = FALSE)
-  hit <- sf::st_within(points, support$mesh_polygons)
-  observations$poly_id <- vapply(hit, function(i) if (length(i)) support$mesh_polygons$poly_id[i[1]] else NA_integer_, integer(1))
-  centroids <- sf::st_coordinates(sf::st_centroid(support$mesh_polygons))
-  base <- data.frame(poly_id = support$mesh_polygons$poly_id, x = centroids[, 1], y = centroids[, 2], area_km2 = support$mesh_polygons$area_km2)
+  hit <- sf::st_within(points, polygons)
+  observations$poly_id <- vapply(hit, function(i) if (length(i)) polygons$poly_id[i[1]] else NA_integer_, integer(1))
+  centroids <- sf::st_coordinates(sf::st_centroid(polygons))
+  base <- data.frame(poly_id = polygons$poly_id, x = centroids[, 1], y = centroids[, 2], area_km2 = polygons$terrestrial_area_km2)
   counts <- observations |> dplyr::filter(!is.na(poly_id)) |> dplyr::count(poly_id, epiyear, epiweek, name = "n_points")
   out <- tidyr::crossing(base, time_index) |>
     dplyr::left_join(counts, by = c("poly_id", "epiyear", "epiweek"))
@@ -57,8 +60,13 @@ build_prediction_grid <- function(support, time_index, template, target_crs) {
   points <- terra::as.points(raster, values = FALSE)
   xy <- terra::crds(points)
   cells <- data.frame(cell_id = terra::cellFromXY(raster, xy), x = xy[, 1], y = xy[, 2])
-  sf_points <- sf::st_as_sf(cells, coords = c("x", "y"), crs = target_crs, remove = FALSE)
-  keep <- lengths(sf::st_within(sf_points, support$simplified_domain)) > 0
+  template_values <- terra::extract(raster, xy)[[1L]]
+  sf_points <- sf::st_as_sf(cells, coords = c("x", "y"), crs = terra::crs(raster), remove = FALSE)
+  sf_points <- sf::st_transform(sf_points, target_crs)
+  transformed_xy <- sf::st_coordinates(sf_points)
+  cells$x <- transformed_xy[, 1]
+  cells$y <- transformed_xy[, 2]
+  keep <- !is.na(template_values) & lengths(sf::st_within(sf_points, support$simplified_domain)) > 0
   cells <- cells[keep, , drop = FALSE]
   tidyr::crossing(cells, time_index) |>
     dplyr::mutate(.row_id = paste0("cell_", cell_id, "_time_", time_index), space_time_id = .row_id)
@@ -80,6 +88,7 @@ assemble_model_inputs <- function(tier1, tier2, prediction_grid, support, time_i
     tier1 = tier1, tier2 = tier2, prediction_grid = prediction_grid,
     mesh = support$mesh, mesh_polygons = support$mesh_polygons,
     time_index = time_index, transformations = transformations,
+    spatial_support = support$metadata,
     excluded_detections = excluded_detections,
     excluded_tier1_positives = thinning_exclusions,
     observation_audit = audits$observation,
