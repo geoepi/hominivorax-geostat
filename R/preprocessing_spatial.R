@@ -24,27 +24,91 @@ simplify_analysis_domain <- function(boundary, island_area_threshold_km2) {
   pieces[area_km2 >= island_area_threshold_km2] |> sf::st_union()
 }
 
-build_spatial_support <- function(boundary, observations, cfg) {
+build_inla_mesh <- function(mesh_boundary, cfg, mesh_observations = NULL, use_observation_locations = !is.null(mesh_observations)) {
   if (!requireNamespace("INLA", quietly = TRUE)) stop("INLA is required for mesh construction.")
+  boundary_sp <- methods::as(sf::st_as_sf(mesh_boundary), "Spatial")
+  mesh_args <- list(
+    boundary = INLA::inla.sp2segment(boundary_sp),
+    cutoff = cfg$mesh$cutoff_km * 1000 / crs_linear_unit_to_m(sf::st_crs(mesh_boundary)),
+    max.edge = cfg$mesh$max_edge_km * 1000 / crs_linear_unit_to_m(sf::st_crs(mesh_boundary)),
+    offset = cfg$mesh$offset_km * 1000 / crs_linear_unit_to_m(sf::st_crs(mesh_boundary)),
+    min.angle = cfg$mesh$minimum_angle_degrees
+  )
+  if (isTRUE(use_observation_locations)) {
+    if (is.null(mesh_observations)) stop("Observation-dependent mesh construction requires observations.")
+    loc <- mesh_observations[, c("x", "y"), drop = FALSE]
+    loc <- as.matrix(loc[stats::complete.cases(loc), , drop = FALSE])
+    if (!nrow(loc)) stop("At least one valid observation is required for observation-dependent mesh construction.")
+    mesh_args$loc <- loc
+  }
+  set.seed(cfg$project$seed)
+  mesh <- do.call(INLA::inla.mesh.2d, mesh_args)
+  if (is.null(mesh) || mesh$n < 1) stop("INLA returned an empty mesh.")
+  mesh
+}
+
+build_observation_independent_mesh <- function(boundary, cfg) {
+  domain <- validate_boundary(boundary, cfg$study$projected_crs)
+  simplified_domain <- simplify_analysis_domain(domain, cfg$mesh$island_area_threshold_km2)
+  unit_to_m <- crs_linear_unit_to_m(sf::st_crs(simplified_domain))
+  mesh_boundary <- sf::st_buffer(simplified_domain, cfg$mesh$boundary_buffer_km * 1000 / unit_to_m)
+  list(
+    mesh = build_inla_mesh(mesh_boundary, cfg, mesh_observations = NULL, use_observation_locations = FALSE),
+    domain = domain,
+    simplified_domain = simplified_domain,
+    mesh_boundary = mesh_boundary,
+    metadata = list(
+      mesh_observation_dependent = FALSE,
+      cutoff_supplied_without_observation_locations = TRUE,
+      seed = cfg$project$seed,
+      mesh_parameters = cfg$mesh
+    )
+  )
+}
+
+classify_mesh_support <- function(mesh_polygons, mesh, domain) {
+  if (nrow(mesh_polygons) != mesh$n) stop("Mesh polygon count does not equal mesh node count.")
+  node_points <- sf::st_as_sf(
+    data.frame(poly_id = seq_len(mesh$n), x = mesh$loc[, 1], y = mesh$loc[, 2]),
+    coords = c("x", "y"), crs = sf::st_crs(domain)
+  )
+  polygon_intersects_domain <- lengths(sf::st_intersects(mesh_polygons, domain)) > 0
+  node_inside_domain <- lengths(sf::st_covered_by(node_points, domain)) > 0
+  category <- ifelse(
+    node_inside_domain & polygon_intersects_domain, "A_node_inside_polygon_intersects",
+    ifelse(!node_inside_domain & polygon_intersects_domain, "B_node_outside_polygon_intersects",
+      ifelse(node_inside_domain & !polygon_intersects_domain, "C_node_inside_polygon_disjoint", "D_node_outside_polygon_disjoint")
+    )
+  )
+  data.frame(
+    poly_id = seq_len(mesh$n),
+    node_inside_domain = node_inside_domain,
+    polygon_intersects_domain = polygon_intersects_domain,
+    category = category,
+    stringsAsFactors = FALSE
+  )
+}
+
+clip_mesh_polygons_to_domain <- function(mesh_polygons, domain, unit_to_m, keep = seq_len(nrow(mesh_polygons))) {
+  selected <- mesh_polygons[keep, , drop = FALSE]
+  clipped_geometry <- lapply(sf::st_geometry(selected), function(g) {
+    g <- sf::st_sfc(g, crs = sf::st_crs(domain))
+    clipped <- sf::st_union(sf::st_intersection(g, domain))
+    sf::st_geometry(clipped)[[1L]]
+  })
+  sf::st_geometry(selected) <- sf::st_sfc(clipped_geometry, crs = sf::st_crs(domain))
+  selected <- sf::st_make_valid(selected)
+  selected$terrestrial_area_km2 <- as.numeric(sf::st_area(selected)) * unit_to_m^2 / 1e6
+  selected[selected$terrestrial_area_km2 > 0, , drop = FALSE]
+}
+
+build_spatial_support <- function(boundary, observations, cfg) {
   domain <- validate_boundary(boundary, cfg$study$projected_crs)
   simplified_domain <- simplify_analysis_domain(domain, cfg$mesh$island_area_threshold_km2)
   unit_to_m <- crs_linear_unit_to_m(sf::st_crs(simplified_domain))
   buffer <- cfg$mesh$boundary_buffer_km * 1000 / unit_to_m
   mesh_boundary <- sf::st_buffer(simplified_domain, buffer)
-  loc <- observations[, c("x", "y"), drop = FALSE]
-  loc <- as.matrix(loc[stats::complete.cases(loc), , drop = FALSE])
-  if (!nrow(loc)) stop("At least one valid observation is required to construct the INLA mesh.")
-  boundary_sp <- methods::as(sf::st_as_sf(mesh_boundary), "Spatial")
-  set.seed(cfg$project$seed)
-  mesh <- INLA::inla.mesh.2d(
-    boundary = INLA::inla.sp2segment(boundary_sp),
-    loc = loc,
-    cutoff = cfg$mesh$cutoff_km * 1000 / unit_to_m,
-    max.edge = cfg$mesh$max_edge_km * 1000 / unit_to_m,
-    offset = cfg$mesh$offset_km * 1000 / unit_to_m,
-    min.angle = cfg$mesh$minimum_angle_degrees
-  )
-  if (is.null(mesh) || mesh$n < 1) stop("INLA returned an empty mesh.")
+  mesh <- build_inla_mesh(mesh_boundary, cfg, mesh_observations = observations)
   mesh_sp <- convert_mesh_poly(mesh)
   mesh_polygons <- sf::st_as_sf(mesh_sp)
   sf::st_crs(mesh_polygons) <- sf::st_crs(simplified_domain)
@@ -54,16 +118,10 @@ build_spatial_support <- function(boundary, observations, cfg) {
   node_points <- sf::st_as_sf(sf::st_sfc(lapply(seq_len(mesh$n), function(i) sf::st_point(mesh$loc[i, 1:2])), crs = sf::st_crs(simplified_domain)))
   node_inside <- lengths(sf::st_covered_by(node_points, simplified_domain)) > 0
   mesh_polygons$inside_domain <- node_inside
-  tier2_polygons <- mesh_polygons[node_inside & mesh_polygons$intersects_domain, , drop = FALSE]
-  clipped_geometry <- lapply(sf::st_geometry(tier2_polygons), function(g) {
-    g <- sf::st_sfc(g, crs = sf::st_crs(simplified_domain))
-    clipped <- sf::st_union(sf::st_intersection(g, simplified_domain))
-    sf::st_geometry(clipped)[[1L]]
-  })
-  sf::st_geometry(tier2_polygons) <- sf::st_sfc(clipped_geometry, crs = sf::st_crs(simplified_domain))
-  tier2_polygons <- sf::st_make_valid(tier2_polygons)
-  tier2_polygons$terrestrial_area_km2 <- as.numeric(sf::st_area(tier2_polygons)) * unit_to_m^2 / 1e6
-  tier2_polygons <- tier2_polygons[tier2_polygons$terrestrial_area_km2 > 0, , drop = FALSE]
+  tier2_polygons <- clip_mesh_polygons_to_domain(
+    mesh_polygons, simplified_domain, unit_to_m,
+    keep = which(node_inside & mesh_polygons$intersects_domain)
+  )
   terrestrial_area <- numeric(mesh$n)
   terrestrial_area[match(tier2_polygons$poly_id, mesh_polygons$poly_id)] <- tier2_polygons$terrestrial_area_km2
   integration_points <- data.frame(
@@ -73,6 +131,7 @@ build_spatial_support <- function(boundary, observations, cfg) {
   )
   list(
     mesh = mesh,
+    mesh_boundary = mesh_boundary,
     mesh_polygons = mesh_polygons,
     tier2_polygons = tier2_polygons,
     integration_points = integration_points,
@@ -83,6 +142,7 @@ build_spatial_support <- function(boundary, observations, cfg) {
       linear_unit_to_m = unit_to_m,
       distance_units = "configured kilometres converted to CRS units",
       tier2_support = "mesh vertices covered by the simplified terrestrial domain; Voronoi polygons clipped to that domain",
+      mesh_observation_dependent = TRUE,
       seed = cfg$project$seed,
       mesh_parameters = cfg$mesh
     )

@@ -64,6 +64,7 @@ outputs/preprocessing_demo/
 !/scripts/run_preprocessing_demo.R
 !/scripts/check_preprocessing_demo.R
 !/scripts/create_preprocessing_demo_inputs.R
+!/scripts/compare_spatial_support.R
 
 # quarto
 /.quarto/
