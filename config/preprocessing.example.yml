@@ -7,6 +7,7 @@ study:
   projected_crs: 'EPSG:5070' # Projected metres; choose a CRS appropriate to the study area.
 inputs:
   observation_mode: raw # raw or standardized
+  observation_crs: null # Required when observation_mode is standardized, e.g. EPSG:4326.
   observations: data/private/observations.csv
   study_boundary: data/private/study_boundary.gpkg
   template_raster: data/private/template.tif

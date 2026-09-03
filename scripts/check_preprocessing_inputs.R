@@ -93,32 +93,47 @@ if (!file.exists(observation_path)) {
     } else {
       year <- suppressWarnings(as.integer(observations[[year_name]]))
       week <- suppressWarnings(as.integer(observations[[week_name]]))
-      x_coord <- suppressWarnings(as.numeric(observations$x))
-      y_coord <- suppressWarnings(as.numeric(observations$y))
+      source_x <- suppressWarnings(as.numeric(observations$x))
+      source_y <- suppressWarnings(as.numeric(observations$y))
       valid_time <- is.finite(year) & is.finite(week) & year > 0 & week >= 1 & week <= 53
-      valid_xy <- is.finite(x_coord) & is.finite(y_coord)
+      valid_xy <- is.finite(source_x) & is.finite(source_y)
       keys <- paste(year, week, sep = "-")
       time_match <- valid_time & keys %in% expected_keys
-      duplicate_key <- paste(keys, signif(x_coord, 12), signif(y_coord, 12), sep = "|")
+      duplicate_key <- paste(keys, signif(source_x, 12), signif(source_y, 12), sep = "|")
       duplicate_count <- sum(duplicated(duplicate_key[valid_time & valid_xy]))
       inside <- rep(NA, nrow(observations))
-      if (file.exists(cfg$inputs$study_boundary) && any(valid_xy)) {
+      model_x <- rep(NA_real_, nrow(observations))
+      model_y <- rep(NA_real_, nrow(observations))
+      source_crs <- get_observation_source_crs(cfg)
+      valid_indices <- which(valid_xy)
+      if (length(valid_indices)) {
+        standardized_points <- sf::st_as_sf(data.frame(source_x = source_x[valid_indices], source_y = source_y[valid_indices]), coords = c("source_x", "source_y"), crs = source_crs)
+        model_points <- sf::st_transform(standardized_points, cfg$study$projected_crs)
+        model_coordinates <- sf::st_coordinates(model_points)
+        model_x[valid_indices] <- model_coordinates[, 1]
+        model_y[valid_indices] <- model_coordinates[, 2]
+      }
+      valid_model_xy <- is.finite(model_x) & is.finite(model_y)
+      if (file.exists(cfg$inputs$study_boundary) && any(valid_model_xy)) {
         boundary_for_obs <- sf::st_read(cfg$inputs$study_boundary, quiet = TRUE)
         boundary_for_obs <- sf::st_transform(sf::st_make_valid(boundary_for_obs), cfg$study$projected_crs)
-        valid_indices <- which(valid_xy)
-        standardized_points <- sf::st_as_sf(data.frame(x = x_coord[valid_indices], y = y_coord[valid_indices]), coords = c("x", "y"), crs = cfg$study$projected_crs)
-        inside[valid_indices] <- lengths(sf::st_covered_by(standardized_points, boundary_for_obs)) > 0
+        model_points <- sf::st_as_sf(data.frame(x = model_x[valid_model_xy], y = model_y[valid_model_xy]), coords = c("x", "y"), crs = cfg$study$projected_crs)
+        model_indices <- which(valid_model_xy)
+        inside[model_indices] <- lengths(sf::st_covered_by(model_points, boundary_for_obs)) > 0
       }
-      retained_candidate <- time_match & valid_xy
+      retained_candidate <- time_match & valid_model_xy
       cat("  canonical year/week columns: ", year_name, " -> epiyear; ", week_name, " -> epiweek\n", sep = "")
-      cat("  coordinate range x: ", if (any(valid_xy)) paste(signif(range(x_coord[valid_xy]), 8), collapse = " to ") else "NA", "\n", sep = "")
-      cat("  coordinate range y: ", if (any(valid_xy)) paste(signif(range(y_coord[valid_xy]), 8), collapse = " to ") else "NA", "\n", sep = "")
+      cat("  source CRS: ", source_crs$input, "\n", sep = "")
+      cat("  source x range: ", if (any(valid_xy)) paste(signif(range(source_x[valid_xy]), 8), collapse = " to ") else "NA", "\n", sep = "")
+      cat("  source y range: ", if (any(valid_xy)) paste(signif(range(source_y[valid_xy]), 8), collapse = " to ") else "NA", "\n", sep = "")
+      cat("  transformed model x range: ", if (any(valid_model_xy)) paste(signif(range(model_x[valid_model_xy]), 8), collapse = " to ") else "NA", "\n", sep = "")
+      cat("  transformed model y range: ", if (any(valid_model_xy)) paste(signif(range(model_y[valid_model_xy]), 8), collapse = " to ") else "NA", "\n", sep = "")
       cat("  duplicate point-week rows: ", duplicate_count, "\n", sep = "")
       cat("  study-period records: ", sum(time_match), "\n", sep = "")
       cat("  outside-period records: ", sum(valid_time & !time_match), "\n", sep = "")
       cat("  invalid year/week records: ", sum(!valid_time), "\n", sep = "")
-      cat("  inside-domain records: ", if (all(is.na(inside))) "unavailable" else sum(retained_candidate & inside, na.rm = TRUE), "\n", sep = "")
-      cat("  outside-domain records: ", if (all(is.na(inside))) "unavailable" else sum(retained_candidate & !inside, na.rm = TRUE), "\n", sep = "")
+      cat("  inside-domain records after transformation: ", if (all(is.na(inside))) "unavailable" else sum(retained_candidate & inside, na.rm = TRUE), "\n", sep = "")
+      cat("  outside-domain records after transformation: ", if (all(is.na(inside))) "unavailable" else sum(retained_candidate & !inside, na.rm = TRUE), "\n", sep = "")
       cat("  time-index match: ", sum(time_match), "/", sum(valid_time), "\n", sep = "")
       cat("  host processing: skipped; no host values invented\n")
       if (any(duplicated(duplicate_key[valid_time & valid_xy]))) note_failure("standardized observations contain duplicate point-week rows")

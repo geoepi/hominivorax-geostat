@@ -35,6 +35,7 @@ preprocess_standardized_observations <- function(observations, boundary, cfg) {
   year_name <- if ("epiyear" %in% names(observations)) "epiyear" else if ("year" %in% names(observations)) "year" else NULL
   week_name <- if ("epiweek" %in% names(observations)) "epiweek" else if ("week" %in% names(observations)) "week" else NULL
   if (is.null(year_name) || is.null(week_name)) stop("standardized observations require year/week or epiyear/epiweek columns")
+  source_crs <- get_observation_source_crs(cfg)
   x <- observations
   x$observation_id <- seq_len(nrow(x))
   x$epiyear <- suppressWarnings(as.integer(x[[year_name]]))
@@ -54,16 +55,21 @@ preprocess_standardized_observations <- function(observations, boundary, cfg) {
   in_period <- paste(x$epiyear, x$epiweek, sep = "|") %in% expected_key
   add_excluded(x[!in_period, , drop = FALSE], "outside_study_period")
   x <- x[in_period, , drop = FALSE]
-  x$x <- suppressWarnings(as.numeric(x$x)); x$y <- suppressWarnings(as.numeric(x$y))
-  valid_xy <- is.finite(x$x) & is.finite(x$y)
+  x$source_x <- suppressWarnings(as.numeric(x$x)); x$source_y <- suppressWarnings(as.numeric(x$y))
+  valid_xy <- is.finite(x$source_x) & is.finite(x$source_y)
   add_excluded(x[!valid_xy, , drop = FALSE], "invalid_coordinates")
   x <- x[valid_xy, , drop = FALSE]
   if (nrow(x)) {
+    source_points <- sf::st_as_sf(x, coords = c("source_x", "source_y"), crs = source_crs, remove = FALSE)
+    model_points <- sf::st_transform(source_points, cfg$study$projected_crs)
+    model_xy <- sf::st_coordinates(model_points)
+    x$x <- model_xy[, 1]; x$y <- model_xy[, 2]
     boundary_model <- sf::st_transform(sf::st_make_valid(boundary), cfg$study$projected_crs)
-    points <- sf::st_as_sf(x, coords = c("x", "y"), crs = cfg$study$projected_crs, remove = FALSE)
-    inside <- lengths(sf::st_covered_by(points, boundary_model)) > 0
+    inside <- lengths(sf::st_covered_by(model_points, boundary_model)) > 0
     add_excluded(x[!inside, , drop = FALSE], "outside_spatial_domain")
     x <- x[inside, , drop = FALSE]
+  } else {
+    x$x <- numeric(0); x$y <- numeric(0)
   }
   x$location_week_key <- paste(x$epiyear, x$epiweek, signif(x$x, 12), signif(x$y, 12), sep = "|")
   duplicate <- duplicated(x$location_week_key)
@@ -77,7 +83,7 @@ preprocess_standardized_observations <- function(observations, boundary, cfg) {
     stage = c("input", "invalid_year_week", "outside_study_period", "invalid_coordinates", "outside_spatial_domain", "exact_point_week_duplicate", "retained"),
     count = c(nrow(observations), count_exclusions(excluded_df, "invalid_year_week"), count_exclusions(excluded_df, "outside_study_period"), count_exclusions(excluded_df, "invalid_coordinates"), count_exclusions(excluded_df, "outside_spatial_domain"), count_exclusions(excluded_df, "exact_point_week_duplicate"), nrow(x))
   )
-  list(data = x, excluded = excluded_df, duplicate_audit = duplicate_audit, audit = audit, unmapped_hosts = character(), mode = "standardized", year_column = year_name, week_column = week_name)
+  list(data = x, excluded = excluded_df, duplicate_audit = duplicate_audit, audit = audit, unmapped_hosts = character(), mode = "standardized", year_column = year_name, week_column = week_name, source_crs = source_crs$input, model_crs = sf::st_crs(cfg$study$projected_crs)$input)
 }
 
 preprocess_observations <- function(observations, boundary, cfg, host_lookup) {
