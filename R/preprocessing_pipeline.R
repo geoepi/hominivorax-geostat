@@ -22,7 +22,7 @@ run_preprocessing <- function(config_path, repo_root = normalizePath(file.path(d
   static_specs <- cfg$static_covariates
   radius_km <- cfg$extraction$search_radius_km
   dynamic_radius_km <- cfg$extraction$dynamic_search_radius_km
-  t2_dynamic <- extract_dynamic_covariates(tier2, dynamic_specs, cfg$study$projected_crs, time_index, cfg$transformations$dynamic_missing_policy, dynamic_radius_km, "tier2_dynamic")
+  t2_dynamic <- extract_dynamic_covariates(tier2, dynamic_specs, cfg$study$projected_crs, time_index, cfg$transformations$dynamic_missing_policy, dynamic_radius_km, "tier2_dynamic", cfg$project$output_directory)
   pred_dynamic <- extract_dynamic_covariates(prediction, dynamic_specs, cfg$study$projected_crs, time_index, "retain", dynamic_radius_km, "prediction_dynamic")
   t1_dynamic <- extract_dynamic_covariates(thinning$retained, dynamic_specs, cfg$study$projected_crs, time_index, "retain", dynamic_radius_km, "tier1_dynamic")
   t2_static <- extract_static_covariates(t2_dynamic$data, static_specs, cfg$study$projected_crs, radius_km, "tier2_static")
