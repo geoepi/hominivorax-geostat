@@ -27,11 +27,13 @@ estimate_transformations <- function(training, cfg) {
 
 apply_transformations <- function(data, spec, include_hinge = TRUE) {
   for (nm in names(spec$dynamic)) {
+    if (!nm %in% names(data)) next
     values <- data[[nm]]
     values[is.na(values)] <- spec$dynamic[[nm]]["center"]
     data[[paste0(nm, "_z")]] <- (values - spec$dynamic[[nm]]["center"]) / spec$dynamic[[nm]]["scale"]
   }
   for (nm in names(spec$static)) {
+    if (!nm %in% names(data)) next
     values <- data[[nm]]
     values[is.na(values)] <- spec$static[[nm]]["impute"]
     data[[paste0(nm, "_log1p")]] <- log1p(values)
@@ -43,6 +45,8 @@ apply_transformations <- function(data, spec, include_hinge = TRUE) {
 
 add_legacy_model_fields <- function(data) {
   aliases <- c(mintemp_s = "mintemp_z", soilmoist_s = "soilmoist_z", leafarea_s = "leafarea_z", rhum_s = "rhum_z", road_dens_s = "road_density_log1p", night_illum_s = "night_illumination_log1p", northing_km_s = "northing_z")
-  for (legacy in names(aliases)) data[[legacy]] <- data[[aliases[[legacy]]]]
+  for (legacy in names(aliases)) {
+    if (aliases[[legacy]] %in% names(data)) data[[legacy]] <- data[[aliases[[legacy]]]]
+  }
   data
 }

@@ -48,9 +48,10 @@ build_inla_mesh <- function(mesh_boundary, cfg, mesh_observations = NULL, use_ob
 }
 
 build_observation_independent_mesh <- function(boundary, cfg) {
-  domain <- validate_boundary(boundary, cfg$study$projected_crs)
-  simplified_domain <- simplify_analysis_domain(domain, cfg$mesh$island_area_threshold_km2)
-  unit_to_m <- crs_linear_unit_to_m(sf::st_crs(simplified_domain))
+  analysis_domain <- build_analysis_domain(boundary, cfg)
+  domain <- analysis_domain$domain
+  simplified_domain <- analysis_domain$simplified_domain
+  unit_to_m <- analysis_domain$unit_to_m
   mesh_boundary <- sf::st_buffer(simplified_domain, cfg$mesh$boundary_buffer_km * 1000 / unit_to_m)
   list(
     mesh = build_inla_mesh(mesh_boundary, cfg, mesh_observations = NULL, use_observation_locations = FALSE),
@@ -63,6 +64,18 @@ build_observation_independent_mesh <- function(boundary, cfg) {
       seed = cfg$project$seed,
       mesh_parameters = cfg$mesh
     )
+  )
+}
+
+build_analysis_domain <- function(boundary, cfg) {
+  domain <- validate_boundary(boundary, cfg$study$projected_crs)
+  simplified_domain <- simplify_analysis_domain(domain, cfg$mesh$island_area_threshold_km2)
+  if (length(sf::st_geometry(simplified_domain)) == 0L) stop("Configured island-area threshold removed the entire analysis domain.")
+  list(
+    domain = domain,
+    simplified_domain = simplified_domain,
+    unit_to_m = crs_linear_unit_to_m(sf::st_crs(simplified_domain)),
+    island_area_threshold_km2 = cfg$mesh$island_area_threshold_km2
   )
 }
 
@@ -102,13 +115,14 @@ clip_mesh_polygons_to_domain <- function(mesh_polygons, domain, unit_to_m, keep 
   selected[selected$terrestrial_area_km2 > 0, , drop = FALSE]
 }
 
-build_spatial_support <- function(boundary, observations, cfg, use_observation_locations = NULL) {
+build_spatial_support <- function(boundary, observations, cfg, use_observation_locations = NULL, analysis_domain = NULL) {
   if (is.null(use_observation_locations)) {
     use_observation_locations <- isTRUE(cfg$mesh$use_observation_locations)
   }
-  domain <- validate_boundary(boundary, cfg$study$projected_crs)
-  simplified_domain <- simplify_analysis_domain(domain, cfg$mesh$island_area_threshold_km2)
-  unit_to_m <- crs_linear_unit_to_m(sf::st_crs(simplified_domain))
+  if (is.null(analysis_domain)) analysis_domain <- build_analysis_domain(boundary, cfg)
+  domain <- analysis_domain$domain
+  simplified_domain <- analysis_domain$simplified_domain
+  unit_to_m <- analysis_domain$unit_to_m
   buffer <- cfg$mesh$boundary_buffer_km * 1000 / unit_to_m
   mesh_boundary <- sf::st_buffer(simplified_domain, buffer)
   mesh <- build_inla_mesh(mesh_boundary, cfg, mesh_observations = if (isTRUE(use_observation_locations)) observations else NULL, use_observation_locations = use_observation_locations)

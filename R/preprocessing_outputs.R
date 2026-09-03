@@ -1,13 +1,15 @@
+`%||%` <- function(x, y) if (is.null(x)) y else x
+
 build_tier1 <- function(observations, integration, time_index) {
   q <- tidyr::crossing(integration, time_index)
   q$.row_id <- paste0("quad_", seq_len(nrow(q)))
   q$source_obs_id <- NA_integer_
-  q$Yi <- 0
+  q$Yi <- 0L
   q$sc_Exp <- ifelse(q$inside_domain, q$area_km2, 0.0001)
   p <- observations
   p$.row_id <- paste0("obs_", p$observation_id)
   p$source_obs_id <- p$observation_id
-  p$Yi <- 1
+  p$Yi <- 1L
   p$sc_Exp <- 0.0001
   dplyr::bind_rows(p, q)
 }
@@ -41,8 +43,12 @@ thin_tier1 <- function(tier1, cfg, template = NULL) {
 build_tier2 <- function(observations, support, time_index) {
   polygons <- support$tier2_polygons
   points <- sf::st_as_sf(observations, coords = c("x", "y"), crs = sf::st_crs(support$domain), remove = FALSE)
-  hit <- sf::st_within(points, polygons)
-  observations$poly_id <- vapply(hit, function(i) if (length(i)) polygons$poly_id[i[1]] else NA_integer_, integer(1))
+  hit <- sf::st_covered_by(points, polygons)
+  hit_count <- lengths(hit)
+  if (any(hit_count != 1L)) {
+    stop("Every retained model observation must map to exactly one Tier 2 polygon; invalid assignments: ", sum(hit_count != 1L), ".")
+  }
+  observations$poly_id <- vapply(hit, function(i) polygons$poly_id[i[[1L]]], integer(1))
   representatives <- sf::st_point_on_surface(polygons)
   coordinates <- sf::st_coordinates(representatives)
   base <- data.frame(
@@ -53,14 +59,24 @@ build_tier2 <- function(observations, support, time_index) {
     terrestrial_area_km2 = polygons$terrestrial_area_km2,
     area_km2 = polygons$terrestrial_area_km2
   )
-  counts <- observations |> dplyr::filter(!is.na(poly_id)) |> dplyr::count(poly_id, epiyear, epiweek, name = "n_points")
+  counts <- observations |> dplyr::count(poly_id, epiyear, epiweek, name = "count")
   out <- tidyr::crossing(base, time_index) |>
     dplyr::left_join(counts, by = c("poly_id", "epiyear", "epiweek"))
-  out$n_points[is.na(out$n_points)] <- 0L
-  out$Yi <- out$n_points
+  out$count[is.na(out$count)] <- 0L
+  out$n_points <- out$count
   out$sc_Exp <- out$area_km2
   out$.row_id <- paste0("poly_", out$poly_id, "_time_", out$time_index)
   out
+}
+
+validate_detection_conservation <- function(tier1, tier2, model_eligible_detections, thinning_enabled = FALSE) {
+  require_columns(tier1, "Yi", "Tier 1 conservation check")
+  require_columns(tier2, "count", "Tier 2 conservation check")
+  tier1_positive <- sum(tier1$Yi == 1L, na.rm = TRUE)
+  tier2_count <- sum(tier2$count, na.rm = TRUE)
+  if (tier2_count != model_eligible_detections) stop("Detection conservation failed: Tier 2 count sum (", tier2_count, ") does not equal model-eligible detections (", model_eligible_detections, ").")
+  if (!isTRUE(thinning_enabled) && tier1_positive != tier2_count) stop("Detection conservation failed: Tier 1 positives (", tier1_positive, ") do not equal Tier 2 count sum (", tier2_count, ") with thinning disabled.")
+  list(model_eligible_detections = model_eligible_detections, tier1_positive = tier1_positive, tier2_count = tier2_count, thinning_enabled = isTRUE(thinning_enabled))
 }
 
 build_prediction_grid <- function(support, time_index, template, target_crs) {
@@ -80,6 +96,43 @@ build_prediction_grid <- function(support, time_index, template, target_crs) {
     dplyr::mutate(.row_id = paste0("cell_", cell_id, "_time_", time_index), space_time_id = .row_id)
 }
 
+infer_admin_column <- function(admin_geometry, configured = NULL) {
+  if (!is.null(configured) && length(configured) && nzchar(as.character(configured))) {
+    if (!configured %in% names(admin_geometry)) stop("Configured administrative column is absent from the boundary: ", configured)
+    return(configured)
+  }
+  candidates <- c("admin_u", "admin_unit", "admin_name", "name", "NAME_0", "GID_0", "country", "COUNTRY")
+  found <- candidates[candidates %in% names(admin_geometry)]
+  if (length(found)) found[[1L]] else NULL
+}
+
+annotate_admin_units <- function(data, admin_geometry, configured_column = NULL, scope = "data") {
+  require_columns(data, c("x", "y"), paste0(scope, " administrative annotation target"))
+  if (!inherits(admin_geometry, "sf")) stop("Administrative geometry must be an sf object.")
+  if (is.na(sf::st_crs(admin_geometry))) stop("Administrative geometry has no CRS.")
+  column <- infer_admin_column(admin_geometry, configured_column)
+  geometry <- sf::st_make_valid(admin_geometry)
+  values <- if (is.null(column)) rep("Unk", nrow(geometry)) else as.character(geometry[[column]])
+  values[is.na(values) | !nzchar(trimws(values))] <- "Unk"
+  polygon_order <- order(values, seq_along(values), na.last = TRUE)
+  geometry <- geometry[polygon_order, , drop = FALSE]
+  values <- values[polygon_order]
+  points <- sf::st_as_sf(data, coords = c("x", "y"), crs = sf::st_crs(geometry), remove = FALSE)
+  hits <- sf::st_intersects(points, geometry)
+  assigned <- vapply(hits, function(i) if (length(i)) values[[i[[1L]]]] else "Unk", character(1))
+  assigned[is.na(assigned) | !nzchar(assigned)] <- "Unk"
+  out <- data
+  out$admin_u <- assigned
+  audit <- data.frame(
+    scope = scope,
+    rows = nrow(out),
+    assigned = sum(out$admin_u != "Unk"),
+    unknown = sum(out$admin_u == "Unk"),
+    stringsAsFactors = FALSE
+  )
+  list(data = out, audit = audit, admin_column = column %||% "Unk", geometry_features = nrow(geometry))
+}
+
 apply_missing_policy <- function(data, audit, cfg) {
   dynamic <- c("mintemp", "soilmoist", "leafarea", "rhum")
   if (cfg$transformations$dynamic_missing_policy == "complete_case") {
@@ -97,6 +150,12 @@ assemble_model_inputs <- function(tier1, tier2, prediction_grid, support, time_i
     mesh = support$mesh, mesh_polygons = support$mesh_polygons,
     time_index = time_index, transformations = transformations,
     spatial_support = support$metadata,
+    preprocessing_metadata = list(
+      stage = "geostatistical_preprocessing",
+      admin_annotation = audits$admin,
+      detection_conservation = audits$conservation,
+      admin_column = cfg$inputs$admin_column %||% "inferred"
+    ),
     excluded_detections = excluded_detections,
     excluded_tier1_positives = thinning_exclusions,
     observation_audit = audits$observation,

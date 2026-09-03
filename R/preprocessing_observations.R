@@ -108,8 +108,9 @@ preprocess_observations <- function(observations, boundary, cfg, host_lookup) {
   valid_xy <- is.finite(x$lon) & is.finite(x$lat) & x$lon >= -180 & x$lon <= 180 & x$lat >= -90 & x$lat <= 90
   add_excluded(x[!valid_xy, , drop = FALSE], "invalid_coordinates")
   x <- x[valid_xy, , drop = FALSE]
-  pts <- sf::st_transform(sf::st_as_sf(x, coords = c("lon", "lat"), crs = 4326, remove = FALSE), sf::st_crs(boundary))
-  inside <- lengths(sf::st_within(pts, boundary)) > 0
+  boundary_model <- sf::st_transform(sf::st_make_valid(boundary), cfg$study$projected_crs)
+  pts <- sf::st_transform(sf::st_as_sf(x, coords = c("lon", "lat"), crs = 4326, remove = FALSE), sf::st_crs(boundary_model))
+  inside <- lengths(sf::st_covered_by(pts, boundary_model)) > 0
   add_excluded(x[!inside, , drop = FALSE], "outside_spatial_domain")
   x <- x[inside, , drop = FALSE]
   xy <- sf::st_coordinates(pts[inside, , drop = FALSE])
@@ -146,4 +147,14 @@ preprocess_observations <- function(observations, boundary, cfg, host_lookup) {
     count = c(nrow(observations), count_exclusions(excluded_df, "invalid_date"), count_exclusions(excluded_df, "outside_study_period"), count_exclusions(excluded_df, "invalid_coordinates"), count_exclusions(excluded_df, "outside_spatial_domain"), count_exclusions(excluded_df, "exact_date_location_duplicate"), nrow(x))
   )
   list(data = x, excluded = excluded_df, duplicate_audit = duplicate_audit, audit = audit, unmapped_hosts = unmapped_host_values)
+}
+
+filter_observations_to_analysis_domain <- function(observations, simplified_domain) {
+  require_columns(observations, c("x", "y"), "model observations")
+  if (!inherits(simplified_domain, c("sf", "sfc")) || is.na(sf::st_crs(simplified_domain))) stop("Simplified analysis domain must be an sf/sfc object with a CRS.")
+  points <- sf::st_as_sf(observations, coords = c("x", "y"), crs = sf::st_crs(simplified_domain), remove = FALSE)
+  inside <- lengths(sf::st_covered_by(points, simplified_domain)) > 0
+  excluded <- observations[!inside, , drop = FALSE]
+  if (nrow(excluded)) excluded$exclusion_reason <- "outside_analysis_domain"
+  list(data = observations[inside, , drop = FALSE], excluded = excluded, retained = sum(inside), excluded_count = sum(!inside))
 }

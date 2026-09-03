@@ -10,6 +10,8 @@ inputs:
   observation_crs: null # Required when observation_mode is standardized, e.g. EPSG:4326.
   observations: data/private/observations.csv
   study_boundary: data/private/study_boundary.gpkg
+  admin_boundary: null # Optional separate administrative geometry; defaults to study_boundary.
+  admin_column: null # Optional attribute; common names are inferred when omitted.
   template_raster: data/private/template.tif
 dynamic_covariates:
   minimum_temperature: data/private/mintemp_weekly

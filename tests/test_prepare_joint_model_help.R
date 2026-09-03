@@ -1,0 +1,5 @@
+repo_root <- normalizePath(".", mustWork = TRUE)
+script <- file.path(repo_root, "scripts", "prepare_joint_model.R")
+result <- system2(file.path(R.home("bin"), "Rscript"), c(shQuote(script), "--help"), stdout = TRUE, stderr = TRUE)
+stopifnot(any(grepl("Usage: Rscript scripts/prepare_joint_model.R", result, fixed = TRUE)))
+cat("Joint-model preparation CLI help regression test passed\n")

@@ -53,6 +53,7 @@ secrets.yaml
 # private and generated inputs/outputs
 /local/
 config/preprocessing.yml
+config/preprocessing.atlas.yml
 config/preprocessing.demo.yml
 data/private/
 outputs/
