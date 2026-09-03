@@ -49,7 +49,7 @@ create_preprocessing_demo_inputs <- function(repo_root, config_path) {
     dynamic_covariates = setNames(file.path("demo/preprocessing", dynamic_names), dynamic_names),
     static_covariates = setNames(file.path("demo/preprocessing/static", paste0(static_names, ".tif")), static_names),
     mesh = list(boundary_buffer_km = 1, use_observation_locations = FALSE, cutoff_km = 0.25, max_edge_km = c(0.5, 2), offset_km = c(1, 2), minimum_angle_degrees = 30, island_area_threshold_km2 = 0),
-    extraction = list(search_radius_km = 75, dynamic_search_radius_km = 25),
+    extraction = list(search_radius_km = 75, dynamic_search_radius_km = 75),
     transformations = list(temperature_hinge = 12, dynamic_missing_policy = "impute", livestock_missing_policy = "impute_zero"),
     tier1_thinning = list(enabled = TRUE, raster_resolution = 500, seed = 1976),
     outputs = list(model_inputs = "model_inputs.rds", observation_audit = "observation_audit.csv", covariate_audit = "covariate_audit.csv", excluded_observations = "excluded_observations.csv", excluded_tier1_positives = "excluded_tier1_positives.csv")
