@@ -4,6 +4,16 @@ resolve_joint_model_path <- function(path, repo_root) {
   if (grepl("^[A-Za-z]:[/\\\\]|^/", path)) normalizePath(path, mustWork = FALSE) else file.path(repo_root, path)
 }
 
+repository_root_from_script <- function(script_path = NULL, command_args = commandArgs(trailingOnly = FALSE)) {
+  if (is.null(script_path)) {
+    file_arg <- grep("^--file=", command_args, value = TRUE)
+    if (!length(file_arg)) stop("Unable to determine the running script location.")
+    script_path <- sub("^--file=", "", file_arg[[1L]])
+  }
+  script_path <- normalizePath(script_path, mustWork = TRUE)
+  normalizePath(file.path(dirname(script_path), ".."), mustWork = TRUE)
+}
+
 joint_model_defaults <- function() {
   list(
     project = list(output_directory = "outputs/joint_model"),

@@ -18,7 +18,10 @@ if (isTRUE(parsed$help)) {
   quit(save = "no", status = 0L)
 }
 config_path <- normalizePath(parsed$config, mustWork = TRUE)
-repo_root <- normalizePath(file.path(dirname(config_path), ".."), mustWork = TRUE)
+script_path <- sub("^--file=", "", grep("^--file=", commandArgs(trailingOnly = FALSE), value = TRUE)[[1L]])
+script_path <- normalizePath(script_path, mustWork = TRUE)
+repo_root <- normalizePath(file.path(dirname(script_path), ".."), mustWork = TRUE)
 source(file.path(repo_root, "R", "load_joint_model.R"))
 load_joint_model(repo_root)
+repo_root <- repository_root_from_script(script_path)
 invisible(run_joint_model_preparation(config_path, repo_root, output_override = parsed$output))
