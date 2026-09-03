@@ -102,25 +102,29 @@ clip_mesh_polygons_to_domain <- function(mesh_polygons, domain, unit_to_m, keep 
   selected[selected$terrestrial_area_km2 > 0, , drop = FALSE]
 }
 
-build_spatial_support <- function(boundary, observations, cfg) {
+build_spatial_support <- function(boundary, observations, cfg, use_observation_locations = NULL) {
+  if (is.null(use_observation_locations)) {
+    use_observation_locations <- isTRUE(cfg$mesh$use_observation_locations)
+  }
   domain <- validate_boundary(boundary, cfg$study$projected_crs)
   simplified_domain <- simplify_analysis_domain(domain, cfg$mesh$island_area_threshold_km2)
   unit_to_m <- crs_linear_unit_to_m(sf::st_crs(simplified_domain))
   buffer <- cfg$mesh$boundary_buffer_km * 1000 / unit_to_m
   mesh_boundary <- sf::st_buffer(simplified_domain, buffer)
-  mesh <- build_inla_mesh(mesh_boundary, cfg, mesh_observations = observations)
+  mesh <- build_inla_mesh(mesh_boundary, cfg, mesh_observations = if (isTRUE(use_observation_locations)) observations else NULL, use_observation_locations = use_observation_locations)
   mesh_sp <- convert_mesh_poly(mesh)
   mesh_polygons <- sf::st_as_sf(mesh_sp)
   sf::st_crs(mesh_polygons) <- sf::st_crs(simplified_domain)
   mesh_polygons$poly_id <- seq_len(nrow(mesh_polygons))
   mesh_polygons$area_km2 <- as.numeric(sf::st_area(mesh_polygons)) * unit_to_m^2 / 1e6
+  mesh_polygons$full_area_km2 <- mesh_polygons$area_km2
   mesh_polygons$intersects_domain <- lengths(sf::st_intersects(mesh_polygons, simplified_domain)) > 0
   node_points <- sf::st_as_sf(sf::st_sfc(lapply(seq_len(mesh$n), function(i) sf::st_point(mesh$loc[i, 1:2])), crs = sf::st_crs(simplified_domain)))
   node_inside <- lengths(sf::st_covered_by(node_points, simplified_domain)) > 0
   mesh_polygons$inside_domain <- node_inside
   tier2_polygons <- clip_mesh_polygons_to_domain(
     mesh_polygons, simplified_domain, unit_to_m,
-    keep = which(node_inside & mesh_polygons$intersects_domain)
+    keep = which(mesh_polygons$intersects_domain)
   )
   terrestrial_area <- numeric(mesh$n)
   terrestrial_area[match(tier2_polygons$poly_id, mesh_polygons$poly_id)] <- tier2_polygons$terrestrial_area_km2
@@ -141,8 +145,10 @@ build_spatial_support <- function(boundary, observations, cfg) {
       crs = sf::st_crs(simplified_domain)$input,
       linear_unit_to_m = unit_to_m,
       distance_units = "configured kilometres converted to CRS units",
-      tier2_support = "mesh vertices covered by the simplified terrestrial domain; Voronoi polygons clipped to that domain",
-      mesh_observation_dependent = TRUE,
+      tier2_support = "Voronoi polygons intersecting the simplified terrestrial domain; retained polygons clipped to that domain",
+      tier2_representative = "st_point_on_surface of clipped terrestrial polygon",
+      tier1_integration_points = "mesh nodes, retaining current outside-domain exposure semantics",
+      mesh_observation_dependent = isTRUE(use_observation_locations),
       seed = cfg$project$seed,
       mesh_parameters = cfg$mesh
     )

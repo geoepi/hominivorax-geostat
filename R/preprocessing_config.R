@@ -8,6 +8,7 @@ read_preprocessing_config <- function(path, repo_root = getwd()) {
   input_path_names <- setdiff(names(cfg$inputs), c("observation_mode", "observation_crs"))
   cfg$inputs[input_path_names] <- lapply(cfg$inputs[input_path_names], resolve_preprocessing_path, repo_root = repo_root)
   if (is.null(cfg$inputs$observation_mode)) cfg$inputs$observation_mode <- "raw"
+  if (is.null(cfg$mesh$use_observation_locations)) cfg$mesh$use_observation_locations <- FALSE
   cfg$dynamic_covariates <- lapply(cfg$dynamic_covariates, resolve_preprocessing_path, repo_root = repo_root)
   cfg$static_covariates <- lapply(cfg$static_covariates, resolve_preprocessing_path, repo_root = repo_root)
   if (is.null(names(cfg$dynamic_covariates)) || any(!nzchar(names(cfg$dynamic_covariates)))) {
@@ -26,6 +27,7 @@ validate_preprocessing_config <- function(cfg, require_inputs = TRUE) {
   if (is.null(cfg$extraction$search_radius_km) || !is.finite(cfg$extraction$search_radius_km) || cfg$extraction$search_radius_km < 0) stop("extraction.search_radius_km must be a non-negative number")
   if (is.null(cfg$extraction$dynamic_search_radius_km)) cfg$extraction$dynamic_search_radius_km <- cfg$extraction$search_radius_km
   if (!is.finite(cfg$extraction$dynamic_search_radius_km) || cfg$extraction$dynamic_search_radius_km < 0) stop("extraction.dynamic_search_radius_km must be a non-negative number")
+  if (length(cfg$mesh$use_observation_locations) != 1L || is.na(cfg$mesh$use_observation_locations) || !is.logical(cfg$mesh$use_observation_locations)) stop("mesh.use_observation_locations must be TRUE or FALSE")
   if (!cfg$inputs$observation_mode %in% c("raw", "standardized")) stop("inputs.observation_mode must be 'raw' or 'standardized'")
   if (identical(cfg$inputs$observation_mode, "standardized")) invisible(get_observation_source_crs(cfg))
   if (as.Date(cfg$study$start_date) > as.Date(cfg$study$end_date)) stop("study start_date is after end_date")

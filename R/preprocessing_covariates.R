@@ -216,17 +216,19 @@ make_covariate_audit <- function(variable, scope, source_layers, extracted, rows
   )
 }
 
-extract_dynamic_covariates <- function(target, specifications, target_crs, expected_time, missing_policy = "fail", search_radius_km = 0, scope = "dynamic", diagnostic_output_directory = NULL) {
+extract_dynamic_covariates <- function(target, specifications, target_crs, expected_time, missing_policy = "fail", search_radius_km = 0, scope = "dynamic", diagnostic_output_directory = NULL, return_details = FALSE) {
   require_columns(target, c(".row_id", "x", "y", "epiyear", "epiweek"), "dynamic extraction target")
   assert_unique_keys(target, ".row_id", "dynamic extraction target")
   result <- target
   audit <- data.frame()
   missing_diagnostics <- list()
+  details <- list()
   for (nm in names(specifications)) {
     index <- dynamic_file_index(specifications[[nm]], expected_time)
     values <- rep(NA_real_, nrow(target))
     direct <- rep(FALSE, nrow(target)); fallback <- rep(FALSE, nrow(target))
     fallback_distance_km <- rep(NA_real_, nrow(target))
+    nearest_distance_km <- rep(NA_real_, nrow(target))
     for (i in seq_len(nrow(index))) {
       which_rows <- which(target$epiyear == index$epiyear[i] & target$epiweek == index$epiweek[i])
       if (!length(which_rows)) next
@@ -235,12 +237,13 @@ extract_dynamic_covariates <- function(target, specifications, target_crs, expec
       if (!terra::same.crs(points, raster)) points <- terra::project(points, terra::crs(raster))
       extracted <- extract_raster_points(
         raster, points, method = "bilinear", search_radius_km = search_radius_km,
-        diagnostic = !is.null(diagnostic_output_directory) && missing_policy == "fail"
+        diagnostic = isTRUE(return_details) || (!is.null(diagnostic_output_directory) && missing_policy == "fail")
       )
       values[which_rows] <- extracted$values
       direct[which_rows] <- extracted$direct
       fallback[which_rows] <- extracted$fallback
       fallback_distance_km[which_rows] <- extracted$fallback_distance_km
+      nearest_distance_km[which_rows] <- extracted$nearest_distance_km
       if (!is.null(diagnostic_output_directory) && missing_policy == "fail" && any(extracted$unresolved)) {
         missing_diagnostics[[length(missing_diagnostics) + 1L]] <- dynamic_missing_diagnostics(
           target, nm, scope, raster, points, extracted, which_rows
@@ -248,6 +251,18 @@ extract_dynamic_covariates <- function(target, specifications, target_crs, expec
       }
     }
     result[[nm]] <- values
+    if (isTRUE(return_details)) {
+      details[[length(details) + 1L]] <- data.frame(
+        .row_id = target$.row_id,
+        variable = nm,
+        direct_extraction = direct,
+        nearest_fallback = fallback,
+        unresolved = is.na(values),
+        fallback_distance_km = fallback_distance_km,
+        nearest_valid_distance_km = ifelse(!is.na(fallback_distance_km), fallback_distance_km, nearest_distance_km),
+        stringsAsFactors = FALSE
+      )
+    }
     index_keys <- paste(index$epiyear, index$epiweek, sep = "-")
     expected_keys <- paste(expected_time$epiyear, expected_time$epiweek, sep = "-")
     audit <- rbind(audit, make_covariate_audit(nm, scope, sum(index_keys %in% expected_keys), list(values = values, direct = direct, fallback = fallback, fallback_distance_km = fallback_distance_km, unresolved = is.na(values)), length(values)))
@@ -262,7 +277,11 @@ extract_dynamic_covariates <- function(target, specifications, target_crs, expec
     ) else ""
     stop(paste0("Dynamic covariate missingness violates configured policy.", diagnostic_message))
   }
-  list(data = result, audit = audit)
+  list(
+    data = result,
+    audit = audit,
+    details = if (isTRUE(return_details)) dplyr::bind_rows(details) else NULL
+  )
 }
 
 extract_static_covariates <- function(data, specifications, target_crs, search_radius_km = 0, scope = "static") {

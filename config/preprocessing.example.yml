@@ -26,6 +26,7 @@ static_covariates:
   night_illumination: data/private/night_illumination.tif
 mesh:
   boundary_buffer_km: 20
+  use_observation_locations: false
   cutoff_km: 25
   max_edge_km: [50, 200]
   offset_km: [100, 250]

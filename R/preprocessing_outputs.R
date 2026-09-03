@@ -43,8 +43,16 @@ build_tier2 <- function(observations, support, time_index) {
   points <- sf::st_as_sf(observations, coords = c("x", "y"), crs = sf::st_crs(support$domain), remove = FALSE)
   hit <- sf::st_within(points, polygons)
   observations$poly_id <- vapply(hit, function(i) if (length(i)) polygons$poly_id[i[1]] else NA_integer_, integer(1))
-  centroids <- sf::st_coordinates(sf::st_centroid(polygons))
-  base <- data.frame(poly_id = polygons$poly_id, x = centroids[, 1], y = centroids[, 2], area_km2 = polygons$terrestrial_area_km2)
+  representatives <- sf::st_point_on_surface(polygons)
+  coordinates <- sf::st_coordinates(representatives)
+  base <- data.frame(
+    poly_id = polygons$poly_id,
+    x = coordinates[, 1],
+    y = coordinates[, 2],
+    full_area_km2 = polygons$full_area_km2,
+    terrestrial_area_km2 = polygons$terrestrial_area_km2,
+    area_km2 = polygons$terrestrial_area_km2
+  )
   counts <- observations |> dplyr::filter(!is.na(poly_id)) |> dplyr::count(poly_id, epiyear, epiweek, name = "n_points")
   out <- tidyr::crossing(base, time_index) |>
     dplyr::left_join(counts, by = c("poly_id", "epiyear", "epiweek"))
