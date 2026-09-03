@@ -56,6 +56,7 @@ fmt_range <- function(r) {
   paste(signif(range(mm, na.rm = TRUE), 7), collapse = " to ")
 }
 crs_matches <- function(r, target) {
+  if (is.na(terra::crs(r)) || !nzchar(terra::crs(r))) return(FALSE)
   isTRUE(tryCatch(sf::st_crs(terra::crs(r)) == sf::st_crs(target), error = function(e) FALSE))
 }
 template <- NULL
@@ -65,9 +66,16 @@ cat("  study interval: ", cfg$study$start_date, " through ", cfg$study$end_date,
 cat("  model CRS: ", cfg$study$projected_crs, "\n", sep = "")
 cat("  nearest-valid search radius (static): ", cfg$extraction$search_radius_km, " km\n", sep = "")
 cat("  nearest-valid search radius (dynamic): ", cfg$extraction$dynamic_search_radius_km, " km\n\n", sep = "")
+output_directory <- cfg$project$output_directory
+output_parent <- if (dir.exists(output_directory)) output_directory else dirname(output_directory)
+output_writable <- dir.exists(output_parent) && file.access(output_parent, 2) == 0
+cat("  output directory: ", output_directory, " (", if (output_writable) "writable" else "not writable or parent missing", ")\n\n", sep = "")
+if (!output_writable) note_failure("configured output directory is not writable")
 
 cat("Observations:\n")
 observation_path <- cfg$inputs$observations
+observation_mode <- cfg$inputs$observation_mode
+cat("  mode: ", observation_mode, "\n", sep = "")
 cat("  path: ", observation_path, "\n", sep = "")
 if (!file.exists(observation_path)) {
   cat("  status: MISSING\n")
@@ -76,9 +84,49 @@ if (!file.exists(observation_path)) {
   observations <- readr::read_csv(observation_path, show_col_types = FALSE)
   cat("  records: ", nrow(observations), "\n", sep = "")
   cat("  columns: ", paste(names(observations), collapse = ", "), "\n", sep = "")
-  if (!all(c("date", "lon", "lat", "host") %in% names(observations))) {
-    cat("  status: required columns missing\n")
-    note_failure("observations lack required columns")
+  if (identical(observation_mode, "standardized")) {
+    year_name <- if ("epiyear" %in% names(observations)) "epiyear" else if ("year" %in% names(observations)) "year" else NULL
+    week_name <- if ("epiweek" %in% names(observations)) "epiweek" else if ("week" %in% names(observations)) "week" else NULL
+    if (is.null(year_name) || is.null(week_name) || !all(c("x", "y") %in% names(observations))) {
+      cat("  status: standardized columns missing\n")
+      note_failure("standardized observations lack year/week and x/y columns")
+    } else {
+      year <- suppressWarnings(as.integer(observations[[year_name]]))
+      week <- suppressWarnings(as.integer(observations[[week_name]]))
+      x_coord <- suppressWarnings(as.numeric(observations$x))
+      y_coord <- suppressWarnings(as.numeric(observations$y))
+      valid_time <- is.finite(year) & is.finite(week) & year > 0 & week >= 1 & week <= 53
+      valid_xy <- is.finite(x_coord) & is.finite(y_coord)
+      keys <- paste(year, week, sep = "-")
+      time_match <- valid_time & keys %in% expected_keys
+      duplicate_key <- paste(keys, signif(x_coord, 12), signif(y_coord, 12), sep = "|")
+      duplicate_count <- sum(duplicated(duplicate_key[valid_time & valid_xy]))
+      inside <- rep(NA, nrow(observations))
+      if (file.exists(cfg$inputs$study_boundary) && any(valid_xy)) {
+        boundary_for_obs <- sf::st_read(cfg$inputs$study_boundary, quiet = TRUE)
+        boundary_for_obs <- sf::st_transform(sf::st_make_valid(boundary_for_obs), cfg$study$projected_crs)
+        valid_indices <- which(valid_xy)
+        standardized_points <- sf::st_as_sf(data.frame(x = x_coord[valid_indices], y = y_coord[valid_indices]), coords = c("x", "y"), crs = cfg$study$projected_crs)
+        inside[valid_indices] <- lengths(sf::st_covered_by(standardized_points, boundary_for_obs)) > 0
+      }
+      retained_candidate <- time_match & valid_xy
+      cat("  canonical year/week columns: ", year_name, " -> epiyear; ", week_name, " -> epiweek\n", sep = "")
+      cat("  coordinate range x: ", if (any(valid_xy)) paste(signif(range(x_coord[valid_xy]), 8), collapse = " to ") else "NA", "\n", sep = "")
+      cat("  coordinate range y: ", if (any(valid_xy)) paste(signif(range(y_coord[valid_xy]), 8), collapse = " to ") else "NA", "\n", sep = "")
+      cat("  duplicate point-week rows: ", duplicate_count, "\n", sep = "")
+      cat("  study-period records: ", sum(time_match), "\n", sep = "")
+      cat("  outside-period records: ", sum(valid_time & !time_match), "\n", sep = "")
+      cat("  invalid year/week records: ", sum(!valid_time), "\n", sep = "")
+      cat("  inside-domain records: ", if (all(is.na(inside))) "unavailable" else sum(retained_candidate & inside, na.rm = TRUE), "\n", sep = "")
+      cat("  outside-domain records: ", if (all(is.na(inside))) "unavailable" else sum(retained_candidate & !inside, na.rm = TRUE), "\n", sep = "")
+      cat("  time-index match: ", sum(time_match), "/", sum(valid_time), "\n", sep = "")
+      cat("  host processing: skipped; no host values invented\n")
+      if (any(duplicated(duplicate_key[valid_time & valid_xy]))) note_failure("standardized observations contain duplicate point-week rows")
+      if (any(!valid_time)) note_failure("standardized observations contain invalid year/week values")
+    }
+  } else if (!all(c("date", "lon", "lat", "host") %in% names(observations))) {
+    cat("  status: required raw columns missing\n")
+    note_failure("raw observations lack required columns")
   } else {
     raw_date <- as.character(observations$date)
     dates <- suppressWarnings(as.Date(raw_date, tryFormats = c("%Y-%m-%d", "%m/%d/%Y", "%d/%m/%Y")))
@@ -118,6 +166,7 @@ if (!file.exists(boundary_path)) {
   cat("  geometry type(s): ", paste(unique(as.character(sf::st_geometry_type(boundary))), collapse = ", "), "\n", sep = "")
   cat("  CRS: ", sf::st_crs(boundary)$input, "\n", sep = "")
   cat("  CRS units: ", sf::st_crs(boundary)$units_gdal %||% "unknown", "\n", sep = "")
+  cat("  CRS equivalent to configured model: ", if (isTRUE(tryCatch(sf::st_crs(boundary) == sf::st_crs(cfg$study$projected_crs), error = function(e) FALSE))) "YES" else "NO", "\n", sep = "")
   cat("  extent: ", fmt_extent(sf::st_bbox(boundary)), "\n", sep = "")
   cat("  geometry valid: ", if (boundary_valid) "YES" else "NO", "\n", sep = "")
   cat("  total area (km2, model CRS): ", signif(sum(area_km2), 8), "\n", sep = "")
@@ -133,16 +182,18 @@ if (!file.exists(template_path)) {
   note_failure("template raster is missing")
 } else {
   template <- terra::rast(template_path)
+  template_crs_available <- !is.na(terra::crs(template)) && nzchar(terra::crs(template))
   non_na <- terra::global(!is.na(template[[1]]), "sum", na.rm = TRUE)[1, 1]
-  cat("  CRS: ", terra::crs(template), "\n", sep = "")
+  cat("  CRS: ", if (template_crs_available) terra::crs(template) else "MISSING", "\n", sep = "")
   cat("  extent: ", fmt_extent(terra::ext(template)), "\n", sep = "")
   cat("  dimensions: ", paste(terra::nrow(template), terra::ncol(template), sep = " x "), "\n", sep = "")
   cat("  resolution: ", paste(terra::res(template), collapse = " x "), "\n", sep = "")
   cat("  cell count: ", terra::ncell(template), "\n", sep = "")
   cat("  non-NA cells: ", non_na, "\n", sep = "")
   cat("  NA fraction: ", sprintf("%.5f", 1 - non_na / terra::ncell(template)), "\n", sep = "")
-  cat("  coordinate units: ", if (sf::st_is_longlat(sf::st_crs(terra::crs(template)))) "longitude/latitude" else sf::st_crs(terra::crs(template))$units_gdal %||% "projected", "\n", sep = "")
+  cat("  coordinate units: ", if (!template_crs_available) "unknown" else if (sf::st_is_longlat(sf::st_crs(terra::crs(template)))) "longitude/latitude" else sf::st_crs(terra::crs(template))$units_gdal %||% "projected", "\n", sep = "")
   cat("  CRS equivalent to model CRS: ", if (crs_matches(template, cfg$study$projected_crs)) "YES" else "NO", "\n", sep = "")
+  if (!template_crs_available) note_failure("template raster has no CRS metadata")
 }
 
 cat("\nStatic inputs:\n")
@@ -154,6 +205,7 @@ for (nm in names(cfg$static_covariates)) {
     next
   }
   r <- terra::rast(path)
+  if (is.na(terra::crs(r)) || !nzchar(terra::crs(r))) note_failure(paste("static raster has no CRS metadata:", nm))
   geom_match <- !is.null(template) && terra::compareGeom(r, template, stopOnError = FALSE, crs = TRUE, ext = TRUE, rowcol = TRUE, res = TRUE)
   non_na <- terra::global(!is.na(r[[1]]), "sum", na.rm = TRUE)[1, 1]
   cat("  ", nm, ": YES; CRS=", if (crs_matches(r, cfg$study$projected_crs)) "model" else "mismatch", "; dims=", terra::nrow(r), "x", terra::ncol(r), "; res=", paste(terra::res(r), collapse = "x"), "; NA fraction=", sprintf("%.5f", 1 - non_na / terra::ncell(r)), "; range=", fmt_range(r), "; geometry=", if (geom_match) "template" else "requires transformation", "\n", sep = "")
@@ -177,6 +229,7 @@ for (nm in names(cfg$dynamic_covariates)) {
   keys <- paste(parsed$epiyear, parsed$epiweek, sep = "-")
   missing <- setdiff(expected_keys, keys)
   representative <- terra::rast(parsed$file[1])
+  if (is.na(terra::crs(representative)) || !nzchar(terra::crs(representative))) note_failure(paste("dynamic raster has no CRS metadata:", nm))
   non_na <- terra::global(!is.na(representative[[1]]), "sum", na.rm = TRUE)[1, 1]
   cat("  ", nm, ": ", length(files), " files; ", length(intersect(expected_keys, keys)), "/", length(expected_keys), " expected weeks; range=", min(keys), " to ", max(keys), "; unique keys=", length(unique(keys)), "; duplicate keys=", sum(duplicated(keys)), "; missing=", if (length(missing)) paste(missing, collapse = ",") else "none", "; representative CRS=", if (crs_matches(representative, cfg$study$projected_crs)) "model" else "mismatch", "; dims=", terra::nrow(representative), "x", terra::ncol(representative), "; res=", paste(terra::res(representative), collapse = "x"), "; extent=", fmt_extent(terra::ext(representative)), "; NA fraction=", sprintf("%.5f", 1 - non_na / terra::ncell(representative)), "\n", sep = "")
   if (length(missing)) note_failure(paste("dynamic coverage incomplete:", nm))

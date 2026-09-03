@@ -1,4 +1,5 @@
 clean_host_values <- function(x) stringr::str_replace_all(tolower(trimws(as.character(x))), "[^a-z]", "")
+count_exclusions <- function(x, reason) if ("exclusion_reason" %in% names(x)) sum(x$exclusion_reason == reason, na.rm = TRUE) else 0L
 
 legacy_host_standardization <- function(x) {
   dplyr::case_when(
@@ -27,6 +28,56 @@ read_host_lookup <- function(path) {
   require_columns(lookup, c("host_cleaned", "host_standardized", "host_group", "multiple_host_flag"), "host lookup")
   assert_unique_keys(lookup, "host_cleaned", "host lookup")
   lookup
+}
+
+preprocess_standardized_observations <- function(observations, boundary, cfg) {
+  require_columns(observations, c("x", "y"), "standardized observations")
+  year_name <- if ("epiyear" %in% names(observations)) "epiyear" else if ("year" %in% names(observations)) "year" else NULL
+  week_name <- if ("epiweek" %in% names(observations)) "epiweek" else if ("week" %in% names(observations)) "week" else NULL
+  if (is.null(year_name) || is.null(week_name)) stop("standardized observations require year/week or epiyear/epiweek columns")
+  x <- observations
+  x$observation_id <- seq_len(nrow(x))
+  x$epiyear <- suppressWarnings(as.integer(x[[year_name]]))
+  x$epiweek <- suppressWarnings(as.integer(x[[week_name]]))
+  excluded <- list()
+  add_excluded <- function(rows, reason) {
+    if (nrow(rows)) {
+      rows$exclusion_reason <- reason
+      excluded[[length(excluded) + 1L]] <<- rows
+    }
+  }
+  valid_time <- is.finite(x$epiyear) & is.finite(x$epiweek) & x$epiyear > 0 & x$epiweek >= 1 & x$epiweek <= 53
+  add_excluded(x[!valid_time, , drop = FALSE], "invalid_year_week")
+  x <- x[valid_time, , drop = FALSE]
+  expected <- make_week_index(cfg$study$start_date, cfg$study$end_date)
+  expected_key <- paste(expected$epiyear, expected$epiweek, sep = "|")
+  in_period <- paste(x$epiyear, x$epiweek, sep = "|") %in% expected_key
+  add_excluded(x[!in_period, , drop = FALSE], "outside_study_period")
+  x <- x[in_period, , drop = FALSE]
+  x$x <- suppressWarnings(as.numeric(x$x)); x$y <- suppressWarnings(as.numeric(x$y))
+  valid_xy <- is.finite(x$x) & is.finite(x$y)
+  add_excluded(x[!valid_xy, , drop = FALSE], "invalid_coordinates")
+  x <- x[valid_xy, , drop = FALSE]
+  if (nrow(x)) {
+    boundary_model <- sf::st_transform(sf::st_make_valid(boundary), cfg$study$projected_crs)
+    points <- sf::st_as_sf(x, coords = c("x", "y"), crs = cfg$study$projected_crs, remove = FALSE)
+    inside <- lengths(sf::st_covered_by(points, boundary_model)) > 0
+    add_excluded(x[!inside, , drop = FALSE], "outside_spatial_domain")
+    x <- x[inside, , drop = FALSE]
+  }
+  x$location_week_key <- paste(x$epiyear, x$epiweek, signif(x$x, 12), signif(x$y, 12), sep = "|")
+  duplicate <- duplicated(x$location_week_key)
+  duplicate_audit <- x[duplicate, c("observation_id", "epiyear", "epiweek", "x", "y", "location_week_key"), drop = FALSE]
+  if (nrow(duplicate_audit)) duplicate_audit$exclusion_reason <- "exact_point_week_duplicate"
+  add_excluded(x[duplicate, , drop = FALSE], "exact_point_week_duplicate")
+  x <- x[!duplicate, , drop = FALSE]
+  x <- dplyr::left_join(x, expected, by = c("epiyear", "epiweek"))
+  excluded_df <- if (length(excluded)) dplyr::bind_rows(excluded) else x[0, , drop = FALSE]
+  audit <- data.frame(
+    stage = c("input", "invalid_year_week", "outside_study_period", "invalid_coordinates", "outside_spatial_domain", "exact_point_week_duplicate", "retained"),
+    count = c(nrow(observations), count_exclusions(excluded_df, "invalid_year_week"), count_exclusions(excluded_df, "outside_study_period"), count_exclusions(excluded_df, "invalid_coordinates"), count_exclusions(excluded_df, "outside_spatial_domain"), count_exclusions(excluded_df, "exact_point_week_duplicate"), nrow(x))
+  )
+  list(data = x, excluded = excluded_df, duplicate_audit = duplicate_audit, audit = audit, unmapped_hosts = character(), mode = "standardized", year_column = year_name, week_column = week_name)
 }
 
 preprocess_observations <- function(observations, boundary, cfg, host_lookup) {
@@ -86,7 +137,7 @@ preprocess_observations <- function(observations, boundary, cfg, host_lookup) {
   excluded_df <- if (length(excluded)) dplyr::bind_rows(excluded) else x[0, , drop = FALSE]
   audit <- data.frame(
     stage = c("input", "invalid_date", "outside_study_period", "invalid_coordinates", "outside_spatial_domain", "exact_date_location_duplicate", "retained"),
-    count = c(nrow(observations), sum(excluded_df$exclusion_reason == "invalid_date"), sum(excluded_df$exclusion_reason == "outside_study_period"), sum(excluded_df$exclusion_reason == "invalid_coordinates"), sum(excluded_df$exclusion_reason == "outside_spatial_domain"), sum(excluded_df$exclusion_reason == "exact_date_location_duplicate"), nrow(x))
+    count = c(nrow(observations), count_exclusions(excluded_df, "invalid_date"), count_exclusions(excluded_df, "outside_study_period"), count_exclusions(excluded_df, "invalid_coordinates"), count_exclusions(excluded_df, "outside_spatial_domain"), count_exclusions(excluded_df, "exact_date_location_duplicate"), nrow(x))
   )
   list(data = x, excluded = excluded_df, duplicate_audit = duplicate_audit, audit = audit, unmapped_hosts = unmapped_host_values)
 }

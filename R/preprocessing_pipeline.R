@@ -3,8 +3,13 @@ run_preprocessing <- function(config_path, repo_root = normalizePath(file.path(d
   validate_preprocessing_config(cfg)
   dir.create(cfg$project$output_directory, recursive = TRUE, showWarnings = FALSE)
   boundary <- sf::st_read(cfg$inputs$study_boundary, quiet = TRUE)
-  host_lookup <- read_host_lookup(file.path(repo_root, "config", "host_lookup.csv"))
-  cleaned <- preprocess_observations(read_observations(cfg$inputs$observations), boundary, cfg, host_lookup)
+  observations <- read_observations(cfg$inputs$observations)
+  if (identical(cfg$inputs$observation_mode, "standardized")) {
+    cleaned <- preprocess_standardized_observations(observations, boundary, cfg)
+  } else {
+    host_lookup <- read_host_lookup(file.path(repo_root, "config", "host_lookup.csv"))
+    cleaned <- preprocess_observations(observations, boundary, cfg, host_lookup)
+  }
   time_index <- make_week_index(cfg$study$start_date, cfg$study$end_date)
   support <- build_spatial_support(boundary, cleaned$data, cfg)
   tier1_raw <- build_tier1(cleaned$data, support$integration_points, time_index)
