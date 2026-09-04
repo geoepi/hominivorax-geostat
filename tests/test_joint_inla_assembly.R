@@ -9,7 +9,7 @@ if (!requireNamespace("INLA", quietly = TRUE)) {
   validate_joint_inla_config(cfg, require_inputs = FALSE)
   stopifnot(identical(cfg$inputs$joint_model_inputs, file.path(repo_root, "outputs", "joint_model", "joint_model_inputs.rds")))
   stopifnot(identical(cfg$model$tier1$family, "binomial"), identical(cfg$model$tier2$family, "nbinomial"))
-  stopifnot(identical(cfg$shared_field$beta_prior_sd, 0.2))
+  stopifnot(identical(cfg$shared_field$beta_prior_precision, 0.2), is.null(cfg$shared_field$beta_prior_sd))
 
   make_common <- function(n, x, y, group) {
     data.frame(x = x, y = y, quarter_index = group, timestep = seq_len(n), admin_f = rep(1L, n), admin_u = rep("A", n),
@@ -41,6 +41,7 @@ if (!requireNamespace("INLA", quietly = TRUE)) {
   stopifnot(grepl("copy", paste(deparse(first$formula), collapse = " "), fixed = TRUE))
   stopifnot(grepl("nbinomial", paste(first$family, collapse = " "), fixed = TRUE))
   stopifnot(identical(first$priors$hyper_copy, list(beta = list(prior = "normal", param = c(0.5, 0.2)))))
+  stopifnot(identical(first$build_audit$value[first$build_audit$metric == "copy_prior_precision"], "0.2"))
   stopifnot(isFALSE(first$provenance$executed_fit), identical(first$provenance$INLA, as.character(utils::packageVersion("INLA"))))
   stopifnot(first$fit_reference$nbinomial_default$available, identical(first$fit_reference$nbinomial_default$hyper$theta$prior, "pc.mgamma"))
   contains_fit_call <- function(expr) {

@@ -34,7 +34,7 @@ shared_field:
   target: tier2_copy_field
   estimate_copy_coefficient: true
   beta_prior_mean: 0.5
-  beta_prior_sd: 0.2
+  beta_prior_precision: 0.2
 
 temporal:
   tier1:

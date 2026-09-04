@@ -55,7 +55,8 @@ joint_audit <- function(tier1, tier2, projections, spdes, cfg, predictor_audit, 
     add("tier2", "exposure_max_active", max(exposure[!is.na(tier2$response_training)], na.rm = TRUE)),
     add("likelihood", "family", paste(c("binomial", "nbinomial"), collapse = ",")),
     add("shared_field", "copy_enabled", cfg$shared_field$enabled),
-    add("shared_field", "copy_prior", paste(cfg$shared_field$beta_prior_mean, cfg$shared_field$beta_prior_sd, sep = ",")),
+    add("shared_field", "copy_prior_mean", cfg$shared_field$beta_prior_mean),
+    add("shared_field", "copy_prior_precision", cfg$shared_field$beta_prior_precision),
     add("predictors", "tier1_nonfinite_active", paste(predictor_audit$tier1$active_rows_nonfinite, collapse = ",")),
     add("predictors", "tier2_nonfinite_active", paste(predictor_audit$tier2$active_rows_nonfinite, collapse = ","))
   )

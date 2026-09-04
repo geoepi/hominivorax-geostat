@@ -18,7 +18,7 @@ joint_inla_defaults <- function() {
     ),
     shared_field = list(
       enabled = TRUE, source = "tier1_field", target = "tier2_copy_field",
-      estimate_copy_coefficient = TRUE, beta_prior_mean = 0.5, beta_prior_sd = 0.2
+      estimate_copy_coefficient = TRUE, beta_prior_mean = 0.5, beta_prior_precision = 0.2
     ),
     temporal = list(
       tier1 = list(variable = "timestep", formula_name = "week_steps", model = "rw1", constr = TRUE, scale_model = TRUE),
@@ -95,7 +95,7 @@ validate_joint_inla_config <- function(cfg, require_inputs = TRUE) {
   if (!identical(cfg$temporal$tier1$model, "rw1") || !identical(cfg$temporal$tier2$model, "rw1")) stop("Both temporal effects must use rw1.")
   if (!identical(cfg$administrative_effect$tier1$model, "iid") || !isTRUE(cfg$administrative_effect$tier1$enabled)) stop("The Tier 1 administrative effect must be enabled with model iid.")
   if (!identical(cfg$livestock_rw2$model, "rw2") || !isTRUE(cfg$livestock_rw2$enabled) || !identical(cfg$livestock_rw2$variable, "cattle")) stop("The cattle RW2 effect is required.")
-  scalar_positive(cfg$shared_field$beta_prior_sd, "shared_field.beta_prior_sd")
+  scalar_positive(cfg$shared_field$beta_prior_precision, "shared_field.beta_prior_precision")
   scalar_positive(cfg$livestock_rw2$prior_sigma, "livestock_rw2.prior_sigma")
   if (isTRUE(require_inputs) && !file.exists(cfg$inputs$joint_model_inputs)) stop("Stage 2 joint_model_inputs.rds does not exist: ", cfg$inputs$joint_model_inputs)
   invisible(TRUE)

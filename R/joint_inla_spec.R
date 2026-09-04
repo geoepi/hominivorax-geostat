@@ -5,7 +5,7 @@ make_joint_priors <- function(cfg) {
     pc_rw = joint_pc_precision(1, 0.01),
     pc_rw_strong = joint_pc_precision(0.3, 0.01),
     pc_rw_cat = joint_pc_precision(cfg$livestock_rw2$prior_sigma, cfg$livestock_rw2$prior_probability),
-    hyper_copy = list(beta = list(prior = "normal", param = c(as.numeric(cfg$shared_field$beta_prior_mean), as.numeric(cfg$shared_field$beta_prior_sd))))
+    hyper_copy = list(beta = list(prior = "normal", param = c(as.numeric(cfg$shared_field$beta_prior_mean), as.numeric(cfg$shared_field$beta_prior_precision))))
   )
 }
 
