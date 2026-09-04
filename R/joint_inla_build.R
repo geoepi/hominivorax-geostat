@@ -29,15 +29,18 @@ joint_prediction_compatibility <- function(prediction_grid, mapping, grouping_va
   if (length(missing)) stop("Prediction grid is missing eventual model predictors: ", paste(missing, collapse = ", "))
   group_values <- as.integer(prediction_grid[[grouping_variable]])
   if (any(!is.na(group_values) & (group_values < 1L | group_values > expected_groups))) stop("Prediction-grid temporal groups are outside the likelihood groups.")
+  nonfinite_counts <- vapply(prediction_grid[required], function(x) sum(!is.finite(as.numeric(x))), integer(1L))
   list(
     required_columns = required,
     missing_columns = missing,
-    nonfinite_counts = vapply(prediction_grid[required], function(x) sum(!is.finite(as.numeric(x))), integer(1L)),
-    groups = sort(unique(group_values[!is.na(group_values)]))
+    nonfinite_counts = nonfinite_counts,
+    groups = sort(unique(group_values[!is.na(group_values)])),
+    compatible = !length(missing) && !any(nonfinite_counts > 0L) &&
+      identical(sort(unique(group_values[!is.na(group_values)])), seq_len(expected_groups))
   )
 }
 
-joint_audit <- function(tier1, tier2, projections, spdes, cfg, predictor_audit, n_groups, exposure) {
+joint_audit <- function(tier1, tier2, projections, spdes, cfg, predictor_audit, n_groups, exposure, compatibility, priors, nbinomial_default) {
   audit <- data.frame(stage = character(), scope = character(), metric = character(), value = character(), stringsAsFactors = FALSE)
   add <- function(scope, metric, value) data.frame(stage = "Stage 3A assembly", scope = scope, metric = metric, value = as.character(value), stringsAsFactors = FALSE)
   audit <- rbind(audit,
@@ -54,12 +57,23 @@ joint_audit <- function(tier1, tier2, projections, spdes, cfg, predictor_audit, 
     add("tier2", "exposure_median_active", stats::median(exposure[!is.na(tier2$response_training)], na.rm = TRUE)),
     add("tier2", "exposure_max_active", max(exposure[!is.na(tier2$response_training)], na.rm = TRUE)),
     add("likelihood", "family", paste(c("binomial", "nbinomial"), collapse = ",")),
+    add("prediction", "prediction_rows", compatibility$rows),
+    add("prediction", "prediction_temporal_groups", compatibility$temporal_groups),
+    add("prediction", "prediction_compatible", compatibility$compatible),
     add("shared_field", "copy_enabled", cfg$shared_field$enabled),
     add("shared_field", "copy_prior_mean", cfg$shared_field$beta_prior_mean),
     add("shared_field", "copy_prior_precision", cfg$shared_field$beta_prior_precision),
+    add("provenance", "R_version", R.version.string),
+    add("provenance", "INLA_version", as.character(utils::packageVersion("INLA"))),
+    add("likelihood", "nb_default_prior", if (isTRUE(nbinomial_default$available)) nbinomial_default$hyper$theta$prior else NA_character_),
+    add("likelihood", "nb_default_initial", if (isTRUE(nbinomial_default$available)) nbinomial_default$hyper$theta$initial else NA_real_),
+    add("shared_field", "copy_prior", paste(capture.output(dput(priors$hyper_copy)), collapse = "")),
     add("predictors", "tier1_nonfinite_active", paste(predictor_audit$tier1$active_rows_nonfinite, collapse = ",")),
     add("predictors", "tier2_nonfinite_active", paste(predictor_audit$tier2$active_rows_nonfinite, collapse = ","))
   )
+  for (predictor in names(compatibility$nonfinite_counts)) {
+    audit <- rbind(audit, add("prediction", paste0("prediction_nonfinite_", predictor), compatibility$nonfinite_counts[[predictor]]))
+  }
   audit
 }
 
@@ -77,6 +91,8 @@ build_joint_inla_from_inputs <- function(joint_inputs, cfg) {
     tier2 = validate_joint_effect_columns(tier2, mapping$tier2, !is.na(tier2$response_training), "Stage 2 Tier 2")
   )
   compatibility <- joint_prediction_compatibility(joint_inputs$prediction_grid, mapping, grouping_variable, groups$n_groups)
+  compatibility$rows <- nrow(joint_inputs$prediction_grid)
+  compatibility$temporal_groups <- length(compatibility$groups)
   unit_to_m <- joint_mesh_unit_to_m(joint_inputs)
   spdes <- list(
     tier1 = make_joint_spde(joint_inputs$mesh, cfg$spatial$tier1, unit_to_m, "tier1"),
@@ -93,7 +109,7 @@ build_joint_inla_from_inputs <- function(joint_inputs, cfg) {
   nbinomial_default <- introspect_nbinomial_default()
   stacks <- build_joint_stacks(tier1, tier2, projections, effects)
   exposure <- if ("terrestrial_area_km2" %in% names(tier2)) tier2$terrestrial_area_km2 else tier2$area_km2
-  audit <- joint_audit(tier1, tier2, projections, spdes, cfg, predictor_audit, groups$n_groups, exposure)
+  audit <- joint_audit(tier1, tier2, projections, spdes, cfg, predictor_audit, groups$n_groups, exposure, compatibility, priors, nbinomial_default)
   input_path <- cfg$inputs$joint_model_inputs
   list(
     spde = list(tier1 = spdes$tier1$object, tier2 = spdes$tier2$object),

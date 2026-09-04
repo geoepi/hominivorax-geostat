@@ -82,7 +82,7 @@ prepare_joint_model_inputs <- function(model_inputs, cfg) {
   tier1 <- apply_admin_mapping(tier1, admin_mapping, "tier1")
   tier2 <- apply_admin_mapping(tier2, admin_mapping, "tier2")
   prediction_grid <- apply_admin_mapping(prediction_grid, admin_mapping, "prediction_grid")
-  features <- add_livestock_rw2_features(tier2, prediction_grid, cfg)
+  features <- add_livestock_rw2_features(tier2, prediction_grid, cfg, model_inputs$transformations)
   tier2 <- features$tier2
   prediction_grid <- features$prediction_grid
 
@@ -113,7 +113,11 @@ prepare_joint_model_inputs <- function(model_inputs, cfg) {
       specification <- features$metadata$specifications[[variable]]
       audit <- dplyr::bind_rows(audit,
         audit_rows("livestock_rw2", variable, "requested_bins", specification$requested_bins),
-        audit_rows("livestock_rw2", variable, "effective_bins", specification$effective_bins)
+        audit_rows("livestock_rw2", variable, "effective_bins", specification$effective_bins),
+        audit_rows("livestock_rw2", variable, "method", specification$method),
+        audit_rows("livestock_rw2", variable, "rank_ties_method", specification$rank_ties_method),
+        audit_rows("livestock_rw2", variable, "imputation_value", specification$imputation_value),
+        audit_rows("livestock_rw2", variable, "quantile_type", specification$quantile_type)
       )
     }
   }

@@ -16,6 +16,8 @@ The Stage 3A shared-field prior follows the historical INLA specification exactl
 
 Stage 2 choices are recorded in `config/joint_model.example.yml` and in the output metadata. The default reporting rule censors affected administrative units from epiweek 32 of 2025 when they reported before the cutoff but not afterward; holdouts sample only uncensored positive rows using stable identifiers and the configured seed; `tier2.zero_count_policy: exclude` removes zeros only from `response_training`; temporal indices are shared across all scopes; and livestock quantile bins are fitted from Tier 2 and reused for prediction.
 
+Livestock RW2 features use the historical rank-quantile method: missing livestock values are replaced only in a feature-working vector using the corresponding Stage 1 transformation imputation value, rank ties use R's default `average` method, and prediction values use the fitted Tier 2 breaks without refitting.
+
 The Stage 1 response contract is `tier1$Yi` for binary detections and `tier2$count` for polygon-week abundance counts. Stage 2 derives `response_observed`, `response_censored`, and `response_training` from those canonical fields without overwriting them.
 
 ## Supporting Information

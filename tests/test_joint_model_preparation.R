@@ -17,7 +17,8 @@ model_inputs <- list(
   tier2 = make_tier("tier2", c(1, 0, 0, 0, 1, 1, 0, 0)),
   prediction_grid = prediction,
   mesh = list(n = 1L), mesh_polygons = data.frame(poly_id = 1L), time_index = time,
-  spatial_support = list(), preprocessing_metadata = list(stage = "geostatistical_preprocessing")
+  spatial_support = list(), preprocessing_metadata = list(stage = "geostatistical_preprocessing"),
+  transformations = list(static = setNames(lapply(c("cattle", "pigs", "sheep", "goats", "horses"), function(x) c(impute = 0, center = 0, scale = 1)), c("cattle", "pigs", "sheep", "goats", "horses")))
 )
 cfg <- joint_model_defaults()
 cfg$reporting_censoring$cutoff_epiyear <- 2025L
@@ -44,5 +45,16 @@ stopifnot(
   sum(prepared$tier2$response_training == 0, na.rm = TRUE) == 0L
 )
 stopifnot(!any(vapply(prepared, function(x) inherits(x, c("inla.spde", "inla.stack")), logical(1))))
+
+cfg_holdout <- cfg
+cfg_holdout$holdout$tier1$positive_fraction <- 0.5
+cfg_holdout$holdout$tier2$positive_fraction <- 0.5
+baseline_holdout <- prepare_joint_model_inputs(model_inputs, cfg_holdout)
+missing_livestock_inputs <- model_inputs
+missing_livestock_inputs$tier2$cattle[1] <- NA_real_
+missing_livestock_inputs$prediction_grid$cattle[1] <- NA_real_
+missing_holdout <- prepare_joint_model_inputs(missing_livestock_inputs, cfg_holdout)
+stopifnot(identical(baseline_holdout$holdout_metadata$tier1$selected_ids, missing_holdout$holdout_metadata$tier1$selected_ids), identical(baseline_holdout$holdout_metadata$tier2$selected_ids, missing_holdout$holdout_metadata$tier2$selected_ids))
+stopifnot(is.na(missing_livestock_inputs$tier2$cattle[1]), all(is.finite(missing_holdout$prediction_grid$cattle_q)))
 
 cat("Joint-model preparation regression tests passed\n")
