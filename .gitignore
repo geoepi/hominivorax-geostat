@@ -67,6 +67,7 @@ outputs/preprocessing_demo/
 !/scripts/create_preprocessing_demo_inputs.R
 !/scripts/compare_spatial_support.R
 !/scripts/prepare_joint_model.R
+!/scripts/build_joint_inla.R
 
 # quarto
 /.quarto/

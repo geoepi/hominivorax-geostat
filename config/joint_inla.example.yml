@@ -1,0 +1,93 @@
+project:
+  output_directory: outputs/joint_inla
+
+inputs:
+  joint_model_inputs: outputs/joint_model/joint_model_inputs.rds
+
+model:
+  tier1:
+    family: binomial
+  tier2:
+    family: nbinomial
+
+spatial:
+  grouping_variable: quarter_index
+  group_model: iid
+  tier1:
+    alpha: 2
+    prior_range_km: 150
+    prior_range_probability: 0.05
+    prior_sigma: 0.5
+    prior_sigma_probability: 0.05
+    constr: true
+  tier2:
+    alpha: 2
+    prior_range_km: 90
+    prior_range_probability: 0.5
+    prior_sigma: 1
+    prior_sigma_probability: 0.5
+    constr: true
+
+shared_field:
+  enabled: true
+  source: tier1_field
+  target: tier2_copy_field
+  estimate_copy_coefficient: true
+  beta_prior_mean: 0.5
+  beta_prior_sd: 0.2
+
+temporal:
+  tier1:
+    variable: timestep
+    formula_name: week_steps
+    model: rw1
+    constr: true
+    scale_model: true
+  tier2:
+    variable: timestep
+    formula_name: tier2_week
+    model: rw1
+    constr: true
+    scale_model: true
+
+administrative_effect:
+  tier1:
+    enabled: true
+    variable: admin_f
+    model: iid
+    constr: true
+    prior_sigma: 0.3
+    prior_probability: 0.01
+
+livestock_rw2:
+  enabled: true
+  variable: cattle
+  index: cattle_q
+  value: cattle_mid_log1p
+  model: rw2
+  constr: true
+  scale_model: true
+  prior_sigma: 0.5
+  prior_probability: 0.05
+
+outputs:
+  build: joint_inla_build.rds
+  audit: joint_inla_build_audit.csv
+
+fit_reference:
+  quantiles: [0.025, 0.25, 0.5, 0.75, 0.975]
+  control_fixed:
+    prec: 1
+    prec_intercept: 1
+  control_mode:
+    restart: false
+    theta: [4.65719676, 0.98772497, -2.01980363, -3.61447715, 2.30258509, 5.02993340, -0.02897474, 0.50323804, 5.42034311, 0.39783963]
+  control_inla:
+    strategy: adaptive
+    int_strategy: eb
+  control_compute:
+    dic: true
+    cpo: false
+    waic: true
+
+# Tracked example only. Stage 3A assembles objects and does not call INLA::inla().

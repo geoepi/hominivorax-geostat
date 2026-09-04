@@ -1,0 +1,16 @@
+repo_root <- normalizePath(".", mustWork = TRUE)
+source(file.path(repo_root, "R", "load_joint_inla.R"))
+load_joint_inla(repo_root)
+
+script_path <- normalizePath(file.path(repo_root, "scripts", "build_joint_inla.R"), mustWork = TRUE)
+external_config <- file.path(tempdir(), "joint-inla", "joint_inla.atlas.yml")
+dir.create(dirname(external_config), recursive = TRUE, showWarnings = FALSE)
+stopifnot(file.copy(file.path(repo_root, "config", "joint_inla.example.yml"), external_config, overwrite = TRUE))
+discovered_root <- normalizePath(file.path(dirname(script_path), ".."), mustWork = TRUE)
+stopifnot(identical(discovered_root, repo_root))
+cfg <- read_joint_inla_config(external_config, discovered_root)
+stopifnot(identical(cfg$repo_root, repo_root))
+stopifnot(identical(cfg$inputs$joint_model_inputs, file.path(repo_root, "outputs", "joint_model", "joint_model_inputs.rds")))
+stopifnot(!identical(discovered_root, normalizePath(file.path(dirname(external_config), ".."), mustWork = FALSE)))
+
+cat("Joint-INLA CLI repository-root regression test passed\n")
