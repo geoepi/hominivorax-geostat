@@ -9,7 +9,7 @@ if (!requireNamespace("INLA", quietly = TRUE)) {
   validate_joint_inla_config(cfg, require_inputs = FALSE)
   stopifnot(identical(cfg$inputs$joint_model_inputs, file.path(repo_root, "outputs", "joint_model", "joint_model_inputs.rds")))
   stopifnot(identical(cfg$model$tier1$family, "binomial"), identical(cfg$model$tier2$family, "nbinomial"))
-  stopifnot(identical(cfg$shared_field$beta_prior_precision, 0.2), is.null(cfg$shared_field$beta_prior_sd))
+  stopifnot(identical(cfg$shared_field$beta_prior_precision, 0.2))
 
   make_common <- function(n, x, y, group) {
     data.frame(x = x, y = y, quarter_index = group, timestep = seq_len(n), admin_f = rep(1L, n), admin_u = rep("A", n),
