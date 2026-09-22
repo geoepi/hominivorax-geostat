@@ -13,6 +13,20 @@ joint_inla_preflight_storage <- function(value) {
   tryCatch(storage.mode(value), error = function(e) "<unavailable>")
 }
 
+joint_inla_preflight_numeric_storage_ok <- function(value) {
+  !is.null(value) && is.atomic(value) &&
+    typeof(value) %in% c("integer", "double") &&
+    is.numeric(value) && !is.factor(value) && !is.ordered(value) &&
+    !is.character(value) && !is.logical(value) && !is.list(value)
+}
+
+joint_inla_preflight_integer_observed <- function(value, tolerance = sqrt(.Machine$double.eps)) {
+  if (!joint_inla_preflight_numeric_storage_ok(value)) return(NA)
+  finite <- value[is.finite(value)]
+  if (!length(finite)) return(NA)
+  all(abs(finite - round(finite)) <= tolerance)
+}
+
 joint_inla_preflight_number <- function(value) {
   if (is.null(value) || !length(value)) return(NA_character_)
   if (any(!is.finite(value))) return(NA_character_)
@@ -27,7 +41,10 @@ joint_inla_preflight_formula_fixed_names <- function(formula) {
     is.call(expression) && identical(as.character(expression[[1L]]), "f")
   }, logical(1L))
   fixed_labels <- labels[!is_random]
-  unique(unlist(lapply(fixed_labels, all.vars), use.names = FALSE))
+  unique(unlist(lapply(fixed_labels, function(label) {
+    expression <- tryCatch(str2lang(label), error = function(e) NULL)
+    if (is.null(expression)) character() else all.vars(expression)
+  }), use.names = FALSE))
 }
 
 joint_inla_preflight_theta_inventory <- function() {
@@ -56,17 +73,43 @@ joint_inla_preflight_theta_inventory <- function() {
 joint_inla_preflight_build <- function(build, build_path = NA_character_, expected_nspde = 13449L,
                                       expected_quarter_groups = 8L, expected_cattle_bins = 22L) {
   checks <- list()
-  add_check <- function(section, check, status, observed, expected, details = "") {
+  add_check <- function(section, check, status, observed, expected, details = "", metrics = list()) {
+    metric_character <- function(name) {
+      value <- metrics[[name]]
+      if (is.null(value) || !length(value)) NA_character_ else as.character(value[[1L]])
+    }
+    metric_logical <- function(name) {
+      value <- metrics[[name]]
+      if (is.null(value) || !length(value)) NA else as.logical(value[[1L]])
+    }
+    metric_numeric <- function(name) {
+      value <- metrics[[name]]
+      if (is.null(value) || !length(value)) NA_real_ else as.numeric(value[[1L]])
+    }
     checks[[length(checks) + 1L]] <<- data.frame(
       section = as.character(section), check = as.character(check), status = as.character(status),
       observed = joint_inla_preflight_text(observed), expected = joint_inla_preflight_text(expected),
       details = as.character(details), artifact_path = joint_inla_preflight_text(build_path),
-      artifact_sha256 = joint_inla_fit_hash_file(build_path), stringsAsFactors = FALSE
+      artifact_sha256 = joint_inla_fit_hash_file(build_path),
+      source_column = metric_character("source_column"),
+      class = metric_character("class"), typeof = metric_character("typeof"),
+      storage_accepted = metric_logical("storage_accepted"),
+      length_observed = metric_numeric("length_observed"),
+      length_expected = metric_numeric("length_expected"),
+      length_matches = metric_logical("length_matches"),
+      integer_valued_required = metric_logical("integer_valued_required"),
+      integer_valued_observed = metric_logical("integer_valued_observed"),
+      minimum = metric_numeric("minimum"), maximum = metric_numeric("maximum"),
+      unique_count = metric_numeric("unique_count"),
+      range_contiguity = metric_character("range_contiguity"),
+      active_finite_count = metric_numeric("active_finite_count"),
+      active_nonfinite_count = metric_numeric("active_nonfinite_count"),
+      stringsAsFactors = FALSE
     )
   }
-  fail <- function(section, check, observed, expected, details) add_check(section, check, "fail", observed, expected, details)
-  pass <- function(section, check, observed, expected, details = "") add_check(section, check, "pass", observed, expected, details)
-  warn <- function(section, check, observed, expected, details) add_check(section, check, "warning", observed, expected, details)
+  fail <- function(section, check, observed, expected, details, metrics = list()) add_check(section, check, "fail", observed, expected, details, metrics)
+  pass <- function(section, check, observed, expected, details = "", metrics = list()) add_check(section, check, "pass", observed, expected, details, metrics)
+  warn <- function(section, check, observed, expected, details, metrics = list()) add_check(section, check, "warning", observed, expected, details, metrics)
 
   if (!is.list(build)) {
     fail("artifact", "build_object", "not a list", "Stage 3A build list", "Cannot inspect the production artifact.")
@@ -197,60 +240,107 @@ joint_inla_preflight_build <- function(build, build_path = NA_character_, expect
     value <- if (name %in% data_names) data[[name]] else NULL
     expected_likelihood <- if (name %in% tier1_fixed) "tier1" else if (name %in% tier2_fixed) "tier2" else "both"
     active <- if (expected_likelihood == "tier1") tier1_rows else if (expected_likelihood == "tier2") tier2_rows else link_active
-    type_ok <- !is.null(value) && length(value) == n_rows && is.numeric(value) && !is.factor(value) && !is.ordered(value) && !is.character(value) && !is.list(value) && !is.logical(value)
-    if (type_ok) pass("fixed_effects", paste0(name, "_type"), paste0("class=", joint_inla_preflight_class(value), "; typeof=", typeof(value), "; storage.mode=", joint_inla_preflight_storage(value)), "numeric/integer vector", "Production fixed-effect column type.")
-    else fail("fixed_effects", paste0(name, "_type"), if (is.null(value)) "missing" else paste0("class=", joint_inla_preflight_class(value), "; typeof=", typeof(value), "; storage.mode=", joint_inla_preflight_storage(value)), "numeric/integer vector; no factor/character/list/logical", "Fixed-effect columns must be numeric storage unless explicitly expected otherwise.")
-    if (type_ok) {
-      invalid <- sum(active & !is.finite(value))
-      if (invalid == 0L) pass("fixed_effects", paste0(name, "_active_finite"), invalid, 0L, paste0("Finite on ", expected_likelihood, " likelihood rows."))
-      else fail("fixed_effects", paste0(name, "_active_finite"), invalid, 0L, "Active fixed-effect values must be finite.")
-      finite <- value[is.finite(value)]
-      pass("fixed_effects", paste0(name, "_summary"), paste0("min=", joint_inla_preflight_number(if (length(finite)) min(finite) else NA_real_), "; max=", joint_inla_preflight_number(if (length(finite)) max(finite) else NA_real_), "; unique=", length(unique(finite))), "min/max/unique recorded", "Fixed-effect distribution summary.")
+    storage_ok <- joint_inla_preflight_numeric_storage_ok(value)
+    length_ok <- !is.null(value) && !is.na(n_rows) && length(value) == n_rows
+    type_metrics <- list(
+      class = if (is.null(value)) NA_character_ else joint_inla_preflight_class(value),
+      typeof = if (is.null(value)) NA_character_ else typeof(value),
+      source_column = name,
+      storage_accepted = storage_ok,
+      length_observed = if (is.null(value)) NA_real_ else length(value),
+      length_expected = n_rows,
+      length_matches = length_ok
+    )
+    if (storage_ok) pass("fixed_effects", paste0(name, "_type"), paste0("class=", joint_inla_preflight_class(value), "; typeof=", typeof(value), "; storage.mode=", joint_inla_preflight_storage(value)), "integer/double numeric atomic vector", "Fixed-effect storage type is accepted.", type_metrics)
+    else fail("fixed_effects", paste0(name, "_type"), if (is.null(value)) "missing" else paste0("class=", joint_inla_preflight_class(value), "; typeof=", typeof(value), "; storage.mode=", joint_inla_preflight_storage(value)), "integer/double numeric atomic vector; no factor/ordered/character/logical/list", "Fixed-effect columns must use accepted numeric storage.", type_metrics)
+    if (storage_ok && !length_ok) fail("fixed_effects", paste0(name, "_length"), length(value), n_rows, "Fixed-effect column length must match the joint stack row count.", type_metrics)
+    if (storage_ok && length_ok) {
+      active_values <- value[active]
+      finite_mask <- is.finite(active_values)
+      invalid <- sum(!finite_mask)
+      finite <- active_values[finite_mask]
+      value_metrics <- c(type_metrics, list(
+        active_finite_count = sum(finite_mask), active_nonfinite_count = invalid,
+        minimum = if (length(finite)) min(finite) else NA_real_,
+        maximum = if (length(finite)) max(finite) else NA_real_,
+        unique_count = length(unique(finite))
+      ))
+      if (invalid == 0L) pass("fixed_effects", paste0(name, "_active_finite"), invalid, 0L, paste0("Finite on ", expected_likelihood, " likelihood rows."), value_metrics)
+      else fail("fixed_effects", paste0(name, "_active_finite"), invalid, 0L, "Active fixed-effect values must be finite.", value_metrics)
+      pass("fixed_effects", paste0(name, "_summary"), paste0("source=", name, "; min=", joint_inla_preflight_number(if (length(finite)) min(finite) else NA_real_), "; max=", joint_inla_preflight_number(if (length(finite)) max(finite) else NA_real_), "; unique=", length(unique(finite))), "source column with min/max/unique recorded", "Fixed-effect distribution summary for the production model column.", value_metrics)
     }
   }
 
   check_index <- function(name, active, integer_valued = TRUE, expected_min = 1L, expected_max = NULL,
-                          exact_levels = NULL, contiguous = FALSE, finite_only = FALSE) {
+                          exact_levels = NULL, contiguous = FALSE) {
     value <- if (name %in% data_names) data[[name]] else NULL
-    type_ok <- !is.null(value) && length(value) == n_rows && is.numeric(value) && !is.factor(value) && !is.ordered(value) && !is.character(value) && !is.list(value) && !is.logical(value)
-    if (!type_ok) {
-      fail("random_effects", paste0(name, "_type"), if (is.null(value)) "missing" else paste0("class=", joint_inla_preflight_class(value), "; typeof=", typeof(value)), "numeric/integer vector", "Random-effect/index variable type is invalid.")
+    storage_ok <- joint_inla_preflight_numeric_storage_ok(value)
+    length_ok <- !is.null(value) && !is.na(n_rows) && length(value) == n_rows
+    type_metrics <- list(
+      class = if (is.null(value)) NA_character_ else joint_inla_preflight_class(value),
+      typeof = if (is.null(value)) NA_character_ else typeof(value),
+      source_column = name,
+      storage_accepted = storage_ok,
+      length_observed = if (is.null(value)) NA_real_ else length(value),
+      length_expected = n_rows,
+      length_matches = length_ok,
+      integer_valued_required = integer_valued
+    )
+    if (storage_ok) pass("random_effects", paste0(name, "_type"), paste0("class=", joint_inla_preflight_class(value), "; typeof=", typeof(value), "; storage.mode=", joint_inla_preflight_storage(value)), "integer/double numeric atomic vector", "Random-effect/index storage type is accepted.", type_metrics)
+    else fail("random_effects", paste0(name, "_type"), if (is.null(value)) "missing" else paste0("class=", joint_inla_preflight_class(value), "; typeof=", typeof(value), "; storage.mode=", joint_inla_preflight_storage(value)), "integer/double numeric atomic vector; no factor/ordered/character/logical/list", "Random-effect/index variables must use accepted numeric storage.", type_metrics)
+    if (storage_ok && !length_ok) {
+      fail("random_effects", paste0(name, "_length"), length(value), n_rows, "Random-effect/index variable length must match the joint stack row count.", type_metrics)
       return(invisible(FALSE))
     }
-    pass("random_effects", paste0(name, "_type"), paste0("class=", joint_inla_preflight_class(value), "; typeof=", typeof(value), "; storage.mode=", joint_inla_preflight_storage(value)), "numeric/integer vector", "Random-effect/index variable type.")
+    if (!storage_ok) return(invisible(FALSE))
     active_values <- value[active]
-    invalid_finite <- sum(!is.finite(active_values))
-    if (invalid_finite == 0L) pass("random_effects", paste0(name, "_active_finite"), invalid_finite, 0L, "Active random-effect/index values are finite.")
-    else fail("random_effects", paste0(name, "_active_finite"), invalid_finite, 0L, "Active random-effect/index values must be finite.")
-    finite <- active_values[is.finite(active_values)]
+    finite_mask <- is.finite(active_values)
+    invalid_finite <- sum(!finite_mask)
+    finite <- active_values[finite_mask]
+    integer_observed <- joint_inla_preflight_integer_observed(active_values)
+    finite_metrics <- c(type_metrics, list(
+      integer_valued_observed = integer_observed,
+      active_finite_count = sum(finite_mask), active_nonfinite_count = invalid_finite,
+      minimum = if (length(finite)) min(finite) else NA_real_,
+      maximum = if (length(finite)) max(finite) else NA_real_,
+      unique_count = if (length(finite)) length(unique(finite)) else 0L
+    ))
+    if (invalid_finite == 0L) pass("random_effects", paste0(name, "_active_finite"), invalid_finite, 0L, "Active random-effect/index values are finite.", finite_metrics)
+    else fail("random_effects", paste0(name, "_active_finite"), invalid_finite, 0L, "Active random-effect/index values must be finite.", finite_metrics)
     if (!length(finite)) {
-      fail("random_effects", paste0(name, "_active_values"), "none", "at least one active value", "No active values were available for validation.")
+      fail("random_effects", paste0(name, "_active_values"), "none", "at least one active value", "No active values were available for validation.", finite_metrics)
       return(invisible(FALSE))
     }
     if (integer_valued) {
-      non_integer <- sum(finite != as.integer(finite))
-      if (non_integer == 0L) pass("random_effects", paste0(name, "_integer_valued"), non_integer, 0L, "Index/group values are integer-valued.")
-      else fail("random_effects", paste0(name, "_integer_valued"), non_integer, 0L, "Index/group values must be integer-valued.")
+      non_integer <- sum(abs(finite - round(finite)) > sqrt(.Machine$double.eps))
+      if (non_integer == 0L) pass("random_effects", paste0(name, "_integer_valued"), non_integer, 0L, "Index/group values are integer-valued within numerical tolerance.", finite_metrics)
+      else fail("random_effects", paste0(name, "_integer_valued"), non_integer, 0L, "Index/group values must be integer-valued within numerical tolerance.", finite_metrics)
     }
-    below_min <- sum(finite < expected_min)
-    if (below_min == 0L) pass("random_effects", paste0(name, "_minimum"), min(finite), paste0(">=", expected_min), "Index/group minimum is valid.")
-    else fail("random_effects", paste0(name, "_minimum"), min(finite), paste0(">=", expected_min), "Index/group values below the valid minimum.")
+    if (!is.null(expected_min)) {
+      below_min <- sum(finite < expected_min)
+      if (below_min == 0L) pass("random_effects", paste0(name, "_minimum"), min(finite), paste0(">=", expected_min), "Index/group minimum is valid.", finite_metrics)
+      else fail("random_effects", paste0(name, "_minimum"), min(finite), paste0(">=", expected_min), "Index/group values below the valid minimum.", finite_metrics)
+    }
     if (!is.null(expected_max)) {
       above_max <- sum(finite > expected_max)
-      if (above_max == 0L) pass("random_effects", paste0(name, "_maximum"), max(finite), paste0("<=", expected_max), "Index/group maximum is within the expected range.")
-      else fail("random_effects", paste0(name, "_maximum"), max(finite), paste0("<=", expected_max), "Index/group values exceed the expected range.")
+      if (above_max == 0L) pass("random_effects", paste0(name, "_maximum"), max(finite), paste0("<=", expected_max), "Index/group maximum is within the expected range.", finite_metrics)
+      else fail("random_effects", paste0(name, "_maximum"), max(finite), paste0("<=", expected_max), "Index/group values exceed the expected range.", finite_metrics)
     }
-    levels <- sort(unique(as.integer(finite)))
+    levels <- if (isTRUE(integer_observed)) sort(unique(as.integer(round(finite)))) else sort(unique(finite))
+    range_contiguity <- "not_required"
     if (!is.null(exact_levels)) {
-      exact <- identical(levels, as.integer(exact_levels))
-      if (exact) pass("random_effects", paste0(name, "_levels"), paste(levels, collapse = ","), paste(as.integer(exact_levels), collapse = ","), "Expected levels are represented.")
-      else fail("random_effects", paste0(name, "_levels"), paste(levels, collapse = ","), paste(as.integer(exact_levels), collapse = ","), "Expected levels are not represented exactly.")
+      exact <- isTRUE(integer_observed) && identical(levels, as.integer(exact_levels))
+      range_contiguity <- if (exact) "pass" else "fail"
+      if (exact) pass("random_effects", paste0(name, "_levels"), paste(levels, collapse = ","), paste(as.integer(exact_levels), collapse = ","), "Expected levels are represented.", c(finite_metrics, list(range_contiguity = range_contiguity)))
+      else fail("random_effects", paste0(name, "_levels"), paste(levels, collapse = ","), paste(as.integer(exact_levels), collapse = ","), "Expected levels are not represented exactly.", c(finite_metrics, list(range_contiguity = range_contiguity)))
     } else if (isTRUE(contiguous)) {
       expected_levels <- seq.int(min(levels), max(levels))
-      if (identical(levels, expected_levels)) pass("random_effects", paste0(name, "_contiguous_levels"), paste(levels, collapse = ","), paste(expected_levels, collapse = ","), "Levels are contiguous.")
-      else fail("random_effects", paste0(name, "_contiguous_levels"), paste(levels, collapse = ","), paste(expected_levels, collapse = ","), "Levels have gaps.")
+      contiguous_ok <- isTRUE(integer_observed) && identical(levels, expected_levels)
+      range_contiguity <- if (contiguous_ok) "pass" else "fail"
+      if (contiguous_ok) pass("random_effects", paste0(name, "_contiguous_levels"), paste(levels, collapse = ","), paste(expected_levels, collapse = ","), "Levels are contiguous.", c(finite_metrics, list(range_contiguity = range_contiguity)))
+      else fail("random_effects", paste0(name, "_contiguous_levels"), paste(levels, collapse = ","), paste(expected_levels, collapse = ","), "Levels have gaps.", c(finite_metrics, list(range_contiguity = range_contiguity)))
     }
-    pass("random_effects", paste0(name, "_summary"), paste0("min=", min(finite), "; max=", max(finite), "; unique=", length(levels)), "min/max/unique recorded", "Random-effect/index summary.")
+    pass("random_effects", paste0(name, "_summary"), paste0("class=", joint_inla_preflight_class(value), "; typeof=", typeof(value), "; storage_accepted=TRUE; integer_required=", integer_valued, "; integer_observed=", integer_observed, "; min=", min(finite), "; max=", max(finite), "; unique=", length(levels)), "class/typeof/storage/integer/range summary recorded", "Random-effect/index audit summary.", c(finite_metrics, list(range_contiguity = range_contiguity)))
     invisible(TRUE)
   }
 
@@ -265,7 +355,7 @@ joint_inla_preflight_build <- function(build, build_path = NA_character_, expect
   check_index("tier2_copy_field.group", tier2_rows, expected_max = expected_quarter_groups, exact_levels = seq_len(expected_quarter_groups))
   check_index("tier2_week", tier2_rows, expected_max = NULL, contiguous = TRUE)
   check_index("cattle_q", tier2_rows, expected_max = expected_cattle_bins, exact_levels = seq_len(expected_cattle_bins))
-  check_index("cattle_mid_log1p", tier2_rows, integer_valued = FALSE, expected_min = -Inf, finite_only = TRUE)
+  check_index("cattle_mid_log1p", tier2_rows, integer_valued = FALSE, expected_min = NULL)
 
   if (link_ok) {
     observed_groups <- sort(unique(c(

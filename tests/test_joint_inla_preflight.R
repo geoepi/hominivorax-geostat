@@ -5,7 +5,7 @@ load_joint_inla_fit(repo_root)
 if (!requireNamespace("INLA", quietly = TRUE)) {
   cat("Stage 3B production preflight tests skipped: INLA is unavailable\n")
 } else {
-  make_production_shaped_build <- function(path, invalid_cattle_bin = FALSE) {
+  make_production_shaped_build <- function(path, invalid_cattle_bin = FALSE, effect_overrides = list()) {
     n_tier1 <- 8L
     n_tier2 <- 22L
     n <- n_tier1 + n_tier2
@@ -45,6 +45,9 @@ if (!requireNamespace("INLA", quietly = TRUE)) {
       cattle_mid_log1p = value(tier2, seq_len(n_tier2) / n_tier2),
       stringsAsFactors = FALSE
     )
+    if (length(effect_overrides)) {
+      for (name in names(effect_overrides)) effects[[name]] <- effect_overrides[[name]]
+    }
 
     Y <- matrix(NA_real_, nrow = n, ncol = 2L, dimnames = list(NULL, c("binomial", "nbinomial")))
     Y[tier1, 1L] <- c(0, 1, 0, 1, 0, 1, 0, 1)
@@ -106,6 +109,55 @@ if (!requireNamespace("INLA", quietly = TRUE)) {
             any(result$audit$check == "object_hyper_copy"),
             any(result$audit$check == "prediction_required_variables_finite"),
             any(result$audit$status == "warning"))
+
+  # Storage type is accepted independently of length and index semantics.
+  integer_values <- c(seq_len(8L), rep(NA_integer_, 22L))
+  double_integer_values <- as.numeric(integer_values)
+  double_non_integer_values <- c(seq_len(8L) + 0.5, rep(NA_real_, 22L))
+  run_variant <- function(label, effect_overrides) {
+    variant_path <- file.path(tempdir(), paste0("joint_inla_preflight_", label, ".rds"))
+    make_production_shaped_build(variant_path, effect_overrides = effect_overrides)
+    joint_inla_preflight_build(joint_inla_fit_read_build(variant_path), variant_path)
+  }
+  integer_result <- run_variant("integer_storage", list(tier1_field = integer_values))
+  double_result <- run_variant("double_integer_values", list(tier1_field = double_integer_values))
+  non_integer_result <- run_variant("double_non_integer_values", list(tier1_field = double_non_integer_values))
+  stopifnot(isTRUE(integer_result$success), isTRUE(double_result$success),
+            integer_result$audit$storage_accepted[integer_result$audit$check == "tier1_field_type"],
+            double_result$audit$storage_accepted[double_result$audit$check == "tier1_field_type"],
+            identical(integer_result$audit$typeof[integer_result$audit$check == "tier1_field_type"], "integer"),
+            identical(double_result$audit$typeof[double_result$audit$check == "tier1_field_type"], "double"),
+            isFALSE(non_integer_result$success),
+            any(non_integer_result$audit$check == "tier1_field_integer_valued" & non_integer_result$audit$status == "fail"))
+
+  invalid_storage <- list(
+    factor = factor(c(1, 2)), ordered = ordered(c(1, 2)),
+    character = c("1", "2"), logical = c(TRUE, FALSE), list_column = list(1, 2)
+  )
+  stopifnot(all(!vapply(invalid_storage, joint_inla_preflight_numeric_storage_ok, logical(1L))))
+
+  cattle_mid_summary <- result$audit[result$audit$check == "cattle_mid_log1p_summary", , drop = FALSE]
+  stopifnot(nrow(cattle_mid_summary) == 1L,
+            isFALSE(cattle_mid_summary$integer_valued_required[[1L]]),
+            isFALSE(cattle_mid_summary$integer_valued_observed[[1L]]),
+            isTRUE(cattle_mid_summary$storage_accepted[[1L]]),
+            isTRUE(cattle_mid_summary$active_finite_count[[1L]] > 0))
+  malformed_cattle_mid <- c(rep(NA_real_, 8L), Inf, seq_len(21L) / 22)
+  malformed_result <- run_variant("malformed_cattle_mid", list(cattle_mid_log1p = malformed_cattle_mid))
+  stopifnot(isFALSE(malformed_result$success),
+            any(malformed_result$audit$check == "cattle_mid_log1p_active_finite" & malformed_result$audit$status == "fail"))
+
+  fixed_summary <- result$audit[result$audit$section == "fixed_effects" & grepl("_summary$", result$audit$check), , drop = FALSE]
+  required_fixed_columns <- c("intercept1", "intercept2", "north", "road_dens", "night_illum",
+                              "mintemp", "soilmoist", "leafarea", "rhum", "cattle", "horses",
+                              "pigs", "goats", "sheep")
+  stopifnot(all(required_fixed_columns %in% fixed_summary$source_column),
+            all(c("class", "typeof", "storage_accepted", "active_finite_count",
+                  "active_nonfinite_count", "minimum", "maximum", "unique_count") %in% names(result$audit)))
+  fixed_rows <- fixed_summary[match(required_fixed_columns, fixed_summary$source_column), , drop = FALSE]
+  stopifnot(all(fixed_rows$storage_accepted), all(fixed_rows$active_nonfinite_count == 0),
+            all(is.finite(fixed_rows$minimum)), all(is.finite(fixed_rows$maximum)),
+            all(fixed_rows$unique_count > 0))
 
   audit_path <- file.path(tempdir(), "joint_inla_fit_preflight_production.csv")
   written_audit <- joint_inla_preflight_write_audit(result, audit_path)
