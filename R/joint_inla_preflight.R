@@ -27,6 +27,10 @@ joint_inla_preflight_integer_observed <- function(value, tolerance = sqrt(.Machi
   all(abs(finite - round(finite)) <= tolerance)
 }
 
+joint_inla_preflight_covers_joint_rows <- function(value, n_rows) {
+  !is.null(value) && length(n_rows) == 1L && !is.na(n_rows) && length(value) >= n_rows
+}
+
 joint_inla_preflight_number <- function(value) {
   if (is.null(value) || !length(value)) return(NA_character_)
   if (any(!is.finite(value))) return(NA_character_)
@@ -73,6 +77,7 @@ joint_inla_preflight_theta_inventory <- function() {
 joint_inla_preflight_build <- function(build, build_path = NA_character_, expected_nspde = 13449L,
                                       expected_quarter_groups = 8L, expected_cattle_bins = 22L) {
   checks <- list()
+  artifact_sha256 <- joint_inla_fit_hash_file(build_path)
   add_check <- function(section, check, status, observed, expected, details = "", metrics = list()) {
     metric_character <- function(name) {
       value <- metrics[[name]]
@@ -90,7 +95,7 @@ joint_inla_preflight_build <- function(build, build_path = NA_character_, expect
       section = as.character(section), check = as.character(check), status = as.character(status),
       observed = joint_inla_preflight_text(observed), expected = joint_inla_preflight_text(expected),
       details = as.character(details), artifact_path = joint_inla_preflight_text(build_path),
-      artifact_sha256 = joint_inla_fit_hash_file(build_path),
+      artifact_sha256 = artifact_sha256,
       source_column = metric_character("source_column"),
       class = metric_character("class"), typeof = metric_character("typeof"),
       storage_accepted = metric_logical("storage_accepted"),
@@ -241,7 +246,7 @@ joint_inla_preflight_build <- function(build, build_path = NA_character_, expect
     expected_likelihood <- if (name %in% tier1_fixed) "tier1" else if (name %in% tier2_fixed) "tier2" else "both"
     active <- if (expected_likelihood == "tier1") tier1_rows else if (expected_likelihood == "tier2") tier2_rows else link_active
     storage_ok <- joint_inla_preflight_numeric_storage_ok(value)
-    length_ok <- !is.null(value) && !is.na(n_rows) && length(value) == n_rows
+    length_ok <- joint_inla_preflight_covers_joint_rows(value, n_rows)
     type_metrics <- list(
       class = if (is.null(value)) NA_character_ else joint_inla_preflight_class(value),
       typeof = if (is.null(value)) NA_character_ else typeof(value),
@@ -253,9 +258,10 @@ joint_inla_preflight_build <- function(build, build_path = NA_character_, expect
     )
     if (storage_ok) pass("fixed_effects", paste0(name, "_type"), paste0("class=", joint_inla_preflight_class(value), "; typeof=", typeof(value), "; storage.mode=", joint_inla_preflight_storage(value)), "integer/double numeric atomic vector", "Fixed-effect storage type is accepted.", type_metrics)
     else fail("fixed_effects", paste0(name, "_type"), if (is.null(value)) "missing" else paste0("class=", joint_inla_preflight_class(value), "; typeof=", typeof(value), "; storage.mode=", joint_inla_preflight_storage(value)), "integer/double numeric atomic vector; no factor/ordered/character/logical/list", "Fixed-effect columns must use accepted numeric storage.", type_metrics)
-    if (storage_ok && !length_ok) fail("fixed_effects", paste0(name, "_length"), length(value), n_rows, "Fixed-effect column length must match the joint stack row count.", type_metrics)
+    if (storage_ok && length_ok) pass("fixed_effects", paste0(name, "_length"), length(value), paste0(">=", n_rows), "Fixed-effect column covers the joint rows; additional prediction rows are permitted.", type_metrics)
+    else if (storage_ok) fail("fixed_effects", paste0(name, "_length"), length(value), paste0(">=", n_rows), "Fixed-effect column is shorter than the joint stack row count.", type_metrics)
     if (storage_ok && length_ok) {
-      active_values <- value[active]
+      active_values <- value[seq_len(n_rows)][active]
       finite_mask <- is.finite(active_values)
       invalid <- sum(!finite_mask)
       finite <- active_values[finite_mask]
@@ -275,7 +281,7 @@ joint_inla_preflight_build <- function(build, build_path = NA_character_, expect
                           exact_levels = NULL, contiguous = FALSE) {
     value <- if (name %in% data_names) data[[name]] else NULL
     storage_ok <- joint_inla_preflight_numeric_storage_ok(value)
-    length_ok <- !is.null(value) && !is.na(n_rows) && length(value) == n_rows
+    length_ok <- joint_inla_preflight_covers_joint_rows(value, n_rows)
     type_metrics <- list(
       class = if (is.null(value)) NA_character_ else joint_inla_preflight_class(value),
       typeof = if (is.null(value)) NA_character_ else typeof(value),
@@ -289,11 +295,12 @@ joint_inla_preflight_build <- function(build, build_path = NA_character_, expect
     if (storage_ok) pass("random_effects", paste0(name, "_type"), paste0("class=", joint_inla_preflight_class(value), "; typeof=", typeof(value), "; storage.mode=", joint_inla_preflight_storage(value)), "integer/double numeric atomic vector", "Random-effect/index storage type is accepted.", type_metrics)
     else fail("random_effects", paste0(name, "_type"), if (is.null(value)) "missing" else paste0("class=", joint_inla_preflight_class(value), "; typeof=", typeof(value), "; storage.mode=", joint_inla_preflight_storage(value)), "integer/double numeric atomic vector; no factor/ordered/character/logical/list", "Random-effect/index variables must use accepted numeric storage.", type_metrics)
     if (storage_ok && !length_ok) {
-      fail("random_effects", paste0(name, "_length"), length(value), n_rows, "Random-effect/index variable length must match the joint stack row count.", type_metrics)
+      fail("random_effects", paste0(name, "_length"), length(value), paste0(">=", n_rows), "Random-effect/index variable is shorter than the joint stack row count.", type_metrics)
       return(invisible(FALSE))
     }
+    if (storage_ok) pass("random_effects", paste0(name, "_length"), length(value), paste0(">=", n_rows), "Random-effect/index variable covers the joint rows; additional prediction rows are permitted.", type_metrics)
     if (!storage_ok) return(invisible(FALSE))
-    active_values <- value[active]
+    active_values <- value[seq_len(n_rows)][active]
     finite_mask <- is.finite(active_values)
     invalid_finite <- sum(!finite_mask)
     finite <- active_values[finite_mask]

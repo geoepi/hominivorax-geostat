@@ -135,6 +135,10 @@ if (!requireNamespace("INLA", quietly = TRUE)) {
     character = c("1", "2"), logical = c(TRUE, FALSE), list_column = list(1, 2)
   )
   stopifnot(all(!vapply(invalid_storage, joint_inla_preflight_numeric_storage_ok, logical(1L))))
+  stopifnot(isTRUE(joint_inla_preflight_covers_joint_rows(seq_len(30L), 30L)),
+            isTRUE(joint_inla_preflight_covers_joint_rows(seq_len(32L), 30L)),
+            isFALSE(joint_inla_preflight_covers_joint_rows(seq_len(29L), 30L)),
+            isFALSE(joint_inla_preflight_covers_joint_rows(NULL, 30L)))
 
   cattle_mid_summary <- result$audit[result$audit$check == "cattle_mid_log1p_summary", , drop = FALSE]
   stopifnot(nrow(cattle_mid_summary) == 1L,
