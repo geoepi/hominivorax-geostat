@@ -68,6 +68,11 @@ outputs/preprocessing_demo/
 !/scripts/compare_spatial_support.R
 !/scripts/prepare_joint_model.R
 !/scripts/build_joint_inla.R
+!/scripts/run_joint_inla.R
+!/scripts/run_joint_inla_atlas.sh.example
+
+# Jupyter checkpoint files
+.ipynb_checkpoints/
 
 # quarto
 /.quarto/

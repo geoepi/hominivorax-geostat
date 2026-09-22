@@ -1,0 +1,43 @@
+# Stage 3B runtime configuration. This file consumes the Stage 3A artifact only.
+
+project:
+  output_directory: outputs/joint_inla_fit
+
+inputs:
+  stage3a_build: outputs/joint_inla/joint_inla_build.rds
+
+outputs:
+  fit: joint_model_fit.rds
+  audit: joint_model_fit_audit.csv
+  metadata: joint_model_fit_metadata.rds
+  # Set true, or pass --overwrite, only when replacing an existing run is intentional.
+  overwrite: false
+
+fit:
+  quantiles: [0.025, 0.25, 0.5, 0.75, 0.975]
+  control_fixed:
+    prec: 1
+    prec.intercept: 1
+  control_inla:
+    strategy: adaptive
+    int.strategy: eb
+  control_compute:
+    dic: true
+    cpo: false
+    waic: true
+  control_predictor:
+    compute: true
+  initialization:
+    # historical reads the theta vector recorded in Stage 3A; default omits control.mode.
+    mode: historical
+  # Leave null to preserve the installed INLA nbinomial likelihood hyperprior.
+  control_family: null
+
+threads:
+  num_threads: 12
+  # Optional. When set, INLA receives num.threads as "num_threads:blas_threads".
+  blas_threads: null
+
+version_compatibility:
+  # warn records a clear mismatch; error prevents fitting.
+  policy: warn
