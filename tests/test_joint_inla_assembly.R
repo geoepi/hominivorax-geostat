@@ -55,6 +55,15 @@ if (!requireNamespace("INLA", quietly = TRUE)) {
   stopifnot(identical(first$build_audit$value[first$build_audit$metric == "copy_prior_precision"], "0.2"))
   stopifnot(isFALSE(first$provenance$executed_fit), identical(first$provenance$INLA, as.character(utils::packageVersion("INLA"))))
   stopifnot(first$fit_reference$nbinomial_default$available, identical(first$fit_reference$nbinomial_default$hyper$theta$prior, "pc.mgamma"))
+  bad_tier1 <- tier1
+  bad_tier1$timestep <- as.numeric(bad_tier1$timestep)
+  bad_inputs <- inputs
+  bad_inputs$tier1 <- bad_tier1
+  bad_index_error <- tryCatch({
+    build_joint_inla_from_inputs(bad_inputs, cfg)
+    FALSE
+  }, error = function(error) grepl("index effect 'week_steps'", conditionMessage(error), fixed = TRUE))
+  stopifnot(bad_index_error)
   contains_fit_call <- function(expr) {
     if (is.call(expr) && identical(as.character(expr[[1L]]), "inla")) return(TRUE)
     if (is.recursive(expr)) any(vapply(as.list(expr), contains_fit_call, logical(1L))) else FALSE

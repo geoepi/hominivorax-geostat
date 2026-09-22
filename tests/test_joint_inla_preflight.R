@@ -168,6 +168,9 @@ if (!requireNamespace("INLA", quietly = TRUE)) {
     character = c("1", "2"), logical = c(TRUE, FALSE), list_column = list(1, 2)
   )
   stopifnot(all(!vapply(invalid_storage, joint_inla_preflight_numeric_storage_ok, logical(1L))))
+  stopifnot(all(!vapply(invalid_storage, joint_inla_preflight_index_storage_ok, logical(1L))),
+            isTRUE(joint_inla_preflight_index_storage_ok(c(1L, 2L))),
+            isFALSE(joint_inla_preflight_index_storage_ok(c(1, 2))))
   stopifnot(isTRUE(joint_inla_preflight_covers_joint_rows(seq_len(30L), 30L)),
             isTRUE(joint_inla_preflight_covers_joint_rows(seq_len(32L), 30L)),
             isFALSE(joint_inla_preflight_covers_joint_rows(seq_len(29L), 30L)),
