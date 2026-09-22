@@ -10,7 +10,7 @@
 set -euo pipefail
 
 PROJECT_ROOT=/project/disease_ecology/hominivorax-geostat
-CONFIG_PATH=/project/disease_ecology/nws-geostat-output/config/joint_inla_fit.atlas.yml
+CONFIG_PATH=/project/disease_ecology/nws-geostat-output/config/joint_inla_fit.atlas.default.yml
 OUTPUT_ROOT=/project/disease_ecology/nws-geostat-output/joint_inla_fit
 RSCRIPT_BIN="${RSCRIPT_BIN:-Rscript}"
 
