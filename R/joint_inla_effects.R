@@ -32,6 +32,17 @@ validate_joint_effect_columns <- function(data, mapping, active, label) {
   list(all_rows_nonfinite = counts, active_rows_nonfinite = active_counts)
 }
 
+joint_inla_integer_effect_names <- function() c("admin_f", "week_steps", "tier2_week", "cattle_q")
+
+joint_inla_require_integer_effect <- function(value, name) {
+  if (typeof(value) != "integer" || !is.numeric(value) || is.factor(value) || is.ordered(value) ||
+      is.character(value) || is.logical(value) || is.list(value)) {
+    stop("Stage 3A index effect '", name, "' must have integer storage (typeof == 'integer'); found ",
+         typeof(value), ".")
+  }
+  value
+}
+
 make_joint_field_indices <- function(spde_tier1, spde_tier2, n_groups) {
   require_joint_inla()
   list(
@@ -41,8 +52,11 @@ make_joint_field_indices <- function(spde_tier1, spde_tier2, n_groups) {
   )
 }
 
-make_joint_fixed_effects <- function(data, mapping, names_to_include) {
-  values <- lapply(names_to_include, function(name) as.numeric(data[[unname(mapping[[name]])]]))
+make_joint_fixed_effects <- function(data, mapping, names_to_include, integer_names = joint_inla_integer_effect_names()) {
+  values <- lapply(names_to_include, function(name) {
+    value <- data[[unname(mapping[[name]])]]
+    if (name %in% integer_names) joint_inla_require_integer_effect(value, name) else as.numeric(value)
+  })
   names(values) <- names_to_include
   values
 }

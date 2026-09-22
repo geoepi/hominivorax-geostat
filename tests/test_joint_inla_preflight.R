@@ -16,6 +16,11 @@ if (!requireNamespace("INLA", quietly = TRUE)) {
       result[tier] <- values
       result
     }
+    integer_value <- function(tier, values) {
+      result <- rep(NA_integer_, n)
+      result[tier] <- as.integer(values)
+      result
+    }
 
     effects <- data.frame(
       intercept1 = value(tier1, rep(1, n_tier1)),
@@ -32,16 +37,16 @@ if (!requireNamespace("INLA", quietly = TRUE)) {
       pigs = value(tier2, seq_len(n_tier2) / n_tier2 + 6),
       goats = value(tier2, seq_len(n_tier2) / n_tier2 + 7),
       sheep = value(tier2, seq_len(n_tier2) / n_tier2 + 8),
-      tier1_field = value(tier1, seq_len(n_tier1)),
-      tier1_field.group = value(tier1, seq_len(n_tier1)),
-      week_steps = value(tier1, seq_len(n_tier1)),
-      admin_f = value(tier1, seq_len(n_tier1)),
-      tier2_field = value(tier2, seq_len(n_tier2)),
-      tier2_field.group = value(tier2, rep(seq_len(8L), length.out = n_tier2)),
-      tier2_copy_field = value(tier2, seq_len(n_tier2)),
-      tier2_copy_field.group = value(tier2, rep(seq_len(8L), length.out = n_tier2)),
-      tier2_week = value(tier2, seq_len(n_tier2)),
-      cattle_q = value(tier2, if (invalid_cattle_bin) c(23, seq_len(21L)) else seq_len(n_tier2)),
+      tier1_field = integer_value(tier1, seq_len(n_tier1)),
+      tier1_field.group = integer_value(tier1, seq_len(n_tier1)),
+      week_steps = integer_value(tier1, seq_len(n_tier1)),
+      admin_f = integer_value(tier1, seq_len(n_tier1)),
+      tier2_field = integer_value(tier2, seq_len(n_tier2)),
+      tier2_field.group = integer_value(tier2, rep(seq_len(8L), length.out = n_tier2)),
+      tier2_copy_field = integer_value(tier2, seq_len(n_tier2)),
+      tier2_copy_field.group = integer_value(tier2, rep(seq_len(8L), length.out = n_tier2)),
+      tier2_week = integer_value(tier2, seq_len(n_tier2)),
+      cattle_q = integer_value(tier2, if (invalid_cattle_bin) c(23L, seq_len(21L)) else seq_len(n_tier2)),
       cattle_mid_log1p = value(tier2, seq_len(n_tier2) / n_tier2),
       stringsAsFactors = FALSE
     )
@@ -113,7 +118,7 @@ if (!requireNamespace("INLA", quietly = TRUE)) {
             any(result$audit$check == "prediction_required_variables_finite"),
             any(result$audit$status == "warning"))
 
-  # Storage type is accepted independently of length and index semantics.
+  # Index storage must be exact integer storage, not merely integer-valued double.
   integer_values <- c(seq_len(8L), rep(NA_integer_, 22L))
   double_integer_values <- as.numeric(integer_values)
   double_non_integer_values <- c(seq_len(8L) + 0.5, rep(NA_real_, 22L))
@@ -125,13 +130,13 @@ if (!requireNamespace("INLA", quietly = TRUE)) {
   integer_result <- run_variant("integer_storage", list(tier1_field = integer_values))
   double_result <- run_variant("double_integer_values", list(tier1_field = double_integer_values))
   non_integer_result <- run_variant("double_non_integer_values", list(tier1_field = double_non_integer_values))
-  stopifnot(isTRUE(integer_result$success), isTRUE(double_result$success),
+  stopifnot(isTRUE(integer_result$success), isFALSE(double_result$success),
             integer_result$audit$storage_accepted[integer_result$audit$check == "tier1_field_type"],
-            double_result$audit$storage_accepted[double_result$audit$check == "tier1_field_type"],
+            !double_result$audit$storage_accepted[double_result$audit$check == "tier1_field_type"],
             identical(integer_result$audit$typeof[integer_result$audit$check == "tier1_field_type"], "integer"),
             identical(double_result$audit$typeof[double_result$audit$check == "tier1_field_type"], "double"),
             isFALSE(non_integer_result$success),
-            any(non_integer_result$audit$check == "tier1_field_integer_valued" & non_integer_result$audit$status == "fail"))
+            any(non_integer_result$audit$check == "tier1_field_type" & non_integer_result$audit$status == "fail"))
 
   twenty_active_result <- run_variant("twenty_active_cattle_bins", inactive_cattle_bins = c(1L, 3L))
   twenty_occupancy <- twenty_active_result$audit[twenty_active_result$audit$check == "cattle_rw2_active_occupancy", , drop = FALSE]
@@ -148,7 +153,7 @@ if (!requireNamespace("INLA", quietly = TRUE)) {
   stopifnot(isFALSE(sparse_active_result$success),
             any(sparse_active_result$audit$check == "cattle_rw2_active_structural_support" & sparse_active_result$audit$status == "fail"))
 
-  missing_full_support <- c(rep(NA_real_, 8L), c(2, 2, seq.int(3L, 22L)))
+  missing_full_support <- c(rep(NA_integer_, 8L), c(2L, 2L, seq.int(3L, 22L)))
   missing_full_result <- run_variant("missing_full_cattle_support", effect_overrides = list(cattle_q = missing_full_support))
   stopifnot(isFALSE(missing_full_result$success),
             any(missing_full_result$audit$check == "cattle_rw2_feature_support" & missing_full_result$audit$status == "fail"))
@@ -178,6 +183,10 @@ if (!requireNamespace("INLA", quietly = TRUE)) {
   malformed_result <- run_variant("malformed_cattle_mid", list(cattle_mid_log1p = malformed_cattle_mid))
   stopifnot(isFALSE(malformed_result$success),
             any(malformed_result$audit$check == "cattle_mid_log1p_active_finite" & malformed_result$audit$status == "fail"))
+
+  complete_occupancy <- result$audit[result$audit$check == "cattle_rw2_active_occupancy", , drop = FALSE]
+  stopifnot(nrow(complete_occupancy) == 1L, identical(complete_occupancy$status[[1L]], "pass"),
+            identical(complete_occupancy$active_missing_bins[[1L]], ""))
 
   fixed_summary <- result$audit[result$audit$section == "fixed_effects" & grepl("_summary$", result$audit$check), , drop = FALSE]
   required_fixed_columns <- c("intercept1", "intercept2", "north", "road_dens", "night_illum",

@@ -20,6 +20,12 @@ joint_inla_preflight_numeric_storage_ok <- function(value) {
     !is.character(value) && !is.logical(value) && !is.list(value)
 }
 
+joint_inla_preflight_index_storage_ok <- function(value) {
+  !is.null(value) && is.atomic(value) && typeof(value) == "integer" && is.numeric(value) &&
+    !is.factor(value) && !is.ordered(value) && !is.character(value) &&
+    !is.logical(value) && !is.list(value)
+}
+
 joint_inla_preflight_integer_observed <- function(value, tolerance = sqrt(.Machine$double.eps)) {
   if (!joint_inla_preflight_numeric_storage_ok(value)) return(NA)
   finite <- value[is.finite(value)]
@@ -337,7 +343,7 @@ joint_inla_preflight_build <- function(build, build_path = NA_character_, expect
   check_index <- function(name, active, integer_valued = TRUE, expected_min = 1L, expected_max = NULL,
                           exact_levels = NULL, contiguous = FALSE) {
     value <- if (name %in% data_names) data[[name]] else NULL
-    storage_ok <- joint_inla_preflight_numeric_storage_ok(value)
+    storage_ok <- if (isTRUE(integer_valued)) joint_inla_preflight_index_storage_ok(value) else joint_inla_preflight_numeric_storage_ok(value)
     length_ok <- joint_inla_preflight_covers_joint_rows(value, n_predictors)
     type_metrics <- list(
       class = if (is.null(value)) NA_character_ else joint_inla_preflight_class(value),
@@ -349,8 +355,10 @@ joint_inla_preflight_build <- function(build, build_path = NA_character_, expect
       length_matches = length_ok,
       integer_valued_required = integer_valued
     )
-    if (storage_ok) pass("random_effects", paste0(name, "_type"), paste0("class=", joint_inla_preflight_class(value), "; typeof=", typeof(value), "; storage.mode=", joint_inla_preflight_storage(value)), "integer/double numeric atomic vector", "Random-effect/index storage type is accepted.", type_metrics)
-    else fail("random_effects", paste0(name, "_type"), if (is.null(value)) "missing" else paste0("class=", joint_inla_preflight_class(value), "; typeof=", typeof(value), "; storage.mode=", joint_inla_preflight_storage(value)), "integer/double numeric atomic vector; no factor/ordered/character/logical/list", "Random-effect/index variables must use accepted numeric storage.", type_metrics)
+    expected_storage <- if (isTRUE(integer_valued)) "integer numeric atomic vector (typeof == 'integer')" else "integer/double numeric atomic vector"
+    detail_storage <- if (isTRUE(integer_valued)) "Random-effect/index variables must use exact integer storage." else "Continuous numeric random-effect covariate storage is accepted."
+    if (storage_ok) pass("random_effects", paste0(name, "_type"), paste0("class=", joint_inla_preflight_class(value), "; typeof=", typeof(value), "; storage.mode=", joint_inla_preflight_storage(value)), expected_storage, "Random-effect/index storage type is accepted.", type_metrics)
+    else fail("random_effects", paste0(name, "_type"), if (is.null(value)) "missing" else paste0("class=", joint_inla_preflight_class(value), "; typeof=", typeof(value), "; storage.mode=", joint_inla_preflight_storage(value)), paste0(expected_storage, "; no factor/ordered/character/logical/list"), detail_storage, type_metrics)
     if (storage_ok && !length_ok) {
       fail("random_effects", paste0(name, "_length"), length(value), paste0(">=", n_predictors), "Random-effect/index variable is shorter than the joint predictor count.", type_metrics)
       return(invisible(FALSE))
@@ -428,7 +436,7 @@ joint_inla_preflight_build <- function(build, build_path = NA_character_, expect
     q_invalid <- length(q_full$missing_rows) + sum(!q_finite)
     if (length(q_finite_values) && isTRUE(q_integer)) q_invalid <- q_invalid + sum(abs(q_finite_values - round(q_finite_values)) > sqrt(.Machine$double.eps))
     if (length(q_finite_values)) q_invalid <- q_invalid + sum(q_finite_values < 1L | q_finite_values > expected_cattle_bins)
-    full_support_valid <- joint_inla_preflight_numeric_storage_ok(q_value) &&
+    full_support_valid <- joint_inla_preflight_index_storage_ok(q_value) &&
       joint_inla_preflight_covers_joint_rows(q_value, n_predictors) &&
       isTRUE(q_integer) && q_invalid == 0L && identical(q_levels, as.integer(configured_bins))
 
@@ -455,7 +463,7 @@ joint_inla_preflight_build <- function(build, build_path = NA_character_, expect
       source_column = "cattle_q",
       class = if (is.null(q_value)) NA_character_ else joint_inla_preflight_class(q_value),
       typeof = if (is.null(q_value)) NA_character_ else typeof(q_value),
-      storage_accepted = joint_inla_preflight_numeric_storage_ok(q_value),
+      storage_accepted = joint_inla_preflight_index_storage_ok(q_value),
       length_observed = if (is.null(q_value)) NA_real_ else length(q_value),
       length_expected = n_predictors,
       length_matches = joint_inla_preflight_covers_joint_rows(q_value, n_predictors),

@@ -78,8 +78,11 @@ if (!requireNamespace("INLA", quietly = TRUE)) {
   stack_data <- INLA::inla.stack.data(loaded$stacks$joint)
   stack_A <- INLA::inla.stack.A(loaded$stacks$joint)
   stopifnot(identical(call$formula, loaded$formula), identical(call$family, loaded$family))
-  stopifnot(identical(call$data, stack_data), identical(call$A, stack_A))
-  stopifnot(identical(call$E, stack_data$e), identical(call$link, stack_data$link))
+  stopifnot(identical(call$data, stack_data), !"A" %in% names(call), !"link" %in% names(call))
+  stopifnot(identical(call$E, stack_data$e))
+  stopifnot(identical(call$control.predictor$A, stack_A),
+            identical(call$control.predictor$link, stack_data$link),
+            identical(call$control.predictor$compute, TRUE))
   stopifnot("control.mode" %in% names(call), identical(call$control.mode, historical$control_mode))
 
   runtime_version <- as.character(utils::packageVersion("INLA"))
@@ -107,7 +110,10 @@ if (!requireNamespace("INLA", quietly = TRUE)) {
   dry <- run_joint_inla_fit(dry_config, repo_root, dry_run = TRUE,
                             inla_function = function(...) stop("INLA::inla must not be called during dry-run"))
   stopifnot(identical(dry$audit$fit_status[[1L]], "dry_run"), isTRUE(dry$audit$dry_run[[1L]]))
-  stopifnot("link" %in% names(dry$call), "A" %in% names(dry$call), "E" %in% names(dry$call))
+  stopifnot(!"link" %in% names(dry$call), !"A" %in% names(dry$call), "E" %in% names(dry$call),
+            identical(dry$call$control.predictor$A, stack_A),
+            identical(dry$call$control.predictor$link, stack_data$link),
+            identical(dry$call$control.predictor$compute, TRUE))
 
   failure_output <- file.path(tempdir(), "joint_inla_fit_failure_output")
   failure_cfg <- cfg
@@ -138,7 +144,16 @@ if (!requireNamespace("INLA", quietly = TRUE)) {
     dic = list(dic = 3), waic = list(waic = 4),
     mlik = data.frame(`log marginal likelihood` = -5)
   )
-  run_joint_inla_fit(success_config, repo_root, inla_function = function(...) fake_fit)
+  strict_inla_mock <- function(...) {
+    args <- list(...)
+    stopifnot(!"A" %in% names(args), !"link" %in% names(args),
+              "control.predictor" %in% names(args),
+              identical(args$control.predictor$A, stack_A),
+              identical(args$control.predictor$link, stack_data$link),
+              identical(args$control.predictor$compute, TRUE))
+    fake_fit
+  }
+  run_joint_inla_fit(success_config, repo_root, inla_function = strict_inla_mock)
   overwrite_blocked <- tryCatch({
     run_joint_inla_fit(success_config, repo_root, inla_function = function(...) fake_fit)
     FALSE

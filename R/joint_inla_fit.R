@@ -114,6 +114,16 @@ joint_inla_fit_control_value <- function(control, dotted_name, underscored_name 
   control[[underscored_name]]
 }
 
+joint_inla_fit_control_predictor <- function(cfg, A, link) {
+  control <- cfg$fit$control_predictor
+  if (is.null(control)) control <- list()
+  if (!is.list(control)) stop("fit.control_predictor must be a list.")
+  control$A <- A
+  control$link <- link
+  control$compute <- TRUE
+  control
+}
+
 joint_inla_fit_construct_call <- function(build, cfg, initialization = NULL) {
   joint_inla_fit_require_inla()
   if (is.null(initialization)) initialization <- joint_inla_fit_initialization(build, cfg)
@@ -125,15 +135,13 @@ joint_inla_fit_construct_call <- function(build, cfg, initialization = NULL) {
   call <- list(
     formula = build$formula,
     data = data,
-    A = A,
     family = build$family,
     E = data$e,
-    link = data$link,
     quantiles = as.numeric(cfg$fit$quantiles),
     control.fixed = cfg$fit$control_fixed,
     control.inla = cfg$fit$control_inla,
     control.compute = cfg$fit$control_compute,
-    control.predictor = cfg$fit$control_predictor,
+    control.predictor = joint_inla_fit_control_predictor(cfg, A, data$link),
     num.threads = joint_inla_fit_thread_argument(cfg)
   )
   if (!is.null(initialization$control_mode)) call$control.mode <- initialization$control_mode
@@ -146,10 +154,10 @@ joint_inla_fit_call_metadata <- function(call, cfg, initialization) {
     argument_names = names(call),
     formula_source = "build$formula",
     data_source = "INLA::inla.stack.data(build$stacks$joint)",
-    predictor_A_source = "INLA::inla.stack.A(build$stacks$joint)",
+    predictor_A_source = "control.predictor$A <- INLA::inla.stack.A(build$stacks$joint)",
     family_source = "build$family",
     exposure_source = "data$e",
-    link_source = "data$link",
+    link_source = "control.predictor$link <- data$link",
     initialization_mode = initialization$mode,
     num_threads = as.integer(cfg$threads$num_threads),
     blas_threads = if (is.null(cfg$threads$blas_threads)) NA_integer_ else as.integer(cfg$threads$blas_threads),

@@ -38,6 +38,14 @@ if (!requireNamespace("INLA", quietly = TRUE)) {
   stopifnot(identical(first$effect_mapping, second$effect_mapping), identical(first$build_audit, second$build_audit))
   stopifnot(nrow(first$stacks$joint$data$Y) == 8L, ncol(first$stacks$joint$data$Y) == 2L)
   stopifnot(all(is.na(first$stacks$joint$data$Y[5:8, 1])), all(is.na(first$stacks$joint$data$Y[1:4, 2])))
+  joint_data <- INLA::inla.stack.data(first$stacks$joint)
+  required_integer_indices <- c(
+    "tier1_field", "tier1_field.group", "week_steps", "admin_f",
+    "tier2_field", "tier2_field.group", "tier2_copy_field", "tier2_copy_field.group",
+    "tier2_week", "cattle_q"
+  )
+  stopifnot(all(vapply(required_integer_indices, function(name) identical(typeof(joint_data[[name]]), "integer"), logical(1L))),
+            identical(typeof(joint_data$cattle_mid_log1p), "double"))
   stopifnot(grepl("copy", paste(deparse(first$formula), collapse = " "), fixed = TRUE))
   stopifnot(grepl("nbinomial", paste(first$family, collapse = " "), fixed = TRUE))
   stopifnot(identical(first$priors$hyper_copy, list(beta = list(prior = "normal", param = c(0.5, 0.2)))))
