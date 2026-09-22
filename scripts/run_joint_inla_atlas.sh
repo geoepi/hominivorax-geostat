@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Initial Atlas allocation; revise near the top after reviewing the first sacct profile.
 #SBATCH --job-name=hominivorax-stage3b
+#SBATCH --account=disease_ecology
 #SBATCH --cpus-per-task=12
 #SBATCH --mem=280G
 #SBATCH --time=12:00:00
