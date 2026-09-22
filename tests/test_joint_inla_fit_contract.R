@@ -45,6 +45,9 @@ if (!requireNamespace("INLA", quietly = TRUE)) {
   cfg$config_path <- file.path(repo_root, "config", "joint_inla_fit.example.yml")
   cfg$inputs$stage3a_build <- build_path
   cfg$project$output_directory <- file.path(tempdir(), "joint_inla_fit_contract_output")
+  # This fixture tests the Stage 3B call/output contract; the production-shaped
+  # preflight is exercised separately in test_joint_inla_preflight.R.
+  cfg$preflight$enabled <- FALSE
   validate_joint_inla_fit_config(cfg)
 
   loaded <- joint_inla_fit_read_build(build_path)

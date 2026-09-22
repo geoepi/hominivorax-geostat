@@ -69,6 +69,8 @@ outputs/preprocessing_demo/
 !/scripts/prepare_joint_model.R
 !/scripts/build_joint_inla.R
 !/scripts/run_joint_inla.R
+!/scripts/check_joint_inla_fit.R
+!/scripts/run_joint_inla_atlas.sh
 !/scripts/run_joint_inla_atlas.sh.example
 
 # Jupyter checkpoint files

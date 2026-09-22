@@ -1,5 +1,6 @@
 joint_inla_fit_hash_file <- function(path) {
-  if (!file.exists(path) || !requireNamespace("digest", quietly = TRUE)) return(NA_character_)
+  if (is.null(path) || length(path) != 1L || is.na(path) || !nzchar(as.character(path)) ||
+      !file.exists(path) || !requireNamespace("digest", quietly = TRUE)) return(NA_character_)
   tryCatch(digest::digest(file = path, algo = "sha256"), error = function(e) NA_character_)
 }
 
@@ -201,6 +202,7 @@ joint_inla_fit_source_provenance <- function(build, build_path, cfg, paths, runt
         output_fit = paths$fit,
         output_audit = paths$audit,
         output_metadata = paths$metadata,
+        output_preflight = paths$preflight,
         runtime_inla = runtime_version,
         version_compatible = version_check$compatible
       )
@@ -354,7 +356,7 @@ joint_inla_fit_write_failure_audit <- function(audit, paths, overwrite = FALSE) 
   target
 }
 
-joint_inla_fit_print_dry_run <- function(build_path, paths, cfg, call, version_check, initialization, effective_prior) {
+joint_inla_fit_print_dry_run <- function(build_path, paths, cfg, call, version_check, initialization, effective_prior, preflight_result) {
   cat("Stage 3B dry run\n")
   cat("  Stage 3A build: ", build_path, "\n", sep = "")
   cat("  INLA runtime: ", version_check$runtime, "\n", sep = "")
@@ -372,6 +374,8 @@ joint_inla_fit_print_dry_run <- function(build_path, paths, cfg, call, version_c
   cat("  Expected fit output: ", paths$fit, "\n", sep = "")
   cat("  Expected audit output: ", paths$audit, "\n", sep = "")
   cat("  Expected metadata output: ", paths$metadata, "\n", sep = "")
+  cat("  Preflight status: ", if (isTRUE(preflight_result$success)) "PASS" else "FAIL", "\n", sep = "")
+  cat("  Preflight audit: ", paths$preflight, "\n", sep = "")
   cat("  INLA::inla() called: FALSE\n")
 }
 
@@ -384,6 +388,21 @@ run_joint_inla_fit <- function(config_path, repo_root = getwd(), output_override
   if (isTRUE(overwrite_override)) cfg$outputs$overwrite <- TRUE
   paths <- joint_inla_fit_output_paths(cfg, output_override)
   build <- joint_inla_fit_read_build(cfg$inputs$stage3a_build)
+  preflight_result <- if (isTRUE(cfg$preflight$enabled)) {
+    joint_inla_preflight_build(build, cfg$inputs$stage3a_build)
+  } else {
+    list(success = TRUE,
+         audit = data.frame(section = "preflight", check = "preflight_enabled", status = "warning",
+                            observed = FALSE, expected = TRUE,
+                            details = "Production preflight was explicitly disabled.", stringsAsFactors = FALSE),
+         summary = list(failures = 0L, warnings = 1L, checks = 1L),
+         theta_inventory = joint_inla_preflight_theta_inventory(), build_path = cfg$inputs$stage3a_build)
+  }
+  paths$preflight <- joint_inla_preflight_write_audit(preflight_result, paths$preflight, overwrite = cfg$outputs$overwrite)
+  joint_inla_preflight_print(preflight_result, paths$preflight)
+  if (!isTRUE(preflight_result$success)) {
+    stop("Stage 3B production-artifact preflight failed. Review: ", paths$preflight, call. = FALSE)
+  }
   initialization <- joint_inla_fit_initialization(build, cfg)
   runtime_version <- joint_inla_fit_runtime_version()
   version_check <- joint_inla_fit_version_check(build, cfg, runtime_version, emit_warning = FALSE)
@@ -402,13 +421,13 @@ run_joint_inla_fit <- function(config_path, repo_root = getwd(), output_override
     audit <- joint_inla_fit_make_audit("dry_run", started, ended, build, cfg$inputs$stage3a_build, cfg, paths,
                                       runtime_version, version_check, initialization, effective_prior,
                                       warnings_captured, fit = NULL, dry_run = TRUE)
-    joint_inla_fit_print_dry_run(cfg$inputs$stage3a_build, paths, cfg, call, version_check, initialization, effective_prior)
+    joint_inla_fit_print_dry_run(cfg$inputs$stage3a_build, paths, cfg, call, version_check, initialization, effective_prior, preflight_result)
     return(invisible(list(config = cfg, paths = paths, call = call, call_metadata = call_metadata,
                           version_check = version_check, initialization = initialization,
                           effective_nbinomial_prior = effective_prior, audit = audit)))
   }
 
-  joint_inla_fit_output_preflight(paths, overwrite = cfg$outputs$overwrite)
+  joint_inla_fit_output_preflight(paths[c("fit", "audit", "metadata")], overwrite = cfg$outputs$overwrite)
   if (is.null(inla_function)) inla_function <- INLA::inla
   fit <- NULL
   fit_error <- NULL

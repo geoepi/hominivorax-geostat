@@ -23,6 +23,7 @@ if (!requireNamespace("INLA", quietly = TRUE)) {
   cfg <- joint_inla_fit_defaults()
   cfg$inputs$stage3a_build <- build_path
   cfg$project$output_directory <- file.path(tempdir(), "joint_inla_cli_root_output")
+  cfg$preflight$enabled <- FALSE
   external_config <- file.path(tempdir(), "external", "joint_inla_fit.yml")
   dir.create(dirname(external_config), recursive = TRUE, showWarnings = FALSE)
   yaml::write_yaml(cfg, external_config)

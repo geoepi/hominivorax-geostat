@@ -34,7 +34,7 @@ args <- commandArgs(trailingOnly = TRUE)
 parsed <- parse_joint_inla_fit_arguments(args)
 if (isTRUE(parsed$help)) {
   cat("Usage: Rscript scripts/run_joint_inla.R --config PATH [--output PATH] [--dry-run] [--overwrite]\n")
-  cat("Execute the validated Stage 3A joint INLA model; --dry-run resolves the call without fitting.\n")
+  cat("Execute the validated Stage 3A joint INLA model; --dry-run runs production preflight and resolves the call without fitting.\n")
   cat("Repository root is discovered from this script, independently of the configuration path.\n")
   quit(save = "no", status = 0L)
 }

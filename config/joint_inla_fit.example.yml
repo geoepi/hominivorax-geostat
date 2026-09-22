@@ -10,8 +10,13 @@ outputs:
   fit: joint_model_fit.rds
   audit: joint_model_fit_audit.csv
   metadata: joint_model_fit_metadata.rds
+  preflight: joint_inla_fit_preflight.csv
   # Set true, or pass --overwrite, only when replacing an existing run is intentional.
   overwrite: false
+
+preflight:
+  # Keep enabled for production. Dry-run fails before model execution on any required check.
+  enabled: true
 
 fit:
   quantiles: [0.025, 0.25, 0.5, 0.75, 0.975]

@@ -16,8 +16,10 @@ joint_inla_fit_defaults <- function() {
       fit = "joint_model_fit.rds",
       audit = "joint_model_fit_audit.csv",
       metadata = "joint_model_fit_metadata.rds",
+      preflight = "joint_inla_fit_preflight.csv",
       overwrite = FALSE
     ),
+    preflight = list(enabled = TRUE),
     fit = list(
       quantiles = c(0.025, 0.25, 0.5, 0.75, 0.975),
       control_fixed = list(prec = 1, prec.intercept = 1),
@@ -59,7 +61,7 @@ read_joint_inla_fit_config <- function(path, repo_root = getwd()) {
 }
 
 validate_joint_inla_fit_config <- function(cfg, require_input = TRUE) {
-  required <- c("project", "inputs", "outputs", "fit", "threads", "version_compatibility")
+  required <- c("project", "inputs", "outputs", "fit", "preflight", "threads", "version_compatibility")
   missing <- setdiff(required, names(cfg))
   if (length(missing)) stop("Stage 3B configuration is missing sections: ", paste(missing, collapse = ", "))
 
@@ -80,12 +82,13 @@ validate_joint_inla_fit_config <- function(cfg, require_input = TRUE) {
   if (isTRUE(require_input) && !file.exists(cfg$inputs$stage3a_build)) {
     stop("Stage 3A joint_inla_build.rds does not exist: ", cfg$inputs$stage3a_build)
   }
-  for (name in c("fit", "audit", "metadata")) {
+  for (name in c("fit", "audit", "metadata", "preflight")) {
     if (length(cfg$outputs[[name]]) != 1L || !nzchar(as.character(cfg$outputs[[name]]))) {
       stop("outputs.", name, " must be a non-empty path.")
     }
   }
   scalar_logical(cfg$outputs$overwrite, "outputs.overwrite")
+  scalar_logical(cfg$preflight$enabled, "preflight.enabled")
 
   if (!is.list(cfg$fit$control_fixed) || !is.list(cfg$fit$control_inla) ||
       !is.list(cfg$fit$control_compute) || !is.list(cfg$fit$control_predictor)) {
@@ -130,11 +133,14 @@ joint_inla_fit_output_paths <- function(cfg, output_override = NULL) {
   }
   audit_name <- cfg$outputs$audit
   metadata_name <- cfg$outputs$metadata
+  preflight_name <- cfg$outputs$preflight
   audit_path <- if (grepl("^[A-Za-z]:[/\\\\]|^/", audit_name)) normalizePath(audit_name, mustWork = FALSE) else file.path(output_directory, audit_name)
   metadata_path <- if (grepl("^[A-Za-z]:[/\\\\]|^/", metadata_name)) normalizePath(metadata_name, mustWork = FALSE) else file.path(output_directory, metadata_name)
+  preflight_path <- if (grepl("^[A-Za-z]:[/\\\\]|^/", preflight_name)) normalizePath(preflight_name, mustWork = FALSE) else file.path(output_directory, preflight_name)
   list(
     fit = normalizePath(fit_path, mustWork = FALSE),
     audit = normalizePath(audit_path, mustWork = FALSE),
-    metadata = normalizePath(metadata_path, mustWork = FALSE)
+    metadata = normalizePath(metadata_path, mustWork = FALSE),
+    preflight = normalizePath(preflight_path, mustWork = FALSE)
   )
 }
