@@ -130,6 +130,11 @@ if (!requireNamespace("INLA", quietly = TRUE)) {
             isFALSE(non_integer_result$success),
             any(non_integer_result$audit$check == "tier1_field_integer_valued" & non_integer_result$audit$status == "fail"))
 
+  active_row_y <- matrix(c(0, NA, NA, NA, NA, NA, 1, NA), nrow = 4L, ncol = 2L)
+  active_row_link <- c(1L, 1L, 2L, 2L)
+  stopifnot(identical(joint_inla_preflight_active_rows(active_row_y, active_row_link, 1L), c(TRUE, FALSE, FALSE, FALSE)),
+            identical(joint_inla_preflight_active_rows(active_row_y, active_row_link, 2L), c(FALSE, FALSE, TRUE, FALSE)))
+
   invalid_storage <- list(
     factor = factor(c(1, 2)), ordered = ordered(c(1, 2)),
     character = c("1", "2"), logical = c(TRUE, FALSE), list_column = list(1, 2)

@@ -31,6 +31,13 @@ joint_inla_preflight_covers_joint_rows <- function(value, n_rows) {
   !is.null(value) && length(n_rows) == 1L && !is.na(n_rows) && length(value) >= n_rows
 }
 
+joint_inla_preflight_active_rows <- function(Y, link, likelihood) {
+  if (!is.matrix(Y) || ncol(Y) < likelihood || length(link) != nrow(Y)) {
+    return(rep(FALSE, if (is.matrix(Y)) nrow(Y) else 0L))
+  }
+  !is.na(Y[, likelihood]) & link == likelihood
+}
+
 joint_inla_preflight_number <- function(value) {
   if (is.null(value) || !length(value)) return(NA_character_)
   if (any(!is.finite(value))) return(NA_character_)
@@ -171,6 +178,9 @@ joint_inla_preflight_build <- function(build, build_path = NA_character_, expect
   y2 <- if (y_ok) Y[, 2L] else NULL
   y1_active <- if (y_ok) !is.na(y1) else logical()
   y2_active <- if (y_ok) !is.na(y2) else logical()
+  tier1_active_rows <- if (y_ok) joint_inla_preflight_active_rows(Y, link, 1L) else rep(FALSE, n_for_rep)
+  tier2_active_rows <- if (y_ok) joint_inla_preflight_active_rows(Y, link, 2L) else rep(FALSE, n_for_rep)
+  observation_active <- y1_active | y2_active
   if (y_ok) {
     pass("response", "likelihood_1_non_na_count", sum(y1_active), "recorded", "Tier 1 response count.")
     pass("response", "likelihood_2_non_na_count", sum(y2_active), "recorded", "Tier 2 response count.")
@@ -244,7 +254,7 @@ joint_inla_preflight_build <- function(build, build_path = NA_character_, expect
   for (name in fixed_names) {
     value <- if (name %in% data_names) data[[name]] else NULL
     expected_likelihood <- if (name %in% tier1_fixed) "tier1" else if (name %in% tier2_fixed) "tier2" else "both"
-    active <- if (expected_likelihood == "tier1") tier1_rows else if (expected_likelihood == "tier2") tier2_rows else link_active
+    active <- if (expected_likelihood == "tier1") tier1_active_rows else if (expected_likelihood == "tier2") tier2_active_rows else observation_active
     storage_ok <- joint_inla_preflight_numeric_storage_ok(value)
     length_ok <- joint_inla_preflight_covers_joint_rows(value, n_rows)
     type_metrics <- list(
@@ -352,23 +362,23 @@ joint_inla_preflight_build <- function(build, build_path = NA_character_, expect
   }
 
   nspde <- as.integer(expected_nspde)
-  check_index("tier1_field", tier1_rows, expected_max = nspde)
-  check_index("tier1_field.group", tier1_rows, expected_max = expected_quarter_groups, exact_levels = seq_len(expected_quarter_groups))
-  check_index("week_steps", tier1_rows, expected_max = NULL, contiguous = TRUE)
-  check_index("admin_f", tier1_rows, expected_max = NULL, contiguous = TRUE)
-  check_index("tier2_field", tier2_rows, expected_max = nspde)
-  check_index("tier2_field.group", tier2_rows, expected_max = expected_quarter_groups, exact_levels = seq_len(expected_quarter_groups))
-  check_index("tier2_copy_field", tier2_rows, expected_max = nspde)
-  check_index("tier2_copy_field.group", tier2_rows, expected_max = expected_quarter_groups, exact_levels = seq_len(expected_quarter_groups))
-  check_index("tier2_week", tier2_rows, expected_max = NULL, contiguous = TRUE)
-  check_index("cattle_q", tier2_rows, expected_max = expected_cattle_bins, exact_levels = seq_len(expected_cattle_bins))
-  check_index("cattle_mid_log1p", tier2_rows, integer_valued = FALSE, expected_min = NULL)
+  check_index("tier1_field", tier1_active_rows, expected_max = nspde)
+  check_index("tier1_field.group", tier1_active_rows, expected_max = expected_quarter_groups, exact_levels = seq_len(expected_quarter_groups))
+  check_index("week_steps", tier1_active_rows, expected_max = NULL, contiguous = TRUE)
+  check_index("admin_f", tier1_active_rows, expected_max = NULL)
+  check_index("tier2_field", tier2_active_rows, expected_max = nspde)
+  check_index("tier2_field.group", tier2_active_rows, expected_max = expected_quarter_groups, exact_levels = seq_len(expected_quarter_groups))
+  check_index("tier2_copy_field", tier2_active_rows, expected_max = nspde)
+  check_index("tier2_copy_field.group", tier2_active_rows, expected_max = expected_quarter_groups, exact_levels = seq_len(expected_quarter_groups))
+  check_index("tier2_week", tier2_active_rows, expected_max = NULL, contiguous = TRUE)
+  check_index("cattle_q", tier2_active_rows, expected_max = expected_cattle_bins, exact_levels = seq_len(expected_cattle_bins))
+  check_index("cattle_mid_log1p", tier2_active_rows, integer_valued = FALSE, expected_min = NULL)
 
   if (link_ok) {
     observed_groups <- sort(unique(c(
-      data[["tier1_field.group"]][tier1_rows],
-      data[["tier2_field.group"]][tier2_rows],
-      data[["tier2_copy_field.group"]][tier2_rows]
+      data[["tier1_field.group"]][tier1_active_rows],
+      data[["tier2_field.group"]][tier2_active_rows],
+      data[["tier2_copy_field.group"]][tier2_active_rows]
     )))
     if (identical(as.integer(observed_groups), seq_len(expected_quarter_groups))) pass("random_effects", "quarter_group_count", length(observed_groups), expected_quarter_groups, "Quarter groups are exactly 1:8.")
     else fail("random_effects", "quarter_group_count", paste(observed_groups, collapse = ","), paste(seq_len(expected_quarter_groups), collapse = ","), "Quarter groups must be exactly 1:8.")
@@ -388,8 +398,8 @@ joint_inla_preflight_build <- function(build, build_path = NA_character_, expect
     row_sums <- tryCatch({
       if (inherits(A, "sparseMatrix") && requireNamespace("Matrix", quietly = TRUE)) as.numeric(Matrix::rowSums(A)) else rowSums(A)
     }, error = function(error) numeric())
-    if (length(row_sums) == n_rows && all(link_active)) {
-      zero_rows <- sum(link_active & row_sums == 0)
+    if (length(row_sums) == n_rows && all(observation_active)) {
+      zero_rows <- sum(observation_active & row_sums == 0)
       if (zero_rows == 0L) pass("projection", "active_nonzero_rows", zero_rows, 0L, "No active observation has a zero-sum projection row.")
       else fail("projection", "active_nonzero_rows", zero_rows, 0L, "Active observation has a zero-sum projection row.")
     } else fail("projection", "A_internal_dimensions", paste(length(row_sums), n_rows, sep = "/"), "row sums match joint rows", "Could not validate projection row sums.")
