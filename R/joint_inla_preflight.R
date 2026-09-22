@@ -38,6 +38,40 @@ joint_inla_preflight_active_rows <- function(Y, link, likelihood) {
   !is.na(Y[, likelihood]) & link == likelihood
 }
 
+joint_inla_preflight_projected_values <- function(value, A, active) {
+  active <- as.logical(active)
+  if (!length(active)) return(list(values = numeric(), missing_rows = integer(), referenced_columns = integer()))
+  if (is.null(A) || length(dim(A)) != 2L || nrow(A) != length(active) ||
+      !joint_inla_preflight_numeric_storage_ok(value) || !requireNamespace("Matrix", quietly = TRUE)) {
+    return(list(
+      values = value[seq_len(min(length(value), length(active)))][active],
+      missing_rows = integer(), referenced_columns = integer()
+    ))
+  }
+  n_predictors <- ncol(A)
+  if (length(value) < n_predictors) {
+    return(list(values = numeric(), missing_rows = which(active), referenced_columns = integer()))
+  }
+  value <- value[seq_len(n_predictors)]
+  support <- which(!is.na(value) | is.nan(value))
+  active_rows <- which(active)
+  if (!length(support) || !length(active_rows)) {
+    return(list(values = numeric(), missing_rows = active_rows, referenced_columns = integer()))
+  }
+  projected <- A[active_rows, support, drop = FALSE]
+  nonzero <- if (inherits(projected, "Matrix")) Matrix::which(projected != 0, arr.ind = TRUE) else which(projected != 0, arr.ind = TRUE)
+  if (!length(nonzero)) {
+    return(list(values = numeric(), missing_rows = active_rows, referenced_columns = integer()))
+  }
+  referenced_support <- sort(unique(nonzero[, "col"]))
+  represented_rows <- sort(unique(active_rows[nonzero[, "row"]]))
+  list(
+    values = value[support[referenced_support]],
+    missing_rows = setdiff(active_rows, represented_rows),
+    referenced_columns = support[referenced_support]
+  )
+}
+
 joint_inla_preflight_number <- function(value) {
   if (is.null(value) || !length(value)) return(NA_character_)
   if (any(!is.finite(value))) return(NA_character_)
@@ -116,6 +150,7 @@ joint_inla_preflight_build <- function(build, build_path = NA_character_, expect
       range_contiguity = metric_character("range_contiguity"),
       active_finite_count = metric_numeric("active_finite_count"),
       active_nonfinite_count = metric_numeric("active_nonfinite_count"),
+      active_unprojected_count = metric_numeric("active_unprojected_count"),
       stringsAsFactors = FALSE
     )
   }
@@ -231,6 +266,8 @@ joint_inla_preflight_build <- function(build, build_path = NA_character_, expect
     }
   }
 
+  n_predictors <- if (!is.null(A) && length(dim(A)) == 2L) ncol(A) else n_rows
+
   nspde_values <- c(
     tier1 = if (!is.null(build$spde$tier1$n.spde)) build$spde$tier1$n.spde else NA_integer_,
     tier2 = if (!is.null(build$spde$tier2$n.spde)) build$spde$tier2$n.spde else NA_integer_
@@ -256,27 +293,29 @@ joint_inla_preflight_build <- function(build, build_path = NA_character_, expect
     expected_likelihood <- if (name %in% tier1_fixed) "tier1" else if (name %in% tier2_fixed) "tier2" else "both"
     active <- if (expected_likelihood == "tier1") tier1_active_rows else if (expected_likelihood == "tier2") tier2_active_rows else observation_active
     storage_ok <- joint_inla_preflight_numeric_storage_ok(value)
-    length_ok <- joint_inla_preflight_covers_joint_rows(value, n_rows)
+    length_ok <- joint_inla_preflight_covers_joint_rows(value, n_predictors)
     type_metrics <- list(
       class = if (is.null(value)) NA_character_ else joint_inla_preflight_class(value),
       typeof = if (is.null(value)) NA_character_ else typeof(value),
       source_column = name,
       storage_accepted = storage_ok,
       length_observed = if (is.null(value)) NA_real_ else length(value),
-      length_expected = n_rows,
+      length_expected = n_predictors,
       length_matches = length_ok
     )
     if (storage_ok) pass("fixed_effects", paste0(name, "_type"), paste0("class=", joint_inla_preflight_class(value), "; typeof=", typeof(value), "; storage.mode=", joint_inla_preflight_storage(value)), "integer/double numeric atomic vector", "Fixed-effect storage type is accepted.", type_metrics)
     else fail("fixed_effects", paste0(name, "_type"), if (is.null(value)) "missing" else paste0("class=", joint_inla_preflight_class(value), "; typeof=", typeof(value), "; storage.mode=", joint_inla_preflight_storage(value)), "integer/double numeric atomic vector; no factor/ordered/character/logical/list", "Fixed-effect columns must use accepted numeric storage.", type_metrics)
-    if (storage_ok && length_ok) pass("fixed_effects", paste0(name, "_length"), length(value), paste0(">=", n_rows), "Fixed-effect column covers the joint rows; additional prediction rows are permitted.", type_metrics)
-    else if (storage_ok) fail("fixed_effects", paste0(name, "_length"), length(value), paste0(">=", n_rows), "Fixed-effect column is shorter than the joint stack row count.", type_metrics)
+    if (storage_ok && length_ok) pass("fixed_effects", paste0(name, "_length"), length(value), paste0(">=", n_predictors), "Fixed-effect column covers the joint predictor columns.", type_metrics)
+    else if (storage_ok) fail("fixed_effects", paste0(name, "_length"), length(value), paste0(">=", n_predictors), "Fixed-effect column is shorter than the joint predictor count.", type_metrics)
     if (storage_ok && length_ok) {
-      active_values <- value[seq_len(n_rows)][active]
+      projected_values <- joint_inla_preflight_projected_values(value, A, active)
+      active_values <- projected_values$values
       finite_mask <- is.finite(active_values)
-      invalid <- sum(!finite_mask)
+      invalid <- sum(!finite_mask) + length(projected_values$missing_rows)
       finite <- active_values[finite_mask]
       value_metrics <- c(type_metrics, list(
         active_finite_count = sum(finite_mask), active_nonfinite_count = invalid,
+        active_unprojected_count = length(projected_values$missing_rows),
         minimum = if (length(finite)) min(finite) else NA_real_,
         maximum = if (length(finite)) max(finite) else NA_real_,
         unique_count = length(unique(finite))
@@ -291,33 +330,35 @@ joint_inla_preflight_build <- function(build, build_path = NA_character_, expect
                           exact_levels = NULL, contiguous = FALSE) {
     value <- if (name %in% data_names) data[[name]] else NULL
     storage_ok <- joint_inla_preflight_numeric_storage_ok(value)
-    length_ok <- joint_inla_preflight_covers_joint_rows(value, n_rows)
+    length_ok <- joint_inla_preflight_covers_joint_rows(value, n_predictors)
     type_metrics <- list(
       class = if (is.null(value)) NA_character_ else joint_inla_preflight_class(value),
       typeof = if (is.null(value)) NA_character_ else typeof(value),
       source_column = name,
       storage_accepted = storage_ok,
       length_observed = if (is.null(value)) NA_real_ else length(value),
-      length_expected = n_rows,
+      length_expected = n_predictors,
       length_matches = length_ok,
       integer_valued_required = integer_valued
     )
     if (storage_ok) pass("random_effects", paste0(name, "_type"), paste0("class=", joint_inla_preflight_class(value), "; typeof=", typeof(value), "; storage.mode=", joint_inla_preflight_storage(value)), "integer/double numeric atomic vector", "Random-effect/index storage type is accepted.", type_metrics)
     else fail("random_effects", paste0(name, "_type"), if (is.null(value)) "missing" else paste0("class=", joint_inla_preflight_class(value), "; typeof=", typeof(value), "; storage.mode=", joint_inla_preflight_storage(value)), "integer/double numeric atomic vector; no factor/ordered/character/logical/list", "Random-effect/index variables must use accepted numeric storage.", type_metrics)
     if (storage_ok && !length_ok) {
-      fail("random_effects", paste0(name, "_length"), length(value), paste0(">=", n_rows), "Random-effect/index variable is shorter than the joint stack row count.", type_metrics)
+      fail("random_effects", paste0(name, "_length"), length(value), paste0(">=", n_predictors), "Random-effect/index variable is shorter than the joint predictor count.", type_metrics)
       return(invisible(FALSE))
     }
-    if (storage_ok) pass("random_effects", paste0(name, "_length"), length(value), paste0(">=", n_rows), "Random-effect/index variable covers the joint rows; additional prediction rows are permitted.", type_metrics)
+    if (storage_ok) pass("random_effects", paste0(name, "_length"), length(value), paste0(">=", n_predictors), "Random-effect/index variable covers the joint predictor columns.", type_metrics)
     if (!storage_ok) return(invisible(FALSE))
-    active_values <- value[seq_len(n_rows)][active]
+    projected_values <- joint_inla_preflight_projected_values(value, A, active)
+    active_values <- projected_values$values
     finite_mask <- is.finite(active_values)
-    invalid_finite <- sum(!finite_mask)
+    invalid_finite <- sum(!finite_mask) + length(projected_values$missing_rows)
     finite <- active_values[finite_mask]
     integer_observed <- joint_inla_preflight_integer_observed(active_values)
     finite_metrics <- c(type_metrics, list(
       integer_valued_observed = integer_observed,
       active_finite_count = sum(finite_mask), active_nonfinite_count = invalid_finite,
+      active_unprojected_count = length(projected_values$missing_rows),
       minimum = if (length(finite)) min(finite) else NA_real_,
       maximum = if (length(finite)) max(finite) else NA_real_,
       unique_count = if (length(finite)) length(unique(finite)) else 0L
@@ -376,9 +417,9 @@ joint_inla_preflight_build <- function(build, build_path = NA_character_, expect
 
   if (link_ok) {
     observed_groups <- sort(unique(c(
-      data[["tier1_field.group"]][tier1_active_rows],
-      data[["tier2_field.group"]][tier2_active_rows],
-      data[["tier2_copy_field.group"]][tier2_active_rows]
+      joint_inla_preflight_projected_values(data[["tier1_field.group"]], A, tier1_active_rows)$values,
+      joint_inla_preflight_projected_values(data[["tier2_field.group"]], A, tier2_active_rows)$values,
+      joint_inla_preflight_projected_values(data[["tier2_copy_field.group"]], A, tier2_active_rows)$values
     )))
     if (identical(as.integer(observed_groups), seq_len(expected_quarter_groups))) pass("random_effects", "quarter_group_count", length(observed_groups), expected_quarter_groups, "Quarter groups are exactly 1:8.")
     else fail("random_effects", "quarter_group_count", paste(observed_groups, collapse = ","), paste(seq_len(expected_quarter_groups), collapse = ","), "Quarter groups must be exactly 1:8.")
@@ -398,7 +439,7 @@ joint_inla_preflight_build <- function(build, build_path = NA_character_, expect
     row_sums <- tryCatch({
       if (inherits(A, "sparseMatrix") && requireNamespace("Matrix", quietly = TRUE)) as.numeric(Matrix::rowSums(A)) else rowSums(A)
     }, error = function(error) numeric())
-    if (length(row_sums) == n_rows && all(observation_active)) {
+    if (length(row_sums) == n_rows && length(observation_active) == n_rows) {
       zero_rows <- sum(observation_active & row_sums == 0)
       if (zero_rows == 0L) pass("projection", "active_nonzero_rows", zero_rows, 0L, "No active observation has a zero-sum projection row.")
       else fail("projection", "active_nonzero_rows", zero_rows, 0L, "Active observation has a zero-sum projection row.")
