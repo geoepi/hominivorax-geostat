@@ -40,33 +40,35 @@ joint_inla_preflight_active_rows <- function(Y, link, likelihood) {
 
 joint_inla_preflight_projected_values <- function(value, A, active) {
   active <- as.logical(active)
-  if (!length(active)) return(list(values = numeric(), missing_rows = integer(), referenced_columns = integer()))
+  if (!length(active)) return(list(values = numeric(), row_values = numeric(), missing_rows = integer(), referenced_columns = integer()))
   if (is.null(A) || length(dim(A)) != 2L || nrow(A) != length(active) ||
       !joint_inla_preflight_numeric_storage_ok(value) || !requireNamespace("Matrix", quietly = TRUE)) {
+    row_values <- value[seq_len(min(length(value), length(active)))][active]
     return(list(
-      values = value[seq_len(min(length(value), length(active)))][active],
+      values = row_values, row_values = row_values,
       missing_rows = integer(), referenced_columns = integer()
     ))
   }
   n_predictors <- ncol(A)
   if (length(value) < n_predictors) {
-    return(list(values = numeric(), missing_rows = which(active), referenced_columns = integer()))
+    return(list(values = numeric(), row_values = numeric(), missing_rows = which(active), referenced_columns = integer()))
   }
   value <- value[seq_len(n_predictors)]
   support <- which(!is.na(value) | is.nan(value))
   active_rows <- which(active)
   if (!length(support) || !length(active_rows)) {
-    return(list(values = numeric(), missing_rows = active_rows, referenced_columns = integer()))
+    return(list(values = numeric(), row_values = numeric(), missing_rows = active_rows, referenced_columns = integer()))
   }
   projected <- A[active_rows, support, drop = FALSE]
   nonzero <- if (inherits(projected, "Matrix")) Matrix::which(projected != 0, arr.ind = TRUE) else which(projected != 0, arr.ind = TRUE)
   if (!length(nonzero)) {
-    return(list(values = numeric(), missing_rows = active_rows, referenced_columns = integer()))
+    return(list(values = numeric(), row_values = numeric(), missing_rows = active_rows, referenced_columns = integer()))
   }
   referenced_support <- sort(unique(nonzero[, "col"]))
   represented_rows <- sort(unique(active_rows[nonzero[, "row"]]))
   list(
     values = value[support[referenced_support]],
+    row_values = value[support[nonzero[, "col"]]],
     missing_rows = setdiff(active_rows, represented_rows),
     referenced_columns = support[referenced_support]
   )
@@ -151,6 +153,12 @@ joint_inla_preflight_build <- function(build, build_path = NA_character_, expect
       active_finite_count = metric_numeric("active_finite_count"),
       active_nonfinite_count = metric_numeric("active_nonfinite_count"),
       active_unprojected_count = metric_numeric("active_unprojected_count"),
+      configured_bin_count = metric_numeric("configured_bin_count"),
+      full_support_bin_count = metric_numeric("full_support_bin_count"),
+      active_bin_count = metric_numeric("active_bin_count"),
+      active_missing_bins = metric_character("active_missing_bins"),
+      active_counts_by_bin = metric_character("active_counts_by_bin"),
+      active_support_proportion = metric_numeric("active_support_proportion"),
       stringsAsFactors = FALSE
     )
   }
@@ -402,18 +410,122 @@ joint_inla_preflight_build <- function(build, build_path = NA_character_, expect
     invisible(TRUE)
   }
 
+  check_cattle_rw2_support <- function() {
+    configured_bins <- seq_len(expected_cattle_bins)
+    q_value <- if ("cattle_q" %in% data_names) data[["cattle_q"]] else NULL
+    mid_value <- if ("cattle_mid_log1p" %in% data_names) data[["cattle_mid_log1p"]] else NULL
+    q_full <- joint_inla_preflight_projected_values(q_value, A, tier2_rows)
+    mid_full <- joint_inla_preflight_projected_values(mid_value, A, tier2_rows)
+    q_full_values <- q_full$row_values
+    if (!length(q_full_values)) q_full_values <- q_full$values
+    mid_full_values <- mid_full$row_values
+    if (!length(mid_full_values)) mid_full_values <- mid_full$values
+
+    q_finite <- is.finite(q_full_values)
+    q_integer <- joint_inla_preflight_integer_observed(q_full_values)
+    q_finite_values <- q_full_values[q_finite]
+    q_levels <- if (length(q_finite_values) && isTRUE(q_integer)) sort(unique(as.integer(round(q_finite_values)))) else sort(unique(q_finite_values))
+    q_invalid <- length(q_full$missing_rows) + sum(!q_finite)
+    if (length(q_finite_values) && isTRUE(q_integer)) q_invalid <- q_invalid + sum(abs(q_finite_values - round(q_finite_values)) > sqrt(.Machine$double.eps))
+    if (length(q_finite_values)) q_invalid <- q_invalid + sum(q_finite_values < 1L | q_finite_values > expected_cattle_bins)
+    full_support_valid <- joint_inla_preflight_numeric_storage_ok(q_value) &&
+      joint_inla_preflight_covers_joint_rows(q_value, n_predictors) &&
+      isTRUE(q_integer) && q_invalid == 0L && identical(q_levels, as.integer(configured_bins))
+
+    active_q_values <- joint_inla_preflight_projected_values(q_value, A, tier2_active_rows)$row_values
+    active_q_finite <- is.finite(active_q_values)
+    active_q_integer <- joint_inla_preflight_integer_observed(active_q_values)
+    active_q_finite_values <- active_q_values[active_q_finite]
+    active_q_valid <- active_q_finite_values[isTRUE(active_q_integer) &
+      abs(active_q_finite_values - round(active_q_finite_values)) <= sqrt(.Machine$double.eps)]
+    active_q_valid <- active_q_valid[active_q_valid >= 1L & active_q_valid <= expected_cattle_bins]
+    active_counts <- tabulate(match(active_q_valid, configured_bins), nbins = expected_cattle_bins)
+    active_levels <- configured_bins[active_counts > 0L]
+    active_missing <- setdiff(configured_bins, active_levels)
+    active_counts_text <- paste(paste0(configured_bins, "=", active_counts), collapse = ";")
+    occupancy_metrics <- list(
+      configured_bin_count = expected_cattle_bins,
+      full_support_bin_count = length(q_levels),
+      active_bin_count = length(active_levels),
+      active_missing_bins = paste(active_missing, collapse = ","),
+      active_counts_by_bin = active_counts_text,
+      active_support_proportion = length(active_levels) / expected_cattle_bins
+    )
+    support_metrics <- c(occupancy_metrics, list(
+      source_column = "cattle_q",
+      class = if (is.null(q_value)) NA_character_ else joint_inla_preflight_class(q_value),
+      typeof = if (is.null(q_value)) NA_character_ else typeof(q_value),
+      storage_accepted = joint_inla_preflight_numeric_storage_ok(q_value),
+      length_observed = if (is.null(q_value)) NA_real_ else length(q_value),
+      length_expected = n_predictors,
+      length_matches = joint_inla_preflight_covers_joint_rows(q_value, n_predictors),
+      integer_valued_required = TRUE,
+      integer_valued_observed = q_integer,
+      minimum = if (length(q_finite_values)) min(q_finite_values) else NA_real_,
+      maximum = if (length(q_finite_values)) max(q_finite_values) else NA_real_,
+      unique_count = length(q_levels),
+      active_finite_count = sum(active_q_finite),
+      active_nonfinite_count = sum(!active_q_finite),
+      active_unprojected_count = length(joint_inla_preflight_projected_values(q_value, A, tier2_active_rows)$missing_rows)
+    ))
+    if (full_support_valid) {
+      pass("random_effects", "cattle_rw2_feature_support", paste(q_levels, collapse = ","), paste(configured_bins, collapse = ","), "Full fitted Tier 2 cattle_q support is exactly 1:22 and finite/integer-valued.", support_metrics)
+    } else {
+      fail("random_effects", "cattle_rw2_feature_support", paste(q_levels, collapse = ","), paste(configured_bins, collapse = ","), "Full fitted Tier 2 cattle_q support must be finite, integer-valued, within 1:22, and contain every configured bin.", support_metrics)
+    }
+
+    minimum_active_bins <- 5L
+    if (length(active_levels) >= minimum_active_bins) {
+      pass("random_effects", "cattle_rw2_active_structural_support", length(active_levels), paste0(">=", minimum_active_bins), "At least five response-active cattle bins provide a conservative minimum for the intended RW2 structure without requiring all 22 bins to be directly observed.", occupancy_metrics)
+    } else {
+      fail("random_effects", "cattle_rw2_active_structural_support", length(active_levels), paste0(">=", minimum_active_bins), "Too few response-active cattle bins to support the intended RW2 structure; at least five distinct bins are required.", occupancy_metrics)
+    }
+    warning_text <- "Some cattle RW2 levels have no direct response-active Tier 2 observations. Their effects are informed by the RW2 prior and neighboring occupied levels."
+    if (length(active_missing)) {
+      warn("random_effects", "cattle_rw2_active_occupancy", paste(active_levels, collapse = ","), paste(active_missing, collapse = ","), warning_text, occupancy_metrics)
+    } else {
+      pass("random_effects", "cattle_rw2_active_occupancy", paste(active_levels, collapse = ","), paste(configured_bins, collapse = ","), "All configured cattle RW2 bins have direct response-active Tier 2 observations.", occupancy_metrics)
+    }
+
+    mid_finite <- is.finite(mid_full_values)
+    mid_alignment <- joint_inla_preflight_numeric_storage_ok(mid_value) &&
+      joint_inla_preflight_covers_joint_rows(mid_value, n_predictors) &&
+      length(mid_full$missing_rows) == 0L && all(mid_finite) &&
+      identical(sort(q_full$referenced_columns), sort(mid_full$referenced_columns))
+    mid_metrics <- c(occupancy_metrics, list(
+      source_column = "cattle_mid_log1p",
+      class = if (is.null(mid_value)) NA_character_ else joint_inla_preflight_class(mid_value),
+      typeof = if (is.null(mid_value)) NA_character_ else typeof(mid_value),
+      storage_accepted = joint_inla_preflight_numeric_storage_ok(mid_value),
+      length_observed = if (is.null(mid_value)) NA_real_ else length(mid_value),
+      length_expected = n_predictors,
+      length_matches = joint_inla_preflight_covers_joint_rows(mid_value, n_predictors),
+      integer_valued_required = FALSE,
+      integer_valued_observed = joint_inla_preflight_integer_observed(mid_full_values),
+      minimum = if (length(mid_full_values[mid_finite])) min(mid_full_values[mid_finite]) else NA_real_,
+      maximum = if (length(mid_full_values[mid_finite])) max(mid_full_values[mid_finite]) else NA_real_,
+      unique_count = length(unique(mid_full_values[mid_finite])),
+      active_finite_count = sum(is.finite(joint_inla_preflight_projected_values(mid_value, A, tier2_active_rows)$row_values)),
+      active_nonfinite_count = sum(!is.finite(joint_inla_preflight_projected_values(mid_value, A, tier2_active_rows)$row_values), na.rm = TRUE),
+      active_unprojected_count = length(joint_inla_preflight_projected_values(mid_value, A, tier2_active_rows)$missing_rows)
+    ))
+    if (mid_alignment) pass("random_effects", "cattle_mid_log1p_feature_alignment", "finite and aligned", "finite and aligned with cattle_q", "cattle_mid_log1p is finite across the full Tier 2 support and references the same projected rows as cattle_q.", mid_metrics)
+    else fail("random_effects", "cattle_mid_log1p_feature_alignment", "not finite or not aligned", "finite and aligned with cattle_q", "cattle_mid_log1p must be finite and aligned with the full fitted cattle_q support.", mid_metrics)
+  }
+
   nspde <- as.integer(expected_nspde)
   check_index("tier1_field", tier1_active_rows, expected_max = nspde)
   check_index("tier1_field.group", tier1_active_rows, expected_max = expected_quarter_groups, exact_levels = seq_len(expected_quarter_groups))
-  check_index("week_steps", tier1_active_rows, expected_max = NULL, contiguous = TRUE)
+  check_index("week_steps", tier1_rows, expected_max = NULL, contiguous = TRUE)
   check_index("admin_f", tier1_active_rows, expected_max = NULL)
   check_index("tier2_field", tier2_active_rows, expected_max = nspde)
   check_index("tier2_field.group", tier2_active_rows, expected_max = expected_quarter_groups, exact_levels = seq_len(expected_quarter_groups))
   check_index("tier2_copy_field", tier2_active_rows, expected_max = nspde)
   check_index("tier2_copy_field.group", tier2_active_rows, expected_max = expected_quarter_groups, exact_levels = seq_len(expected_quarter_groups))
-  check_index("tier2_week", tier2_active_rows, expected_max = NULL, contiguous = TRUE)
-  check_index("cattle_q", tier2_active_rows, expected_max = expected_cattle_bins, exact_levels = seq_len(expected_cattle_bins))
+  check_index("tier2_week", tier2_rows, expected_max = NULL, contiguous = TRUE)
+  check_index("cattle_q", tier2_active_rows, expected_max = expected_cattle_bins)
   check_index("cattle_mid_log1p", tier2_active_rows, integer_valued = FALSE, expected_min = NULL)
+  check_cattle_rw2_support()
 
   if (link_ok) {
     observed_groups <- sort(unique(c(

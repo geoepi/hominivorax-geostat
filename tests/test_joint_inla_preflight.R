@@ -5,7 +5,7 @@ load_joint_inla_fit(repo_root)
 if (!requireNamespace("INLA", quietly = TRUE)) {
   cat("Stage 3B production preflight tests skipped: INLA is unavailable\n")
 } else {
-  make_production_shaped_build <- function(path, invalid_cattle_bin = FALSE, effect_overrides = list()) {
+  make_production_shaped_build <- function(path, invalid_cattle_bin = FALSE, effect_overrides = list(), inactive_cattle_bins = integer()) {
     n_tier1 <- 8L
     n_tier2 <- 22L
     n <- n_tier1 + n_tier2
@@ -52,6 +52,7 @@ if (!requireNamespace("INLA", quietly = TRUE)) {
     Y <- matrix(NA_real_, nrow = n, ncol = 2L, dimnames = list(NULL, c("binomial", "nbinomial")))
     Y[tier1, 1L] <- c(0, 1, 0, 1, 0, 1, 0, 1)
     Y[tier2, 2L] <- seq_len(n_tier2)
+    if (length(inactive_cattle_bins)) Y[which(tier2)[inactive_cattle_bins], 2L] <- NA_real_
     e <- c(rep(NA_real_, n_tier1), seq_len(n_tier2) + 10)
     link <- c(rep(1L, n_tier1), rep(2L, n_tier2))
     joint_stack <- INLA::inla.stack(data = list(Y = Y, e = e, link = link),
@@ -105,7 +106,9 @@ if (!requireNamespace("INLA", quietly = TRUE)) {
   stopifnot(isTRUE(result$success), result$summary$failures == 0L,
             nrow(result$theta_inventory) == 10L,
             any(result$audit$check == "tier1_mesh_nspde"),
-            any(result$audit$check == "cattle_q_levels"),
+            any(result$audit$check == "cattle_rw2_feature_support" & result$audit$status == "pass"),
+            any(result$audit$check == "cattle_rw2_active_occupancy" & result$audit$status == "pass"),
+            !any(result$audit$check == "cattle_rw2_active_occupancy" & result$audit$status == "warning"),
             any(result$audit$check == "object_hyper_copy"),
             any(result$audit$check == "prediction_required_variables_finite"),
             any(result$audit$status == "warning"))
@@ -114,9 +117,9 @@ if (!requireNamespace("INLA", quietly = TRUE)) {
   integer_values <- c(seq_len(8L), rep(NA_integer_, 22L))
   double_integer_values <- as.numeric(integer_values)
   double_non_integer_values <- c(seq_len(8L) + 0.5, rep(NA_real_, 22L))
-  run_variant <- function(label, effect_overrides) {
+  run_variant <- function(label, effect_overrides = list(), inactive_cattle_bins = integer()) {
     variant_path <- file.path(tempdir(), paste0("joint_inla_preflight_", label, ".rds"))
-    make_production_shaped_build(variant_path, effect_overrides = effect_overrides)
+    make_production_shaped_build(variant_path, effect_overrides = effect_overrides, inactive_cattle_bins = inactive_cattle_bins)
     joint_inla_preflight_build(joint_inla_fit_read_build(variant_path), variant_path)
   }
   integer_result <- run_variant("integer_storage", list(tier1_field = integer_values))
@@ -129,6 +132,26 @@ if (!requireNamespace("INLA", quietly = TRUE)) {
             identical(double_result$audit$typeof[double_result$audit$check == "tier1_field_type"], "double"),
             isFALSE(non_integer_result$success),
             any(non_integer_result$audit$check == "tier1_field_integer_valued" & non_integer_result$audit$status == "fail"))
+
+  twenty_active_result <- run_variant("twenty_active_cattle_bins", inactive_cattle_bins = c(1L, 3L))
+  twenty_occupancy <- twenty_active_result$audit[twenty_active_result$audit$check == "cattle_rw2_active_occupancy", , drop = FALSE]
+  stopifnot(isTRUE(twenty_active_result$success), nrow(twenty_occupancy) == 1L,
+            identical(twenty_occupancy$status[[1L]], "warning"),
+            identical(twenty_occupancy$full_support_bin_count[[1L]], 22),
+            identical(twenty_occupancy$active_bin_count[[1L]], 20),
+            identical(twenty_occupancy$active_missing_bins[[1L]], "1,3"),
+            identical(twenty_occupancy$active_counts_by_bin[[1L]], paste(c("1=0", "2=1", "3=0", paste0(seq.int(4L, 22L), "=1")), collapse = ";")),
+            identical(twenty_occupancy$details[[1L]], "Some cattle RW2 levels have no direct response-active Tier 2 observations. Their effects are informed by the RW2 prior and neighboring occupied levels."),
+            isTRUE(all.equal(twenty_occupancy$active_support_proportion[[1L]], 20 / 22)))
+
+  sparse_active_result <- run_variant("sparse_active_cattle_bins", inactive_cattle_bins = seq.int(5L, 22L))
+  stopifnot(isFALSE(sparse_active_result$success),
+            any(sparse_active_result$audit$check == "cattle_rw2_active_structural_support" & sparse_active_result$audit$status == "fail"))
+
+  missing_full_support <- c(rep(NA_real_, 8L), c(2, 2, seq.int(3L, 22L)))
+  missing_full_result <- run_variant("missing_full_cattle_support", effect_overrides = list(cattle_q = missing_full_support))
+  stopifnot(isFALSE(missing_full_result$success),
+            any(missing_full_result$audit$check == "cattle_rw2_feature_support" & missing_full_result$audit$status == "fail"))
 
   active_row_y <- matrix(c(0, NA, NA, NA, NA, NA, 1, NA), nrow = 4L, ncol = 2L)
   active_row_link <- c(1L, 1L, 2L, 2L)
@@ -160,9 +183,11 @@ if (!requireNamespace("INLA", quietly = TRUE)) {
   required_fixed_columns <- c("intercept1", "intercept2", "north", "road_dens", "night_illum",
                               "mintemp", "soilmoist", "leafarea", "rhum", "cattle", "horses",
                               "pigs", "goats", "sheep")
-  stopifnot(all(required_fixed_columns %in% fixed_summary$source_column),
+        stopifnot(all(required_fixed_columns %in% fixed_summary$source_column),
             all(c("class", "typeof", "storage_accepted", "active_finite_count",
-                  "active_nonfinite_count", "minimum", "maximum", "unique_count") %in% names(result$audit)))
+                  "active_nonfinite_count", "minimum", "maximum", "unique_count",
+                  "configured_bin_count", "full_support_bin_count", "active_bin_count",
+                  "active_missing_bins", "active_counts_by_bin", "active_support_proportion") %in% names(result$audit)))
   fixed_rows <- fixed_summary[match(required_fixed_columns, fixed_summary$source_column), , drop = FALSE]
   stopifnot(all(fixed_rows$storage_accepted), all(fixed_rows$active_nonfinite_count == 0),
             all(is.finite(fixed_rows$minimum)), all(is.finite(fixed_rows$maximum)),
@@ -180,7 +205,7 @@ if (!requireNamespace("INLA", quietly = TRUE)) {
   invalid_path <- file.path(tempdir(), "joint_inla_invalid_build.rds")
   invalid_build <- make_production_shaped_build(invalid_path, invalid_cattle_bin = TRUE)
   invalid <- joint_inla_preflight_build(joint_inla_fit_read_build(invalid_path), invalid_path)
-  stopifnot(isFALSE(invalid$success), any(invalid$audit$check == "cattle_q_levels" & invalid$audit$status == "fail"))
+  stopifnot(isFALSE(invalid$success), any(invalid$audit$check == "cattle_rw2_feature_support" & invalid$audit$status == "fail"))
 
   invalid_cfg <- cfg
   invalid_cfg$inputs$stage3a_build <- invalid_path
