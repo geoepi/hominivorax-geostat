@@ -110,6 +110,7 @@ metadata <- list(
   generated_utc = format(Sys.time(), tz = "UTC"),
   repository = list(root = repo_root, git_head = paste(git_head, collapse = "")),
   inputs = list(build = normalizePath(build_path, mustWork = TRUE), fit = normalizePath(fit_path, mustWork = TRUE), holdout = normalizePath(holdout_path, mustWork = TRUE), stage2 = normalizePath(stage2_path, mustWork = TRUE), fit_sha256 = fit_checksum, holdout_sha256_before = holdout_checksum_before, holdout_sha256_after = holdout_checksum_after, stage2_sha256 = stage2_checksum),
+  stage3a_provenance = build$provenance,
   tier1_semantics = list(
     positive_population = "6,638 Stage 2 withheld Yi=1 occurrence rows",
     background_population = reference_background$background_rule,
@@ -133,7 +134,11 @@ metadata <- list(
                        weighted_cbi = tier1_presence$weighted_cbi, unweighted_cbi = tier1_presence$unweighted_cbi),
   tier2_reconciliation = list(expected = expected_tier2, observed = observed_tier2, differences = tier2_differences, tolerance = 1e-6, point_validation = "COMPLETE"),
   posterior_predictive_intervals = list(status = "UNAVAILABLE_FROM_CURRENT_RETAINED_FIT_ARTIFACT", method = posterior_support$method, details = posterior_support$details),
-  software = list(R = R.version.string, INLA = if (requireNamespace("INLA", quietly = TRUE)) as.character(utils::packageVersion("INLA")) else "not loaded for validation"),
+  software = list(
+    R = R.version.string,
+    INLA_fit_provenance = if (!is.null(build$provenance$INLA)) as.character(build$provenance$INLA) else NA_character_,
+    INLA_validation_runtime = if (requireNamespace("INLA", quietly = TRUE)) as.character(utils::packageVersion("INLA")) else "not loaded for validation"
+  ),
   output_paths = paths,
   audit_summary = list(pass = sum(audit$status == "PASS"), warning = sum(audit$status == "WARNING"), fail = sum(audit$status == "FAIL")),
   scope = list(stage3b_refit = FALSE, model_changed = FALSE, prediction_grid_projected = FALSE, surfaces_created = FALSE, biological_interpretation = FALSE)
