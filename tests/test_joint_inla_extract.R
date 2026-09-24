@@ -1,5 +1,6 @@
 repo_root <- normalizePath(".", mustWork = TRUE)
 source(file.path(repo_root, "R", "joint_inla_extract.R"))
+source(file.path(repo_root, "R", "joint_inla_fit.R"))
 
 stack_data <- data.frame(
   Y.1 = c(1, NA, 0, NA, NA, NA),
@@ -59,7 +60,7 @@ fit <- list(
 stopifnot(identical(joint_inla_stack_tags(build), c("tier1", "tier2")))
 row_map <- joint_inla_extract_row_map(build, stage2)
 stopifnot(identical(row_map$stack_row, 1:6), identical(row_map$tier, c(rep("tier1", 3), rep("tier2", 3))),
-          identical(row_map$source_row, 1:6), identical(row_map$family_index, stack_data$link),
+          identical(row_map$source_row, c(1:3, 1:3)), identical(row_map$family_index, stack_data$link),
           identical(row_map$source_is_test_point, c(FALSE, TRUE, FALSE, FALSE, TRUE, FALSE)))
 fitted <- joint_inla_extract_fitted_values(build, fit, stage2)
 stopifnot(identical(fitted$output_index, 1:6), identical(fitted$fitted_mean, fit$summary.fitted.values$mean[1:6]))
@@ -78,5 +79,6 @@ stopifnot(all(vapply(spde, nrow, integer(1L)) == 4L), identical(spde$tier1_field
 criteria <- joint_inla_extract_criteria(build, fit)
 stopifnot(all(criteria$reconciliation$pass), abs(criteria$reconciliation$difference) < 1e-12)
 mlik <- joint_inla_extract_marginal_log_likelihood(fit)
-stopifnot(identical(mlik$value[1], -5))
+stopifnot(identical(mlik$value[1], -5), identical(joint_inla_fit_marginal_log_likelihood(fit$mlik), -5),
+          identical(joint_inla_fit_summary_values(list(mlik = fit$mlik))$marginal_log_likelihood, -5))
 cat("Stage 3B extraction tests passed\n")
