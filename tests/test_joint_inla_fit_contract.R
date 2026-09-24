@@ -144,6 +144,12 @@ if (!requireNamespace("INLA", quietly = TRUE)) {
     dic = list(dic = 3), waic = list(waic = 4),
     mlik = data.frame(`log marginal likelihood` = -5)
   )
+  matrix_mlik <- matrix(c(-5, -4), nrow = 2L, dimnames = list(
+    c("log marginal-likelihood (integration)", "log marginal-likelihood (Gaussian)"), NULL
+  ))
+  stopifnot(identical(joint_inla_fit_marginal_log_likelihood(matrix_mlik), -5),
+            identical(joint_inla_fit_marginal_log_likelihood(fake_fit$mlik), -5),
+            identical(joint_inla_fit_summary_values(list(mlik = matrix_mlik))$marginal_log_likelihood, -5))
   strict_inla_mock <- function(...) {
     args <- list(...)
     stopifnot(!"A" %in% names(args), !"link" %in% names(args),

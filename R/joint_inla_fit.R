@@ -225,6 +225,37 @@ joint_inla_fit_source_provenance <- function(build, build_path, cfg, paths, runt
   )
 }
 
+joint_inla_fit_marginal_log_likelihood <- function(value) {
+  if (is.null(value)) return(NA_real_)
+  if (is.data.frame(value) || is.matrix(value)) {
+    matrix_value <- as.matrix(value)
+    row_labels <- rownames(matrix_value)
+    if (!is.null(row_labels)) {
+      integration <- grep("log marginal likelihood.*integration|integration.*log marginal likelihood", row_labels, ignore.case = TRUE)
+      if (length(integration)) {
+        candidate <- as.numeric(matrix_value[integration[[1L]], ])[1L]
+        if (is.finite(candidate)) return(candidate)
+      }
+    }
+    column_labels <- colnames(matrix_value)
+    if (!is.null(column_labels)) {
+      labelled <- grep("log marginal likelihood", column_labels, ignore.case = TRUE)
+      if (length(labelled)) {
+        candidate <- as.numeric(matrix_value[1L, labelled[[1L]]])
+        if (is.finite(candidate)) return(candidate)
+      }
+    }
+    finite <- as.numeric(matrix_value)
+    finite <- finite[is.finite(finite)]
+    return(if (length(finite)) finite[[1L]] else NA_real_)
+  }
+  if (is.numeric(value) && length(value)) {
+    finite <- as.numeric(value)[is.finite(as.numeric(value))]
+    return(if (length(finite)) finite[[1L]] else NA_real_)
+  }
+  NA_real_
+}
+
 joint_inla_fit_summary_values <- function(fit) {
   if (is.null(fit)) {
     return(list(number_hyperparameters = NA_integer_, number_fixed_effects = NA_integer_,
@@ -236,15 +267,7 @@ joint_inla_fit_summary_values <- function(fit) {
   n_random <- if (!is.null(fit$summary.random)) length(fit$summary.random) else NA_integer_
   dic <- if (!is.null(fit$dic$dic)) as.numeric(fit$dic$dic)[[1L]] else NA_real_
   waic <- if (!is.null(fit$waic$waic)) as.numeric(fit$waic$waic)[[1L]] else NA_real_
-  mlik <- NA_real_
-  if (!is.null(fit$mlik)) {
-    if (is.data.frame(fit$mlik) || is.matrix(fit$mlik)) {
-      col <- grep("log marginal likelihood", colnames(fit$mlik), ignore.case = TRUE)
-      if (length(col)) mlik <- as.numeric(fit$mlik[1L, col[[1L]]])
-    } else if (is.numeric(fit$mlik) && length(fit$mlik)) {
-      mlik <- as.numeric(fit$mlik[[1L]])
-    }
-  }
+  mlik <- joint_inla_fit_marginal_log_likelihood(fit$mlik)
   list(number_hyperparameters = n_hyper, number_fixed_effects = n_fixed,
        number_random_effect_components = n_random, dic = dic, waic = waic,
        marginal_log_likelihood = mlik)
