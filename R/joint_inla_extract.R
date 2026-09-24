@@ -282,7 +282,10 @@ joint_inla_extract_criteria <- function(build, fit_artifact, tolerance = 1e-6) {
   )))
   global <- data.frame(metric = c("dic", "waic"), value = c(as.numeric(fit$dic$dic)[[1L]], as.numeric(fit$waic$waic)[[1L]]), stringsAsFactors = FALSE)
   local_totals <- c(dic = sum(by_family$dic), waic = sum(by_family$waic))
-  differences <- c(dic = global$value[global$metric == "dic"] - local_totals[["dic"], drop = TRUE], waic = global$value[global$metric == "waic"] - local_totals[["waic"], drop = TRUE])
+  differences <- c(
+    dic = global$value[match("dic", global$metric)] - local_totals[["dic"]],
+    waic = global$value[match("waic", global$metric)] - local_totals[["waic"]]
+  )
   list(global = global, by_family = by_family, local = local, reconciliation = data.frame(metric = names(differences), local_sum = unname(local_totals), global = global$value, difference = unname(differences), pass = abs(differences) <= tolerance, stringsAsFactors = FALSE))
 }
 
