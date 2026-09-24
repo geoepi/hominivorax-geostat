@@ -42,4 +42,45 @@ summary_only <- list(
 posterior <- joint_inla_validate_posterior_support(summary_only)
 stopifnot(identical(posterior$method, "D_insufficient_saved_posterior"), identical(posterior$status, "WARNING"))
 
+stopifnot(
+  joint_inla_validate_presence_background_auc(c(3, 4), c(1, 2)) == 1,
+  joint_inla_validate_presence_background_auc(c(1, 2), c(3, 4)) == 0,
+  joint_inla_validate_presence_background_auc(c(1, 1), c(1, 1)) == 0.5,
+  joint_inla_validate_presence_background_auc(c(1, 2), c(1, 2), c(1, 1)) == joint_inla_validate_presence_background_auc(c(1, 2), c(1, 2)),
+  abs(joint_inla_validate_presence_background_auc(2, c(1, 3), c(0.9, 0.1)) - 0.9) < 1e-12
+)
+stopifnot(
+  joint_inla_validate_weighted_percentile(0, c(1, 2, 3)) == 0,
+  joint_inla_validate_weighted_percentile(4, c(1, 2, 3)) == 1,
+  joint_inla_validate_weighted_percentile(2, c(1, 2, 3)) == 0.5,
+  abs(joint_inla_validate_weighted_percentile(2, c(1, 2, 3), c(1, 2, 1)) - 0.5) < 1e-12,
+  joint_inla_validate_weighted_percentile(2, c(1, 2, 3), c(1, 1, 1)) == joint_inla_validate_weighted_percentile(2, c(1, 2, 3))
+)
+boyce_positive <- joint_inla_validate_boyce(seq(0.5, 0.9, 0.1), seq(0.1, 0.9, 0.1), resolution = 100L)
+boyce_reversed <- joint_inla_validate_boyce(seq(0.1, 0.5, 0.1), seq(0.1, 0.9, 0.1), resolution = 100L)
+boyce_constant <- joint_inla_validate_boyce(rep(1, 3), rep(1, 3), resolution = 100L)
+stopifnot(boyce_positive$cbi > 0, boyce_reversed$cbi < 0, is.na(boyce_constant$cbi),
+          abs(joint_inla_validate_boyce(seq(0.5, 0.9, 0.1), seq(0.1, 0.9, 0.1), c(1, 1, 1, 1, 1, 1, 1, 1, 1))$cbi - boyce_positive$cbi) < 1e-12)
+
+stage2_contract <- list(tier1 = data.frame(
+  .row_id = c("obs_1", "obs_2", "quad_1", "quad_2", "quad_3", "quad_4"),
+  source_obs_id = c(1L, 2L, NA_integer_, NA_integer_, NA_integer_, NA_integer_),
+  Yi = c(1L, 1L, 0L, 0L, 0L, 0L),
+  inside_domain = c(NA, NA, TRUE, TRUE, FALSE, TRUE),
+  sc_Exp = c(0.0001, 0.0001, 2, 3, 0.0001, 4),
+  is_censored = FALSE,
+  is_test_point = c(TRUE, TRUE, FALSE, FALSE, FALSE, FALSE),
+  epiyear = 2024L, epiweek = c(1L, 2L, 1L, 2L, 3L, 3L), time_index = c(1L, 2L, 1L, 2L, 3L, 3L),
+  x = 1:6, y = 1:6,
+  stringsAsFactors = FALSE
+))
+fitted_contract <- data.frame(
+  tier = rep("tier1", 6), source_row = 1:6, output_id = paste0("stack:", 1:6),
+  fitted_mean = c(0.9, 0.8, 0.1, 0.2, 0.05, 0.3), stringsAsFactors = FALSE
+)
+reference <- joint_inla_validate_reference_background(stage2_contract, fitted_contract, expected_holdouts = 2L)
+stopifnot(reference$background_rows == 3L, reference$unique_spatial_nodes == 3L,
+          reference$occurrence_rows == 2L, reference$represented_weeks == 3L,
+          all(reference$background$weight > 0), all(reference$background$inside_domain))
+
 cat("Joint-INLA validation tests passed\n")
