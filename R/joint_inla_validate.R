@@ -451,15 +451,24 @@ joint_inla_validate_presence_background_auc <- function(presence_score, backgrou
   background_score <- background_score[keep]
   background_weight <- background_weight[keep]
   if (!length(presence_score) || !length(background_score)) return(NA_real_)
-  unique_score <- sort(unique(background_score))
-  score_weight <- vapply(unique_score, function(value) sum(background_weight[background_score == value]), numeric(1L))
+  order_index <- order(background_score)
+  sorted_score <- background_score[order_index]
+  sorted_weight <- background_weight[order_index]
+  run_start <- c(TRUE, sorted_score[-1L] != sorted_score[-length(sorted_score)])
+  run_start_index <- which(run_start)
+  run_end_index <- c(run_start_index[-1L] - 1L, length(sorted_score))
+  cumulative_rows <- cumsum(sorted_weight)
+  previous_cumulative <- c(0, cumulative_rows[run_end_index[-length(run_end_index)]])
+  unique_score <- sorted_score[run_start_index]
+  score_weight <- cumulative_rows[run_end_index] - previous_cumulative
   cumulative <- cumsum(score_weight)
+  total_weight <- sum(score_weight)
   contributions <- vapply(presence_score, function(value) {
     index <- findInterval(value, unique_score)
     less <- if (!index) 0 else cumulative[index]
     equal_index <- match(value, unique_score, nomatch = 0L)
     equal <- if (equal_index) score_weight[equal_index] else 0
-    (less - equal + equal / 2) / sum(score_weight)
+    (less - equal + equal / 2) / total_weight
   }, numeric(1L))
   mean(contributions)
 }
@@ -523,6 +532,43 @@ joint_inla_validate_same_week_percentiles <- function(occurrence, background) {
   occurrence$key <- paste(occurrence$epiyear, occurrence$epiweek, occurrence$time_index, sep = "|")
   background$key <- paste(background$epiyear, background$epiweek, background$time_index, sep = "|")
   groups <- split(seq_len(nrow(background)), background$key)
+  references <- lapply(groups, function(indices) {
+    bg <- background[indices, , drop = FALSE]
+    keep <- is.finite(bg$prediction) & is.finite(bg$weight) & bg$weight > 0
+    score <- as.numeric(bg$prediction[keep])
+    weight <- as.numeric(bg$weight[keep])
+    if (!length(score)) return(list(score = numeric(), weighted_cumulative = numeric(), weighted_total = 0, unweighted_cumulative = numeric(), unweighted_total = 0))
+    order_index <- order(score)
+    score <- score[order_index]
+    weight <- weight[order_index]
+    run_start <- c(TRUE, score[-1L] != score[-length(score)])
+    run_start_index <- which(run_start)
+    run_end_index <- c(run_start_index[-1L] - 1L, length(score))
+    cumulative_rows <- cumsum(weight)
+    previous_cumulative <- c(0, cumulative_rows[run_end_index[-length(run_end_index)]])
+    unique_score <- score[run_start_index]
+    weighted_score_weight <- cumulative_rows[run_end_index] - previous_cumulative
+    list(
+      score = unique_score,
+      weighted_cumulative = cumsum(weighted_score_weight),
+      weighted_score_weight = weighted_score_weight,
+      weighted_total = sum(weighted_score_weight),
+      unweighted_cumulative = cumsum(tabulate(match(score, unique_score), nbins = length(unique_score))),
+      unweighted_score_weight = tabulate(match(score, unique_score), nbins = length(unique_score)),
+      unweighted_total = length(score)
+    )
+  })
+  percentile_from_reference <- function(value, reference, weighting) {
+    if (!is.finite(value) || !length(reference$score)) return(NA_real_)
+    cumulative <- reference[[paste0(weighting, "_cumulative")]]
+    score_weight <- reference[[paste0(weighting, "_score_weight")]]
+    total <- reference[[paste0(weighting, "_total")]]
+    index <- findInterval(value, reference$score)
+    less <- if (!index) 0 else cumulative[index]
+    equal_index <- match(value, reference$score, nomatch = 0L)
+    equal <- if (equal_index) score_weight[equal_index] else 0
+    (less - equal + equal / 2) / total
+  }
   rows <- lapply(seq_len(nrow(occurrence)), function(i) {
     indices <- groups[[occurrence$key[[i]]]]
     if (is.null(indices) || !length(indices)) {
@@ -536,8 +582,8 @@ joint_inla_validate_same_week_percentiles <- function(occurrence, background) {
                epiyear = occurrence$epiyear[[i]], epiweek = occurrence$epiweek[[i]], time_index = occurrence$time_index[[i]],
                prediction = occurrence$prediction[[i]], background_node_count = nrow(bg),
                total_background_integration_weight = sum(bg$weight),
-               weighted_percentile = joint_inla_validate_weighted_percentile(occurrence$prediction[[i]], bg$prediction, bg$weight),
-               unweighted_percentile = joint_inla_validate_weighted_percentile(occurrence$prediction[[i]], bg$prediction),
+               weighted_percentile = percentile_from_reference(occurrence$prediction[[i]], references[[occurrence$key[[i]]]], "weighted"),
+               unweighted_percentile = percentile_from_reference(occurrence$prediction[[i]], references[[occurrence$key[[i]]]], "unweighted"),
                stringsAsFactors = FALSE)
   })
   do.call(rbind, rows)
