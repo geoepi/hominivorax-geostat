@@ -7,6 +7,12 @@ interpretation. The one-shot Atlas wrapper is
 
 ## Gate order
 
+Atlas execution must follow the validated environment and interactive spatial
+smoke-test procedure in [docs/atlas-environment.md](atlas-environment.md).
+The login-node shell is not evidence about compute-node package availability;
+the GEOS ABI warning recorded there is non-blocking when the validated Phase
+2/3 and spatial round-trip checks pass.
+
 0. **Scheduler completion.** `sacct` must report the exact fit job as
    `COMPLETED` with exit code `0:0`. A running, pending, cancelled, or failed
    job cannot enter downstream analysis.

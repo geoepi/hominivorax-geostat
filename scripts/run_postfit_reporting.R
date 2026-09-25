@@ -38,9 +38,13 @@ phase3_root <- arg(args, "phase3-root", file.path(dirname(fit_path), paste0("ras
 phase2_root <- arg(args, "phase2", file.path(dirname(fit_path), paste0("prediction_projection_", run_id)))
 boundary_path <- arg(args, "boundary")
 species_path <- arg(args, "species-data")
+observation_path <- arg(args, "observation-input")
+species_cohort <- arg(args, "species-cohort")
+if (is.null(observation_path) && is.null(species_cohort) && !is.null(species_path)) observation_path <- species_path
 species_column <- arg(args, "species-column", "host_standardized")
 species_category_column <- arg(args, "species-category-column")
-species_cohort <- arg(args, "species-cohort")
+host_column <- arg(args, "host-column", "host")
+mapping_version <- arg(args, "mapping-version", "historical-host-normalization-v1")
 cell_area_template <- arg(args, "cell-area-template")
 cell_area_value <- arg(args, "cell-area")
 cell_area_units <- arg(args, "cell-area-units")
@@ -96,15 +100,34 @@ save_figure(postfit_reporting_plot_cattle(cattle, cattle_units = cattle_units), 
 save_figure(postfit_reporting_plot_temporal(temporal), "temporal_effects", 10, 8)
 
 species_audit <- list(status = "UNRESOLVED", reason = "No explicit species source cohort was supplied; denominator was not guessed.")
-if (!is.null(species_path)) {
-  if (is.null(species_cohort)) stop("--species-data requires --species-cohort so the denominator is explicit.")
+if (!is.null(observation_path)) {
+  if (!file.exists(observation_path)) stop("Authoritative observation input does not exist: ", observation_path)
+  observation_data <- utils::read.csv(observation_path, stringsAsFactors = FALSE, check.names = FALSE)
+  species <- postfit_reporting_host_composition(
+    observation_data, host_column = host_column, source_file = normalizePath(observation_path, mustWork = TRUE),
+    mapping_version = mapping_version
+  )
+  write_table(species, "species_composition")
+  write_table(species$lookup, "host_lookup")
+  write_table(species$assignment_table, "host_assignments")
+  write_table(species$first_host_assignment_table, "host_assignments_first_host")
+  write_table(species$first_host_table, "species_composition_first_host")
+  write_table(species$first_host_sensitivity, "species_composition_first_host_sensitivity")
+  save_figure(postfit_reporting_plot_species(species), "species_composition", 9, 8)
+  species_audit <- species$audit
+} else if (!is.null(species_path)) {
+  if (is.null(species_cohort)) stop("--species-data requires --species-cohort, or use --observation-input with --host-column.")
   species_data <- utils::read.csv(species_path, stringsAsFactors = FALSE, check.names = FALSE)
   species <- postfit_reporting_species_composition(species_data, species_column, species_cohort, species_category_column)
   write_table(species, "species_composition")
   save_figure(postfit_reporting_plot_species(species), "species_composition", 9, 8)
   species_audit <- species$audit
 }
-utils::write.csv(data.frame(status = species_audit$status, reason = species_audit$reason %||% NA_character_, cohort_definition = species_audit$cohort_definition %||% NA_character_, denominator_n = species_audit$denominator_n %||% NA_integer_, stringsAsFactors = FALSE), file.path(paths$metadata, "species_composition_audit.csv"), row.names = FALSE, na = "")
+utils::write.csv(data.frame(
+  metric = names(species_audit),
+  value = vapply(species_audit, function(value) if (is.null(value)) NA_character_ else paste(as.character(value), collapse = "|"), character(1L)),
+  stringsAsFactors = FALSE
+), file.path(paths$metadata, "species_composition_audit.csv"), row.names = FALSE, na = "")
 
 map_manifest <- NULL
 map_object <- NULL
@@ -170,6 +193,7 @@ metadata <- list(
   generated_tables = generated_tables,
   generated_figures = generated_figures,
   selected_map_week_rule = map_audit$selection_rule %||% NA_character_,
+  observation_input = if (is.null(observation_path)) NULL else list(path = normalizePath(observation_path, mustWork = TRUE), sha256 = postfit_reporting_hash_file(observation_path), role = "authoritative descriptive host-composition source; not fit provenance and not assumed to be the RPI observation set"),
   species_composition = species_audit,
   cattle_effect_semantics = "Weighted cattle_q RW2 posterior summary: latent RW2 summary × cattle_mid_log1p.",
   temporal_effect_semantics = "week_steps is Tier 1 latent logit deviation; tier2_week is Tier 2 latent log-intensity deviation; Stage 2 mapping is authoritative.",

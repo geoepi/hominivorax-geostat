@@ -104,6 +104,37 @@ testthat::test_that("species composition requires and preserves an explicit deno
   testthat::expect_equal(object$audit$cohort_definition, "analysis-eligible submissions")
 })
 
+testthat::test_that("authoritative host composition expands compound records and audits the denominator", {
+  x <- data.frame(host = c(
+    "BOVINE", "bufalino", "bovino-suino", "ovine", "caprine", "equine",
+    "burro", "canine", "feline", "human", "bird", "kinkaju", "perezosos",
+    "porcuspin", "lapine", "procyon lotor", "crvido", "lion", "leopard",
+    "wild terrestrial", "other", "mystery", NA_character_
+  ), stringsAsFactors = FALSE)
+  source_path <- tempfile(fileext = ".csv")
+  utils::write.csv(x, source_path, row.names = FALSE)
+  object <- postfit_reporting_host_composition(x, source_file = source_path)
+  testthat::expect_true(all(c("common_name", "broad_group", "count", "prop", "pct", "tier", "denominator", "denominator_type", "source_file", "mapping_version") %in% names(object$table)))
+  testthat::expect_equal(object$audit$n_submission_rows, nrow(x))
+  testthat::expect_equal(object$audit$n_compound_submission_rows, 2L)
+  testthat::expect_equal(object$audit$n_unmatched_submission_rows, 2L)
+  testthat::expect_gt(object$audit$n_expanded_host_assignments, object$audit$n_submission_rows)
+  testthat::expect_equal(sum(object$table$count), object$audit$n_expanded_host_assignments)
+  testthat::expect_true(all(object$table$denominator_type == "expanded_host_assignments"))
+  testthat::expect_true(all(c("Cattle", "Pig", "Unreported") %in% object$table$common_name))
+  testthat::expect_true(all(c("raw_host", "cleaned_host", "pattern", "common_name", "broad_group") %in% names(object$assignment_table)))
+  testthat::expect_true(nrow(object$first_host_sensitivity) >= 1L)
+  testthat::expect_equal(object$lookup$mapping_version, rep("historical-host-normalization-v1", nrow(object$lookup)))
+  if (requireNamespace("digest", quietly = TRUE)) testthat::expect_false(is.na(object$audit$source_sha256))
+})
+
+testthat::test_that("host composition retains the minor-host tier", {
+  x <- data.frame(host = c(rep("bovine", 100), "feline"), stringsAsFactors = FALSE)
+  object <- postfit_reporting_host_composition(x)
+  testthat::expect_equal(object$table$tier[object$table$common_name == "Cat"], "Minor Hosts (<1%)")
+  testthat::expect_equal(object$table$denominator[1], 101L)
+})
+
 testthat::test_that("maps use deterministic weeks and unchanged raster values", {
   testthat::skip_if_not_installed("terra")
   root <- file.path(tempdir(), paste0("postfit-map-", Sys.getpid()))

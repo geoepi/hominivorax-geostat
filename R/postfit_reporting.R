@@ -249,6 +249,181 @@ postfit_reporting_temporal_effects <- function(build, fit_artifact, stage2) {
   out
 }
 
+postfit_reporting_host_lookup <- function(mapping_version = "historical-host-normalization-v1") {
+  data.frame(
+    pattern = c(
+      "bovin", "bufal", "suin|porc", "(?<!b)ovin", "caprin",
+      "equin", "burro", "canin|carin", "felin", "human",
+      "bird|ave|aviar|ardeid", "kinkaju", "sloth|perezos",
+      "porcupin|porcuspin", "rabbit|lapine|leporid", "procyonlotor",
+      "deer|crvido", "leon|lion", "leopard", "wildterrestrial|faunasilvestre",
+      "other|unknown"
+    ),
+    common_name = c(
+      "Cattle", "Water Buffalo", "Pig", "Sheep", "Goat", "Horse", "Donkey",
+      "Dog", "Cat", "Human", "Birds", "Kinkajou", "Sloth", "Porcupine",
+      "Rabbit/Hare", "Raccoon", "Deer", "Lion", "Leopard", "Unspecified Wildlife",
+      "Unreported"
+    ),
+    broad_group = c(
+      rep("Livestock", 5L), rep("Equids", 2L), rep("Companion Animals", 2L),
+      "Human", "Birds", rep("Wildlife", 9L), "Unreported"
+    ),
+    mapping_version = mapping_version,
+    stringsAsFactors = FALSE
+  )
+}
+
+postfit_reporting_clean_host <- function(value) {
+  value <- tolower(as.character(value))
+  value[is.na(value)] <- ""
+  gsub("[^a-z]", "", value, perl = TRUE)
+}
+
+postfit_reporting_host_composition_table <- function(assignments, denominator, denominator_type,
+                                                      source_file, mapping_version,
+                                                      major_threshold_pct = 1) {
+  if (!nrow(assignments)) {
+    return(data.frame(
+      common_name = character(), broad_group = character(), count = integer(), prop = numeric(),
+      pct = numeric(), tier = character(), denominator = integer(), denominator_type = character(),
+      source_file = character(), mapping_version = character(), stringsAsFactors = FALSE
+    ))
+  }
+  counts <- stats::aggregate(
+    assignments$submission_row,
+    by = list(common_name = assignments$common_name, broad_group = assignments$broad_group),
+    FUN = length
+  )
+  names(counts)[names(counts) == "x"] <- "count"
+  counts$prop <- counts$count / denominator
+  counts$pct <- 100 * counts$prop
+  counts$tier <- ifelse(counts$pct >= major_threshold_pct, "Major Hosts", "Minor Hosts (<1%)")
+  counts$denominator <- denominator
+  counts$denominator_type <- denominator_type
+  counts$source_file <- source_file
+  counts$mapping_version <- mapping_version
+  broad_order <- c("Livestock", "Equids", "Companion Animals", "Human", "Wildlife", "Birds", "Unreported")
+  counts$.broad_order <- match(counts$broad_group, broad_order)
+  counts <- counts[order(counts$.broad_order, -counts$pct, counts$common_name), , drop = FALSE]
+  counts$.broad_order <- NULL
+  rownames(counts) <- NULL
+  counts[, c("common_name", "broad_group", "count", "prop", "pct", "tier", "denominator", "denominator_type", "source_file", "mapping_version"), drop = FALSE]
+}
+
+postfit_reporting_host_composition <- function(data, host_column = "host", source_file = NA_character_,
+                                               mapping_version = "historical-host-normalization-v1",
+                                               major_threshold_pct = 1) {
+  if (!is.data.frame(data)) stop("Host-composition source must be a data frame.")
+  if (length(host_column) != 1L || !host_column %in% names(data)) stop("Host-composition source is missing host column: ", host_column)
+  if (length(mapping_version) != 1L || is.na(mapping_version) || !nzchar(mapping_version)) stop("mapping_version must be a non-empty string.")
+  if (length(major_threshold_pct) != 1L || !is.finite(major_threshold_pct) || major_threshold_pct <= 0) stop("major_threshold_pct must be positive.")
+
+  lookup <- postfit_reporting_host_lookup(mapping_version)
+  raw_host <- as.character(data[[host_column]])
+  cleaned_host <- postfit_reporting_clean_host(raw_host)
+  matched_patterns <- lapply(cleaned_host, function(value) {
+    if (!nzchar(value)) return(integer())
+    which(vapply(lookup$pattern, function(pattern) grepl(pattern, value, perl = TRUE), logical(1L)))
+  })
+  n_matches <- lengths(matched_patterns)
+  assignment_rows <- vector("list", length(raw_host))
+  for (i in seq_along(raw_host)) {
+    matches <- matched_patterns[[i]]
+    if (!length(matches)) {
+      assignment_rows[[i]] <- data.frame(
+        submission_row = i, raw_host = raw_host[[i]], cleaned_host = cleaned_host[[i]],
+        pattern = "unmatched", common_name = "Unreported", broad_group = "Unreported",
+        match_count = 0L, matched = FALSE, stringsAsFactors = FALSE
+      )
+    } else {
+      assignment_rows[[i]] <- data.frame(
+        submission_row = rep.int(i, length(matches)), raw_host = rep.int(raw_host[[i]], length(matches)),
+        cleaned_host = rep.int(cleaned_host[[i]], length(matches)), pattern = lookup$pattern[matches],
+        common_name = lookup$common_name[matches], broad_group = lookup$broad_group[matches],
+        match_count = rep.int(length(matches), length(matches)), matched = TRUE,
+        stringsAsFactors = FALSE
+      )
+    }
+  }
+  assignments <- if (length(assignment_rows)) do.call(rbind, assignment_rows) else data.frame()
+  rownames(assignments) <- NULL
+  denominator <- nrow(assignments)
+  primary <- postfit_reporting_host_composition_table(
+    assignments, denominator, "expanded_host_assignments", source_file, mapping_version,
+    major_threshold_pct = major_threshold_pct
+  )
+
+  first_rows <- lapply(seq_along(raw_host), function(i) {
+    matches <- matched_patterns[[i]]
+    if (!length(matches)) matches <- NA_integer_ else matches <- matches[[1L]]
+    data.frame(
+      submission_row = i, raw_host = raw_host[[i]], cleaned_host = cleaned_host[[i]],
+      pattern = if (is.na(matches)) "unmatched" else lookup$pattern[[matches]],
+      common_name = if (is.na(matches)) "Unreported" else lookup$common_name[[matches]],
+      broad_group = if (is.na(matches)) "Unreported" else lookup$broad_group[[matches]],
+      match_count = n_matches[[i]], matched = !is.na(matches), stringsAsFactors = FALSE
+    )
+  })
+  first_assignments <- if (length(first_rows)) do.call(rbind, first_rows) else data.frame()
+  first_table <- postfit_reporting_host_composition_table(
+    first_assignments, nrow(data), "submission_rows_first_host", source_file, mapping_version,
+    major_threshold_pct = major_threshold_pct
+  )
+  sensitivity <- merge(
+    primary[, c("common_name", "broad_group", "count", "pct"), drop = FALSE],
+    first_table[, c("common_name", "broad_group", "count", "pct"), drop = FALSE],
+    by = c("common_name", "broad_group"), all = TRUE, suffixes = c("_expanded", "_first_host")
+  )
+  for (column in c("count_expanded", "pct_expanded", "count_first_host", "pct_first_host")) {
+    sensitivity[[column]][is.na(sensitivity[[column]])] <- 0
+  }
+  sensitivity$pct_difference <- sensitivity$pct_expanded - sensitivity$pct_first_host
+  sensitivity <- sensitivity[order(-sensitivity$pct_expanded, sensitivity$common_name), , drop = FALSE]
+  rownames(sensitivity) <- NULL
+
+  raw_trimmed <- trimws(raw_host)
+  source_path <- if (length(source_file) == 1L && !is.na(source_file)) as.character(source_file) else NA_character_
+  audit <- list(
+    status = "PASS",
+    source_role = "authoritative descriptive observation source; separate from fit provenance and RPI observations",
+    source_file = source_path,
+    source_sha256 = postfit_reporting_hash_file(source_path),
+    source_row_count = nrow(data),
+    source_column_names = paste(names(data), collapse = "|"),
+    host_column = host_column,
+    n_missing_or_blank_host = sum(is.na(raw_host) | !nzchar(raw_trimmed)),
+    n_unique_raw_host = length(unique(raw_host)),
+    n_submission_rows = nrow(data),
+    n_expanded_host_assignments = denominator,
+    n_compound_submission_rows = sum(n_matches > 1L),
+    n_unmatched_submission_rows = sum(n_matches == 0L),
+    n_assignments_unreported = sum(assignments$broad_group == "Unreported"),
+    denominator_type = "expanded_host_assignments",
+    denominator_discrepancy = denominator != nrow(data),
+    mapping_version = mapping_version,
+    major_threshold_pct = major_threshold_pct
+  )
+  list(
+    table = primary,
+    audit = audit,
+    lookup = lookup,
+    assignment_table = assignments,
+    first_host_assignment_table = first_assignments,
+    first_host_table = first_table,
+    first_host_sensitivity = sensitivity
+  )
+}
+
+postfit_reporting_host_audit_table <- function(host_object) {
+  audit <- host_object$audit
+  data.frame(
+    metric = names(audit),
+    value = vapply(audit, function(value) paste(as.character(value), collapse = "|"), character(1L)),
+    stringsAsFactors = FALSE
+  )
+}
+
 postfit_reporting_species_composition <- function(data, species_column, cohort_definition,
                                                    category_column = NULL, major_threshold = 0.01,
                                                    standardize = NULL) {
@@ -299,13 +474,24 @@ theme_hominivorax_report <- function(base_size = 11, base_family = "sans") {
 postfit_reporting_plot_species <- function(species_object) {
   postfit_reporting_require("ggplot2")
   data <- species_object$table %||% species_object
+  if ("pct" %in% names(data)) {
+    data$host_species <- data$common_name
+    data$broad_category <- data$broad_group
+    data$percentage <- data$pct / 100
+    data$major_minor <- data$tier
+    x_label <- "Percentage of expanded host assignments (%)"
+    subtitle <- "Compound submissions contribute once per identified species; Unreported is retained"
+  } else {
+    x_label <- "Percentage of stated cohort"
+    subtitle <- "Major hosts and hosts contributing less than 1% of the stated cohort"
+  }
   data$host_species <- stats::reorder(data$host_species, data$count)
   ggplot2::ggplot(data, ggplot2::aes(x = percentage, y = host_species, fill = broad_category)) +
     ggplot2::geom_col(width = 0.75, colour = "white", linewidth = 0.15) +
     ggplot2::facet_wrap(~major_minor, scales = "free_y", ncol = 1, drop = FALSE) +
     ggplot2::scale_x_continuous(labels = function(x) paste0(round(100 * x), "%"), expand = ggplot2::expansion(mult = c(0, 0.05))) +
     ggplot2::scale_fill_viridis_d(option = "D", end = 0.9, name = "Broad host category") +
-    ggplot2::labs(x = "Percentage of stated cohort", y = NULL, title = "Host composition", subtitle = "Major hosts and hosts contributing less than 1% of the stated cohort") +
+    ggplot2::labs(x = x_label, y = NULL, title = "Host composition", subtitle = subtitle) +
     theme_hominivorax_report()
 }
 

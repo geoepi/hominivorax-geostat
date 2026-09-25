@@ -10,8 +10,14 @@ phase2: "/project/disease_ecology/nws-geostat-output/joint_inla_fit/prediction_p
 phase3: "/project/disease_ecology/nws-geostat-output/joint_inla_fit/raster_surfaces_20725437"
 boundary: null
 
-# Species composition is intentionally explicit because the denominator must
-# be audited. Supply these only after identifying the reference cohort.
+# Host composition uses the authoritative descriptive observation source. This
+# CSV is separate from fit provenance and is not implicitly the RPI source.
+observation_input: "/project/disease_ecology/NWScrewworm/data/processed_data/case_detections/combined_clean_obs_2027-07-31.csv"
+host_column: host
+mapping_version: "historical-host-normalization-v1"
+
+# Legacy/generic species input remains available only when its cohort and
+# denominator are explicit.
 species_data: null
 species_column: host_standardized
 species_category_column: host_group
