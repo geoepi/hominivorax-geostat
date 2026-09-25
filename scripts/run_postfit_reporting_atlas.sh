@@ -20,7 +20,8 @@ module purge
 module load udunits proj geos/3.12.1 gdal/3.8.5 \
   intel-oneapi-mkl/2023.2.0 r/4.4.3
 
-PROJECT_ROOT=/project/disease_ecology/hominivorax-geostat
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="${POSTFIT_REPORTING_PROJECT_ROOT:-$(cd -- "${SCRIPT_DIR}/.." && pwd)}"
 RUN_ID="${POSTFIT_REPORTING_RUN_ID:-20725437}"
 OUTPUT_ROOT="${POSTFIT_REPORTING_OUTPUT_ROOT:-/project/disease_ecology/nws-geostat-output/postfit_reporting}"
 FIT_PATH="${POSTFIT_REPORTING_FIT:-/project/disease_ecology/nws-geostat-output/joint_inla_fit/joint_model_fit.rds}"
