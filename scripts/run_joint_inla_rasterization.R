@@ -1,6 +1,8 @@
 #!/usr/bin/env Rscript
 
-repo_root <- normalizePath(file.path(dirname(commandArgs(trailingOnly = FALSE)[grep("^--file=", commandArgs(trailingOnly = FALSE))][1L]), ".."), mustWork = TRUE)
+script_arg <- commandArgs(trailingOnly = FALSE)[grep("^--file=", commandArgs(trailingOnly = FALSE))][1L]
+script_path <- sub("^--file=", "", script_arg)
+repo_root <- normalizePath(file.path(dirname(script_path), ".."), mustWork = TRUE)
 source(file.path(repo_root, "R", "joint_inla_rasterize.R"), local = .GlobalEnv)
 
 parse_args <- function(args) {
