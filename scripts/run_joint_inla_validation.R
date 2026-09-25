@@ -10,18 +10,34 @@ repo_root <- normalizePath(option("repo-root", getwd()), mustWork = TRUE)
 source(file.path(repo_root, "R", "joint_inla_extract.R"))
 source(file.path(repo_root, "R", "joint_inla_validate.R"))
 
-build_path <- option("build", file.path(repo_root, "outputs", "joint_inla", "joint_inla_build.rds"))
-fit_path <- option("fit", file.path(repo_root, "outputs", "joint_inla_fit", "joint_model_fit.rds"))
-holdout_path <- option("holdout", file.path(dirname(fit_path), "holdout_predictions.csv"))
-stage2_path <- option("stage2", file.path(repo_root, "outputs", "joint_model", "joint_model_inputs.rds"))
-output_root <- option("output-dir", dirname(fit_path))
-run_id <- option("run-id", "20725437")
+acceptance_mode <- tolower(option("acceptance-mode", option("mode", "reference")))
+if (!acceptance_mode %in% c("reference", "production")) stop("acceptance mode must be 'reference' or 'production'.")
+build_arg <- option("build")
+fit_arg <- option("fit")
+holdout_arg <- option("holdout")
+stage2_arg <- option("stage2")
+output_arg <- option("output-dir")
+run_id_arg <- option("run-id")
+if (identical(acceptance_mode, "production") && any(vapply(list(build_arg, fit_arg, holdout_arg, stage2_arg, output_arg, run_id_arg), is.null, logical(1L)))) {
+  stop("Production validation requires explicit --build, --fit, --holdout, --stage2, --output-dir, and --run-id arguments.")
+}
+build_path <- build_arg %||% file.path(repo_root, "outputs", "joint_inla", "joint_inla_build.rds")
+fit_path <- fit_arg %||% file.path(repo_root, "outputs", "joint_inla_fit", "joint_model_fit.rds")
+holdout_path <- holdout_arg %||% file.path(dirname(fit_path), "holdout_predictions.csv")
+stage2_path <- stage2_arg %||% file.path(repo_root, "outputs", "joint_model", "joint_model_inputs.rds")
+output_root <- output_arg %||% dirname(fit_path)
+run_id <- run_id_arg %||% "20725437"
+source_fit_job <- option("source-fit-job", if (identical(acceptance_mode, "reference")) "20725437" else NA_character_)
+prior_validation_job <- option("prior-validation-job", if (identical(acceptance_mode, "reference")) "20740207" else NA_character_)
 output_dir <- file.path(output_root, paste0("validation_presence_background_", run_id))
 overwrite <- flag("overwrite")
 
 required_paths <- c(build = build_path, fit = fit_path, holdout = holdout_path, stage2 = stage2_path)
 missing_paths <- required_paths[!file.exists(required_paths)]
 if (length(missing_paths)) stop("Validation input does not exist: ", paste(missing_paths, collapse = ", "))
+if (dir.exists(output_dir) && length(list.files(output_dir, all.files = TRUE, no.. = TRUE, recursive = TRUE)) && !overwrite) {
+  stop("Refusing to write into a non-empty validation output directory without overwrite=TRUE: ", output_dir)
+}
 dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
 
 paths <- c(
@@ -55,29 +71,54 @@ if (!all(c("tier", "output_id", "source_is_test_point") %in% names(fitted))) sto
 extracted_holdout <- fitted[fitted$source_is_test_point %in% TRUE, , drop = FALSE]
 if (!setequal(as.character(extracted_holdout$output_id), as.character(holdout$output_id))) stop("Existing holdout CSV does not reconcile exactly to the established extraction/indexing contract.")
 
-reference_background <- joint_inla_validate_reference_background(stage2, fitted, expected_holdouts = 6638L)
+derive_stage2_holdout_count <- function(stage2, tier) {
+  if (is.list(stage2$holdout_metadata) && is.list(stage2$holdout_metadata[[tier]]) && !is.null(stage2$holdout_metadata[[tier]]$selected_count)) {
+    return(as.integer(stage2$holdout_metadata[[tier]]$selected_count))
+  }
+  if (!is.data.frame(stage2[[tier]]) || !"is_test_point" %in% names(stage2[[tier]])) stop("Stage 2 does not expose an is_test_point contract for ", tier, ".")
+  sum(stage2[[tier]]$is_test_point %in% TRUE, na.rm = TRUE)
+}
+expected_tier1_holdouts <- if (identical(acceptance_mode, "reference")) 6638L else derive_stage2_holdout_count(stage2, "tier1")
+expected_tier2_holdouts <- derive_stage2_holdout_count(stage2, "tier2")
+reference_background <- joint_inla_validate_reference_background(stage2, fitted, expected_holdouts = expected_tier1_holdouts)
 tier1_presence <- joint_inla_validate_tier1_presence_background(reference_background)
 tier2_holdout <- holdout[holdout$tier == "tier2", , drop = FALSE]
+if (nrow(tier2_holdout) != expected_tier2_holdouts) stop("Tier 2 holdout count is ", nrow(tier2_holdout), "; expected Stage 2 count ", expected_tier2_holdouts, ".")
 tier2 <- joint_inla_validate_tier2(tier2_holdout)
 posterior_support <- joint_inla_validate_posterior_support(fit_artifact)
 intervals <- joint_inla_validate_unresolved_intervals(tier2_holdout, tier2$predicted, posterior_support)
 
-expected_tier2 <- c(mae = 0.778332244713918, rmse = 1.02158254118904, pearson = 0.392991140775537,
-                    spearman = 0.377338853270058, calibration_mean_ratio = 0.982325679980395)
-observed_tier2 <- vapply(names(expected_tier2), function(metric) {
-  value <- tier2$metrics$value[tier2$metrics$tier == "tier2" & tier2$metrics$metric == metric]
-  if (length(value) != 1L) NA_real_ else value
-}, numeric(1L))
-tier2_differences <- observed_tier2 - expected_tier2
-if (any(!is.finite(observed_tier2)) || any(abs(tier2_differences) > 1e-6)) stop("Tier 2 point metrics materially differ from validation job 20740207: ", paste(names(expected_tier2), format(tier2_differences, digits = 8), collapse = "; "))
+expected_tier2 <- NULL
+tier2_differences <- NULL
+if (identical(acceptance_mode, "reference")) {
+  expected_tier2 <- c(mae = 0.778332244713918, rmse = 1.02158254118904, pearson = 0.392991140775537,
+                      spearman = 0.377338853270058, calibration_mean_ratio = 0.982325679980395)
+  observed_tier2 <- vapply(names(expected_tier2), function(metric) {
+    value <- tier2$metrics$value[tier2$metrics$tier == "tier2" & tier2$metrics$metric == metric]
+    if (length(value) != 1L) NA_real_ else value
+  }, numeric(1L))
+  tier2_differences <- observed_tier2 - expected_tier2
+  if (any(!is.finite(observed_tier2)) || any(abs(tier2_differences) > 1e-6)) stop("Tier 2 point metrics materially differ from validation job 20740207: ", paste(names(expected_tier2), format(tier2_differences, digits = 8), collapse = "; "))
+} else {
+  metric_names <- c("mae", "rmse", "pearson", "spearman", "calibration_mean_ratio")
+  observed_tier2 <- vapply(metric_names, function(metric) {
+    value <- tier2$metrics$value[tier2$metrics$tier == "tier2" & tier2$metrics$metric == metric]
+    if (length(value) != 1L) NA_real_ else value
+  }, numeric(1L))
+  names(observed_tier2) <- metric_names
+  if (any(!is.finite(observed_tier2))) stop("Production Tier 2 point metrics are not all finite: ", paste(names(observed_tier2)[!is.finite(observed_tier2)], collapse = ", "))
+}
 
-audit <- joint_inla_validate_audit(holdout, stage2, tier1_presence, tier2, posterior_support, reference_background = reference_background)
+audit <- joint_inla_validate_audit(holdout, stage2, tier1_presence, tier2, posterior_support,
+                                   reference_background = reference_background,
+                                   expected_tier1_holdouts = expected_tier1_holdouts)
 audit <- rbind(
   audit,
   joint_inla_validate_audit_row("inputs", "holdout_extraction_alignment", "PASS", nrow(extracted_holdout), nrow(holdout), "Existing holdout predictions reconcile to the validated response-stack extraction."),
   joint_inla_validate_audit_row("inputs", "source_holdout_checksum_unchanged", "PASS", holdout_checksum_before, holdout_checksum_before, "Source holdout checksum recorded before and after validation artifact generation."),
-  joint_inla_validate_audit_row("tier2", "point_metrics_reconcile_validation_20740207", "PASS", paste(format(observed_tier2, digits = 15), collapse = "/"), paste(format(expected_tier2, digits = 15), collapse = "/"), "All required Tier 2 point metrics agree within 1e-6."),
-  joint_inla_validate_audit_row("scope", "existing_validation_20740207_preserved", "PASS", "separate output directory", "unchanged", "Revised artifacts are written below validation_presence_background_20725437/."),
+  if (identical(acceptance_mode, "reference")) joint_inla_validate_audit_row("tier2", "point_metrics_reconcile_validation_20740207", "PASS", paste(format(observed_tier2, digits = 15), collapse = "/"), paste(format(expected_tier2, digits = 15), collapse = "/"), "All required Tier 2 point metrics agree within 1e-6.") else joint_inla_validate_audit_row("tier2", "point_metrics_finite_production", "PASS", paste(format(observed_tier2, digits = 15), collapse = "/"), "all finite; no reference values applied", "Production metrics are reported without comparison to fit 20725437."),
+  joint_inla_validate_audit_row("scope", "acceptance_mode", "PASS", acceptance_mode, "reference or production", if (identical(acceptance_mode, "reference")) "Reference numerical regression checks were applied." else "New-production mode did not apply historical reference metric values."),
+  joint_inla_validate_audit_row("scope", "separate_output_directory", "PASS", output_dir, "new output root", "Validation outputs are isolated from the reference fit outputs."),
   joint_inla_validate_audit_row("scope", "no_prediction_grid_projection", "PASS", "not run", "not run", "Reference background uses existing Stage 2 integration rows only."),
   joint_inla_validate_audit_row("scope", "no_surface_generation", "PASS", "not run", "not run", "No dense grid or raster output was created."),
   joint_inla_validate_audit_row("scope", "no_biological_interpretation", "PASS", "not run", "not run", "Outputs are computational validation diagnostics only.")
@@ -105,14 +146,17 @@ stage2_checksum <- sha256_file(stage2_path)
 metadata <- list(
   phase = "Phase 1 validation completion",
   run_id = run_id,
-  source_fit_job = "20725437",
-  prior_validation_job = "20740207",
+  acceptance_mode = acceptance_mode,
+  acceptance_profile = if (identical(acceptance_mode, "reference")) "reference_20725437" else "new_production",
+  historical_metric_regression_applied = identical(acceptance_mode, "reference"),
+  source_fit_job = source_fit_job,
+  prior_validation_job = prior_validation_job,
   generated_utc = format(Sys.time(), tz = "UTC"),
   repository = list(root = repo_root, git_head = paste(git_head, collapse = "")),
   inputs = list(build = normalizePath(build_path, mustWork = TRUE), fit = normalizePath(fit_path, mustWork = TRUE), holdout = normalizePath(holdout_path, mustWork = TRUE), stage2 = normalizePath(stage2_path, mustWork = TRUE), fit_sha256 = fit_checksum, holdout_sha256_before = holdout_checksum_before, holdout_sha256_after = holdout_checksum_after, stage2_sha256 = stage2_checksum),
   stage3a_provenance = build$provenance,
   tier1_semantics = list(
-    positive_population = "6,638 Stage 2 withheld Yi=1 occurrence rows",
+    positive_population = paste(expected_tier1_holdouts, "Stage 2 withheld Yi=1 occurrence rows"),
     background_population = reference_background$background_rule,
     background_biological_status = "unknown / not treated as absence",
     background_rows = reference_background$background_rows,
@@ -132,7 +176,8 @@ metadata <- list(
   ),
   tier1_results = list(weighted_pb_auc = tier1_presence$weighted_auc, unweighted_pb_auc = tier1_presence$unweighted_auc,
                        weighted_cbi = tier1_presence$weighted_cbi, unweighted_cbi = tier1_presence$unweighted_cbi),
-  tier2_reconciliation = list(expected = expected_tier2, observed = observed_tier2, differences = tier2_differences, tolerance = 1e-6, point_validation = "COMPLETE"),
+  holdout_counts = list(tier1 = expected_tier1_holdouts, tier2 = expected_tier2_holdouts, extracted_tier1 = nrow(extracted_holdout), extracted_tier2 = nrow(tier2_holdout)),
+  tier2_reconciliation = list(expected = expected_tier2, observed = observed_tier2, differences = tier2_differences, tolerance = 1e-6, point_validation = "COMPLETE", historical_regression_applied = identical(acceptance_mode, "reference")),
   posterior_predictive_intervals = list(status = "UNAVAILABLE_FROM_CURRENT_RETAINED_FIT_ARTIFACT", method = posterior_support$method, details = posterior_support$details),
   software = list(
     R = R.version.string,

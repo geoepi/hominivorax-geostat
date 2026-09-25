@@ -156,14 +156,14 @@ joint_inla_rasterize_read_phase2_metadata <- function(phase2_dir, run_id) {
   list(path = normalizePath(path, mustWork = TRUE), metadata = readRDS(path))
 }
 
-joint_inla_rasterize_read_manifest <- function(phase2_dir, run_id, expected_weeks = 105L) {
+joint_inla_rasterize_read_manifest <- function(phase2_dir, run_id, expected_weeks = NULL) {
   manifest_path <- file.path(phase2_dir, paste0("prediction_projection_manifest_", run_id, ".csv"))
   if (!file.exists(manifest_path)) stop("Phase 2 manifest does not exist: ", manifest_path)
   manifest <- utils::read.csv(manifest_path, stringsAsFactors = FALSE, check.names = FALSE)
   required <- c("epiyear", "epiweek", "rows", "path", "sha256")
   missing <- setdiff(required, names(manifest))
   if (length(missing)) stop("Phase 2 manifest is missing: ", paste(missing, collapse = ", "))
-  if (nrow(manifest) != as.integer(expected_weeks)) stop("Phase 2 manifest has ", nrow(manifest), " weeks; expected ", expected_weeks, ".")
+  if (!is.null(expected_weeks) && nrow(manifest) != as.integer(expected_weeks)) stop("Phase 2 manifest has ", nrow(manifest), " weeks; expected ", expected_weeks, ".")
   if (anyDuplicated(paste(manifest$epiyear, manifest$epiweek, sep = "-W"))) stop("Phase 2 manifest has duplicate year-week keys.")
   if (any(!nzchar(as.character(manifest$sha256))) || any(!grepl("^[0-9a-fA-F]{64}$", manifest$sha256))) stop("Phase 2 manifest has invalid SHA-256 checksums.")
   actual_paths <- vapply(seq_len(nrow(manifest)), function(i) {
@@ -341,11 +341,11 @@ joint_inla_rasterize_run <- function(phase2_dir,
                                      template_path = NULL,
                                      output_dir = NULL,
                                      run_id = "20725437",
-                                     expected_weeks = 105L,
-                                     expected_rows = 1669395L,
+                                     expected_weeks = NULL,
+                                     expected_rows = NULL,
                                      coordinate_tolerance = 1e-7,
                                      roundtrip_tolerances = c(rmse = 1e-12, maximum = 1e-10),
-                                     source_phase2_commit = "1bcb6deb554c6f9b84013040487fbdb9470a2c0e",
+                                     source_phase2_commit = NULL,
                                      diagnostic = TRUE,
                                      overwrite = FALSE,
                                      repo_root = getwd()) {
@@ -357,6 +357,10 @@ joint_inla_rasterize_run <- function(phase2_dir,
     stop("Refusing to write into a non-empty Phase 3 output directory without overwrite=TRUE: ", output_dir)
   }
   phase2_metadata <- joint_inla_rasterize_read_phase2_metadata(phase2_dir, run_id)
+  if (!is.na(phase2_metadata$path) && !is.null(phase2_metadata$metadata$run_id) &&
+      !identical(as.character(phase2_metadata$metadata$run_id), as.character(run_id))) {
+    stop("Phase 2 metadata run_id does not match requested rasterization run_id: ", phase2_metadata$metadata$run_id, " vs ", run_id)
+  }
   if (is.null(stage2_artifact)) {
     input_paths <- phase2_metadata$metadata$input_paths
     candidates <- unique(c(input_paths$stage2_artifact, input_paths$joint_model_inputs, input_paths$model_inputs, input_paths$stage2))
@@ -368,6 +372,8 @@ joint_inla_rasterize_run <- function(phase2_dir,
   provenance <- joint_inla_rasterize_resolve_template(stage2_artifact, template_path = template_path, repo_root = repo_root)
   stage2 <- provenance$stage2
   support <- joint_inla_rasterize_temporal_support(stage2)
+  if (is.null(expected_weeks)) expected_weeks <- length(support$weeks)
+  if (is.null(expected_rows)) expected_rows <- nrow(stage2$prediction_grid)
   if (length(support$weeks) != as.integer(expected_weeks)) stop("Stage 2 prediction support has ", length(support$weeks), " weeks; expected ", expected_weeks, ".")
   manifest <- joint_inla_rasterize_read_manifest(phase2_dir, run_id, expected_weeks)
   if (!setequal(manifest$week_key, support$weeks)) stop("Phase 2 manifest week support does not match Stage 2 temporal support.")

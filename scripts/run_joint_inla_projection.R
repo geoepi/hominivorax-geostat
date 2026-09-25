@@ -16,9 +16,9 @@ build_path <- option("build", file.path(repo_root, "outputs", "joint_inla", "joi
 fit_path <- option("fit", file.path(repo_root, "outputs", "joint_inla_fit", "joint_model_fit.rds"))
 run_id <- option("run-id", "20725437")
 output_dir <- option("output-dir", file.path(dirname(fit_path), paste0("prediction_projection_", run_id)))
-expected_rows <- as.integer(option("expected-rows", "1669395"))
-expected_weeks <- as.integer(option("expected-weeks", "105"))
-expected_groups <- as.integer(option("expected-groups", "8"))
+expected_rows_arg <- option("expected-rows")
+expected_weeks_arg <- option("expected-weeks")
+expected_groups_arg <- option("expected-groups")
 subset_target <- as.integer(option("diagnostic-subset", "10000"))
 n_worst <- as.integer(option("n-worst", "20"))
 overwrite <- flag("overwrite")
@@ -26,6 +26,9 @@ allow_unseen_admin_zero <- flag("allow-unseen-admin-zero")
 
 if (!file.exists(build_path)) stop("Stage 3A build artifact does not exist: ", build_path)
 if (!file.exists(fit_path)) stop("Stage 3B fit artifact does not exist: ", fit_path)
+if (dir.exists(output_dir) && length(list.files(output_dir, all.files = TRUE, no.. = TRUE, recursive = TRUE)) && !overwrite) {
+  stop("Refusing to write into a non-empty projection output directory without overwrite=TRUE: ", output_dir)
+}
 
 build <- readRDS(build_path)
 fit_artifact <- readRDS(fit_path)
@@ -40,12 +43,27 @@ stage2_path <- stage2_candidates[file.exists(stage2_candidates)][1L]
 if (is.na(stage2_path) || !length(stage2_path)) {
   stop("Unable to resolve the Stage 2 artifact from --stage2 or Stage 3A provenance/configuration.")
 }
+declared_stage2 <- c(
+  if (!is.null(build$provenance$source_artifact)) as.character(build$provenance$source_artifact) else character(),
+  if (!is.null(build$config$inputs$joint_model_inputs)) as.character(build$config$inputs$joint_model_inputs) else character()
+)
+declared_stage2 <- declared_stage2[nzchar(declared_stage2)]
+if (!is.null(option("stage2")) && length(declared_stage2)) {
+  supplied_norm <- normalizePath(option("stage2"), mustWork = TRUE)
+  declared_norm <- normalizePath(declared_stage2[file.exists(declared_stage2)], mustWork = TRUE)
+  if (length(declared_norm) && !any(vapply(declared_norm, identical, logical(1L), supplied_norm))) {
+    stop("Explicit Stage 2 artifact does not reconcile to Stage 3A provenance/configuration: ", supplied_norm)
+  }
+}
 stage2 <- readRDS(stage2_path)
 
 fitted_values <- joint_inla_extract_fitted_values(build, fit_artifact, stage2)
 components <- joint_inla_project_prepare_components(build, fit_artifact, stage2)
+expected_rows <- if (!is.null(expected_rows_arg)) as.integer(expected_rows_arg) else nrow(stage2$prediction_grid)
+expected_weeks <- if (!is.null(expected_weeks_arg)) as.integer(expected_weeks_arg) else length(unique(paste(stage2$prediction_grid$epiyear, stage2$prediction_grid$epiweek, sep = "-W")))
+expected_groups <- if (!is.null(expected_groups_arg)) as.integer(expected_groups_arg) else as.integer(components$n_groups)
 fitted_counts <- table(fitted_values$tier)
-expected_fitted_counts <- c(tier1 = 1478518L, tier2 = 1145865L)
+expected_fitted_counts <- c(tier1 = nrow(stage2$tier1), tier2 = nrow(stage2$tier2))
 if (!identical(as.integer(fitted_counts[names(expected_fitted_counts)]), unname(expected_fitted_counts))) {
   stop("Response-stack row counts do not match the production contract: ", paste(names(fitted_counts), as.integer(fitted_counts), collapse = "/"))
 }

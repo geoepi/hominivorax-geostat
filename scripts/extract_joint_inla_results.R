@@ -32,6 +32,9 @@ stage2 <- readRDS(stage2_path)
 result <- joint_inla_extract_audit(build, fit_artifact, stage2)
 utils::write.csv(result$audit, paths[["audit"]], row.names = FALSE, na = "")
 writeLines(result$details, paths[["details"]])
+if (any(result$audit$status == "FAIL")) {
+  stop("Stage 3B extraction audit failed; downstream validation is forbidden. Review: ", paths[["audit"]])
+}
 holdout <- joint_inla_extract_holdout_predictions(build, fit_artifact, stage2)
 utils::write.csv(holdout, paths[["holdout"]], row.names = FALSE, na = "")
 

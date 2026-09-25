@@ -393,7 +393,7 @@ joint_inla_project_reconstruction_metrics <- function(manual, fitted_values, n_w
   list(audit = audit, worst_rows = do.call(rbind, worst), pass = all(audit$pass_rmse & audit$pass_median_abs & audit$pass_max_abs))
 }
 
-joint_inla_project_prediction_grid_contract <- function(stage2, build, expected_rows = 1669395L, expected_weeks = 105L, components = NULL) {
+joint_inla_project_prediction_grid_contract <- function(stage2, build, expected_rows = NULL, expected_weeks = NULL, components = NULL) {
   grid <- stage2$prediction_grid
   if (!is.data.frame(grid)) stop("Stage 2 prediction_grid must be a data frame.")
   if (!is.null(expected_rows) && nrow(grid) != as.integer(expected_rows)) stop("Prediction-grid row count is ", nrow(grid), "; expected ", expected_rows, ".")
@@ -418,7 +418,7 @@ joint_inla_project_prediction_grid_contract <- function(stage2, build, expected_
     }
   }
   weeks <- unique(paste(grid$epiyear, grid$epiweek, sep = "-W"))
-  if (length(weeks) != as.integer(expected_weeks)) stop("Prediction grid has ", length(weeks), " weeks; expected ", expected_weeks, ".")
+  if (!is.null(expected_weeks) && length(weeks) != as.integer(expected_weeks)) stop("Prediction grid has ", length(weeks), " weeks; expected ", expected_weeks, ".")
   cell_coordinate <- unique(grid[c("cell_id", "x", "y")])
   if (anyDuplicated(cell_coordinate$cell_id)) stop("Each cell_id must map to one prediction coordinate.")
   list(
@@ -470,7 +470,7 @@ joint_inla_project_validate_spatial_projector <- function(build, stage2, compone
 
 joint_inla_project_prediction <- function(stage2, build, components, spatial_validation,
                                           allow_unseen_admin_zero = FALSE,
-                                          expected_rows = 1669395L, expected_weeks = 105L) {
+                                          expected_rows = NULL, expected_weeks = NULL) {
   if (!isTRUE(spatial_validation$pass)) stop("Spatial projection validation failed; dense-grid prediction is forbidden.")
   contract <- joint_inla_project_prediction_grid_contract(stage2, build, expected_rows, expected_weeks, components)
   grid <- stage2$prediction_grid

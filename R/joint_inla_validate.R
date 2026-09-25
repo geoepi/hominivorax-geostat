@@ -274,7 +274,9 @@ joint_inla_validate_audit_row <- function(section, check, status, observed, expe
              blocking = isTRUE(blocking), details = as.character(details), stringsAsFactors = FALSE)
 }
 
-joint_inla_validate_audit <- function(holdout, stage2, tier1_presence, tier2, posterior_support, expected_counts = NULL, reference_background = NULL) {
+joint_inla_validate_audit <- function(holdout, stage2, tier1_presence, tier2, posterior_support,
+                                     expected_counts = NULL, reference_background = NULL,
+                                     expected_tier1_holdouts = NULL) {
   rows <- list()
   add <- function(...) rows[[length(rows) + 1L]] <<- joint_inla_validate_audit_row(...)
   all_true <- function(x) length(x) > 0L && all(!is.na(x) & as.logical(x))
@@ -283,6 +285,8 @@ joint_inla_validate_audit <- function(holdout, stage2, tier1_presence, tier2, po
     sum(isTRUE(x$is_test_point) | (!is.null(x$is_test_point) & x$is_test_point %in% TRUE), na.rm = TRUE)
   }, integer(1L))
   holdout_counts <- table(factor(holdout$tier, levels = c("tier1", "tier2")))
+  expected_tier1_holdouts <- expected_tier1_holdouts %||%
+    if (!is.null(reference_background)) reference_background$occurrence_rows else NA_integer_
   add("inputs", "holdout_file_rows", "PASS", nrow(holdout), nrow(holdout), "Existing holdout prediction CSV was read; it was not overwritten.")
   add("inputs", "stage2_holdout_counts", if (identical(as.integer(stage2_counts), as.integer(holdout_counts))) "PASS" else "FAIL",
       paste(as.integer(stage2_counts), collapse = "/"), paste(as.integer(holdout_counts), collapse = "/"),
@@ -297,8 +301,8 @@ joint_inla_validate_audit <- function(holdout, stage2, tier1_presence, tier2, po
   family_ok <- "family" %in% names(holdout) && all(holdout$family[holdout$tier == "tier1"] == "binomial") && all(holdout$family[holdout$tier == "tier2"] == "nbinomial")
   add("inputs", "family_labels", if (family_ok) "PASS" else "FAIL", if ("family" %in% names(holdout)) paste(unique(holdout$family), collapse = "/") else "missing", "binomial/nbinomial", "Holdout rows retain the production likelihood-family labels.", blocking = TRUE)
   background_ok <- !is.null(reference_background) && identical(reference_background$status, "PASS")
-  add("tier1", "withheld_presence_population", if (background_ok && reference_background$occurrence_rows == 6638L) "PASS" else "FAIL",
-      if (is.null(reference_background)) "missing" else reference_background$occurrence_rows, 6638, "Stage 2 test points with occurrence provenance; background rows are not used as confirmed absence.", blocking = TRUE)
+  add("tier1", "withheld_presence_population", if (background_ok && is.finite(expected_tier1_holdouts) && reference_background$occurrence_rows == as.integer(expected_tier1_holdouts)) "PASS" else "FAIL",
+      if (is.null(reference_background)) "missing" else reference_background$occurrence_rows, expected_tier1_holdouts, "Stage 2 test points with occurrence provenance; background rows are not used as confirmed absence.", blocking = TRUE)
   add("tier1", "reference_background_identified", if (background_ok) "PASS" else "FAIL",
       if (is.null(reference_background)) "missing" else reference_background$background_rows, "identified", "Reference background is established from Yi=0 quadrature provenance, not response_observed alone.", blocking = TRUE)
   add("tier1", "background_terrestrial_support", if (background_ok && reference_background$background_rows > 0) "PASS" else "FAIL",
@@ -362,8 +366,17 @@ joint_inla_validate_source_origin <- function(source) {
   list(occurrence = occurrence, quadrature = quadrature, unclassified = !(occurrence | quadrature))
 }
 
-joint_inla_validate_reference_background <- function(stage2, fitted, expected_holdouts = 6638L) {
+joint_inla_validate_reference_background <- function(stage2, fitted, expected_holdouts = NULL) {
   if (!is.list(stage2) || !is.data.frame(stage2$tier1)) stop("Stage 2 artifact must contain a Tier 1 data frame.")
+  if (is.null(expected_holdouts)) {
+    expected_holdouts <- if (is.list(stage2$holdout_metadata) && !is.null(stage2$holdout_metadata$tier1$selected_count)) {
+      stage2$holdout_metadata$tier1$selected_count
+    } else if (is.data.frame(stage2$tier1) && "is_test_point" %in% names(stage2$tier1)) {
+      sum(stage2$tier1$is_test_point %in% TRUE, na.rm = TRUE)
+    } else {
+      stop("expected_holdouts is required when Stage 2 lacks a Tier 1 holdout count contract.")
+    }
+  }
   source <- stage2$tier1
   required <- c("inside_domain", "sc_Exp", "is_censored", "is_test_point", "epiyear", "epiweek", "time_index", "x", "y")
   missing <- setdiff(required, names(source))

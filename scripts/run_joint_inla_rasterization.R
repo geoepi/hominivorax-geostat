@@ -28,9 +28,9 @@ args <- parse_args(commandArgs(trailingOnly = TRUE))
 phase2_dir <- args[["phase2-output"]] %||% "/project/disease_ecology/nws-geostat-output/joint_inla_fit/prediction_projection_20725437"
 run_id <- args[["run-id"]] %||% "20725437"
 output_dir <- args[["output"]] %||% file.path(dirname(phase2_dir), paste0("raster_surfaces_", run_id))
-expected_weeks <- as.integer(args[["expected-weeks"]] %||% 105L)
-expected_rows <- as.integer(args[["expected-rows"]] %||% 1669395L)
-source_phase2_commit <- args[["source-phase2-commit"]] %||% "1bcb6deb554c6f9b84013040487fbdb9470a2c0e"
+expected_weeks <- if (is.null(args[["expected-weeks"]])) NULL else as.integer(args[["expected-weeks"]])
+expected_rows <- if (is.null(args[["expected-rows"]])) NULL else as.integer(args[["expected-rows"]])
+source_phase2_commit <- args[["source-phase2-commit"]] %||% NULL
 stage2_artifact <- args[["stage2-artifact"]] %||% NULL
 template_path <- args[["template"]] %||% NULL
 
