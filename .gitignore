@@ -73,6 +73,7 @@ outputs/preprocessing_demo/
 !/scripts/run_joint_inla_atlas.sh
 !/scripts/run_joint_inla_atlas.sh.example
 !/scripts/run_joint_inla_rasterization.R
+!/scripts/run_joint_inla_rasterization_atlas.sh
 
 # Jupyter checkpoint files
 .ipynb_checkpoints/
