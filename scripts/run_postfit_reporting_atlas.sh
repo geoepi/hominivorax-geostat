@@ -40,7 +40,7 @@ echo "Post-fit reporting hostname: $(hostname)"
 echo "Post-fit reporting git SHA: $(git rev-parse HEAD)"
 echo "Post-fit reporting start: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
 echo "Post-fit reporting module list:"
-module list 2>&1
+module list 2>&1 | cat
 echo "Post-fit reporting R executable:"
 which R
 R --version | head -2

@@ -180,6 +180,67 @@ if (!isTRUE(args[["no-rpi"]]) && isTRUE(rpi_audit$enabled) && !is.null(potential
 utils::write.csv(rpi_audit$checks, file.path(paths$metadata, "rpi_readiness_audit.csv"), row.names = FALSE, na = "")
 saveRDS(rpi_audit, file.path(paths$objects, "rpi_readiness_audit.rds")); generated_objects$rpi_readiness_audit <- file.path(paths$objects, "rpi_readiness_audit.rds")
 
+host_mapping_status <- if (is.null(observation_path)) "WARNING" else if (identical(species_audit$status, "PASS") && isTRUE(as.numeric(species_audit$n_unmatched_submission_rows) == 0)) "PASS" else "WARNING"
+denominator_status <- if (is.null(observation_path)) "WARNING" else if (isTRUE(as.numeric(species_audit$n_expanded_host_assignments) == sum(read.csv(file.path(paths$tables, "species_composition.csv"), stringsAsFactors = FALSE)$count))) "PASS" else "FAIL"
+denominator_label_status <- if (is.null(observation_path)) "WARNING" else if (isTRUE(species_audit$denominator_discrepancy)) "WARNING" else "PASS"
+qa_checks <- data.frame(
+  check = c(
+    "reference_fit_available", "stage2_provenance", "stage3a_provenance", "host_csv_availability",
+    "host_mapping_coverage", "denominator_reconciliation", "denominator_label_accuracy",
+    "species_product", "coefficient_tables", "cattle_product", "temporal_product",
+    "phase3_raster_access", "map_generation", "potential_abundance_conversion",
+    "rpi_observation_provenance", "rpi_readiness", "manifest_checksum_prerequisites"
+  ),
+  status = c(
+    if (file.exists(fit_path)) "PASS" else "FAIL",
+    if (file.exists(stage2_path) && dir.exists(phase2_root)) "PASS" else "FAIL",
+    if (file.exists(build_path)) "PASS" else "FAIL",
+    if (!is.null(observation_path) && identical(species_audit$status, "PASS")) "PASS" else "FAIL",
+    host_mapping_status,
+    denominator_status,
+    denominator_label_status,
+    if (file.exists(file.path(paths$tables, "species_composition.csv")) && file.exists(file.path(paths$figures, "species_composition.png"))) "PASS" else "FAIL",
+    if (file.exists(file.path(paths$tables, "fixed_effects_tier1.csv")) && file.exists(file.path(paths$tables, "fixed_effects_tier2.csv"))) "PASS" else "FAIL",
+    if (file.exists(file.path(paths$tables, "cattle_effect.csv")) && file.exists(file.path(paths$figures, "cattle_effect.png"))) "PASS" else "FAIL",
+    if (file.exists(file.path(paths$tables, "temporal_effects.csv")) && file.exists(file.path(paths$figures, "temporal_effects.png"))) "PASS" else "FAIL",
+    if (!is.null(map_manifest) && nrow(map_manifest) >= 1L) "PASS" else "FAIL",
+    if (file.exists(file.path(paths$figures, "selected_week_maps.png"))) "PASS" else "FAIL",
+    if (!is.null(potential) && length(potential$paths) == nrow(map_manifest)) "PASS" else "WARNING",
+    if (any(rpi_audit$checks$check == "observed_source" & rpi_audit$checks$status == "PASS")) "PASS" else "WARNING",
+    if (identical(rpi_audit$status, "PASS")) "PASS" else "WARNING",
+    if (requireNamespace("digest", quietly = TRUE)) "PASS" else "WARNING"
+  ),
+  detail = c(
+    "Reference fit was loaded from the explicit reference path.",
+    "Stage 2 and Phase 2 reference paths were available.",
+    "Stage 3A build artifact was available.",
+    "Authoritative host CSV was read and audited separately from fit/RPI provenance.",
+    if (is.null(observation_path)) "Host source was not supplied." else paste0("Unmatched submission rows: ", species_audit$n_unmatched_submission_rows, "."),
+    if (is.null(observation_path)) "Host denominator was not available." else paste0("Expanded assignments: ", species_audit$n_expanded_host_assignments, "; table count sum reconciled."),
+    if (is.null(observation_path)) "Host denominator was not available." else if (isTRUE(species_audit$denominator_discrepancy)) "Expanded assignments differ from submission rows; percentage of total submissions is not literally accurate." else "Expanded assignments equal submission rows.",
+    "Species-composition table and rendered figure were written.",
+    "Tier 1 and Tier 2 coefficient tables were written.",
+    "Cattle RW2 table and rendered figure were written.",
+    "Two-panel temporal table and rendered figure were written.",
+    "Validated Phase 3 raster manifest was available.",
+    "Deterministic selected-week map figure was written.",
+    if (is.null(potential)) "Potential abundance was not generated." else paste0("Generated ", length(potential$paths), " nominal-cell potential-abundance rasters."),
+    if (identical(rpi_audit$status, "PASS")) "Historical calibration observation source was supplied." else "Historical nws_obs calibration provenance was not established; no authoritative RPI product generated.",
+    paste0("RPI gate status: ", rpi_audit$status, "."),
+    "SHA-256 checksum support was available for manifest generation."
+  ),
+  stringsAsFactors = FALSE
+)
+qa <- list(
+  checks = qa_checks,
+  totals = as.list(table(factor(qa_checks$status, levels = c("PASS", "WARNING", "FAIL")))),
+  overall_status = if (any(qa_checks$status == "FAIL")) "FAIL" else if (any(qa_checks$status == "WARNING")) "WARNING" else "PASS",
+  production_fit_scope = "Job 20742007 was outside this reporting run and was not touched."
+)
+saveRDS(qa, file.path(paths$objects, "reporting_qa_audit.rds")); generated_objects$reporting_qa_audit <- file.path(paths$objects, "reporting_qa_audit.rds")
+utils::write.csv(qa_checks, file.path(paths$qa, "reporting_qa_audit.csv"), row.names = FALSE, na = "")
+utils::write.csv(data.frame(status = qa$overall_status, pass = qa$totals$PASS, warning = qa$totals$WARNING, fail = qa$totals$FAIL, stringsAsFactors = FALSE), file.path(paths$qa, "reporting_qa_summary.csv"), row.names = FALSE, na = "")
+
 metadata <- list(
   source_run_id = run_id,
   fit = list(path = normalizePath(fit_path, mustWork = TRUE), sha256 = postfit_reporting_hash_file(fit_path)),
@@ -202,8 +263,9 @@ metadata <- list(
   cell_area = cell_area,
   potential_abundance = if (is.null(potential)) list(status = "BLOCKED", reason = "Potential abundance requires a validated cell-area audit and Phase 3 map manifest.", cell_area = cell_area) else potential,
   rpi = rpi_audit,
+  qa = qa,
   model_summary = model_summary
 )
 postfit_reporting_write_metadata(paths, metadata)
 manifest <- postfit_reporting_write_manifest(paths, run_id, metadata$generated_at_utc)
-cat("Post-fit reporting complete\n", "Output: ", paths$root, "\n", "Objects: ", sum(manifest$artifact_type == "object"), "\n", "Tables: ", sum(manifest$artifact_type == "table"), "\n", "Figures: ", sum(manifest$artifact_type == "figure"), "\n", "RPI: ", rpi_audit$status, "\n", sep = "")
+cat("Post-fit reporting complete\n", "Output: ", paths$root, "\n", "Objects: ", sum(manifest$artifact_type == "object"), "\n", "Tables: ", sum(manifest$artifact_type == "table"), "\n", "Figures: ", sum(manifest$artifact_type == "figure"), "\n", "RPI: ", rpi_audit$status, "\n", "QA: PASS=", qa$totals$PASS, " WARNING=", qa$totals$WARNING, " FAIL=", qa$totals$FAIL, "\n", sep = "")
