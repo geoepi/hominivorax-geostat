@@ -463,6 +463,9 @@ theme_hominivorax_report <- function(base_size = 11, base_family = "sans") {
     ggplot2::theme(
       panel.grid.minor = ggplot2::element_blank(),
       panel.grid.major = ggplot2::element_line(linewidth = 0.25, colour = "grey85"),
+      panel.background = ggplot2::element_rect(fill = "white", colour = NA),
+      plot.background = ggplot2::element_rect(fill = "white", colour = NA),
+      legend.background = ggplot2::element_rect(fill = "white", colour = NA),
       plot.title = ggplot2::element_text(face = "bold", colour = "grey15"),
       plot.subtitle = ggplot2::element_text(colour = "grey30"),
       axis.title = ggplot2::element_text(colour = "grey15"),
@@ -480,7 +483,7 @@ postfit_reporting_plot_species <- function(species_object) {
     data$percentage <- data$pct / 100
     data$major_minor <- data$tier
     x_label <- "Percentage of expanded host assignments (%)"
-    subtitle <- "Compound submissions contribute once per identified species; Unreported is retained"
+    subtitle <- "Compound submissions counted once per identified species; Unreported retained"
   } else {
     x_label <- "Percentage of stated cohort"
     subtitle <- "Major hosts and hosts contributing less than 1% of the stated cohort"
@@ -643,10 +646,10 @@ postfit_reporting_plot_selected_maps <- function(map_object) {
     }
     p1 <- add_context(ggplot2::ggplot(data[data$layer == "tier1_probability", , drop = FALSE], ggplot2::aes(x = x, y = y, fill = value)) + ggplot2::geom_raster()) +
       ggplot2::scale_fill_viridis_c(limits = limits$tier1_probability, name = "Probability", na.value = "transparent") +
-      ggplot2::labs(title = paste0(week, " — Tier 1"), x = NULL, y = NULL) + theme_hominivorax_report() + ggplot2::theme(axis.text = ggplot2::element_blank(), axis.ticks = ggplot2::element_blank())
+      ggplot2::labs(title = paste0(week, " - Tier 1"), x = NULL, y = NULL) + theme_hominivorax_report() + ggplot2::theme(axis.text = ggplot2::element_blank(), axis.ticks = ggplot2::element_blank())
     p2 <- add_context(ggplot2::ggplot(data[data$layer == "tier2_intensity", , drop = FALSE], ggplot2::aes(x = x, y = y, fill = value)) + ggplot2::geom_raster()) +
       ggplot2::scale_fill_viridis_c(limits = limits$tier2_intensity, name = "Intensity", na.value = "transparent") +
-      ggplot2::labs(title = paste0(week, " — Tier 2"), x = NULL, y = NULL) + theme_hominivorax_report() + ggplot2::theme(axis.text = ggplot2::element_blank(), axis.ticks = ggplot2::element_blank())
+      ggplot2::labs(title = paste0(week, " - Tier 2"), x = NULL, y = NULL) + theme_hominivorax_report() + ggplot2::theme(axis.text = ggplot2::element_blank(), axis.ticks = ggplot2::element_blank())
     list(tier1 = p1, tier2 = p2)
   })
   structure(list(plots = plots, nrow = length(plots), ncol = 2L, composition = "grid", object = map_object), class = "postfit_reporting_map_grid")
