@@ -512,7 +512,10 @@ postfit_reporting_plot_cattle <- function(cattle_object, cattle_units = NULL) {
 postfit_reporting_compose_two <- function(first, second) {
   if (requireNamespace("patchwork", quietly = TRUE)) return(first / second)
   if (requireNamespace("cowplot", quietly = TRUE)) return(cowplot::plot_grid(first, second, ncol = 1, align = "v", axis = "l"))
-  list(first = first, second = second, composition = "grid")
+  structure(
+    list(plots = list(list(first), list(second)), nrow = 2L, ncol = 1L, composition = "grid"),
+    class = "postfit_reporting_panel_grid"
+  )
 }
 
 postfit_reporting_plot_temporal <- function(temporal_object) {
@@ -805,7 +808,7 @@ postfit_reporting_save_plot <- function(plot, object_name, paths, width = 8, hei
   postfit_reporting_require("ggplot2")
   rds <- file.path(paths$objects, paste0("plot_", object_name, ".rds")); pdf <- file.path(paths$figures, paste0(object_name, ".pdf")); png <- file.path(paths$figures, paste0(object_name, ".png"))
   saveRDS(plot, rds)
-  if (inherits(plot, "postfit_reporting_map_grid")) {
+  if (inherits(plot, c("postfit_reporting_map_grid", "postfit_reporting_panel_grid"))) {
     draw <- function(device_path, device_fun) {
       if (identical(device_fun, grDevices::pdf)) device_fun(device_path, width = width, height = height) else device_fun(device_path, width = width, height = height, units = "in", res = 160)
       on.exit(grDevices::dev.off(), add = TRUE)
