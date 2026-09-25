@@ -1,0 +1,33 @@
+# Parameterized post-fit reporting configuration.
+# This file names the validated reference artifacts only; it does not fit or
+# modify a model and it never uses the running production fit implicitly.
+run_id: "20725437"
+output_root: "/project/disease_ecology/nws-geostat-output/postfit_reporting"
+fit: "/project/disease_ecology/nws-geostat-output/joint_inla_fit/joint_model_fit.rds"
+build: "/project/disease_ecology/nws-geostat-output/joint_inla/joint_inla_build.rds"
+stage2: "/project/disease_ecology/nws-geostat-output/joint_model/joint_model_inputs.rds"
+phase2: "/project/disease_ecology/nws-geostat-output/joint_inla_fit/prediction_projection_20725437"
+phase3: "/project/disease_ecology/nws-geostat-output/joint_inla_fit/raster_surfaces_20725437"
+boundary: null
+
+# Species composition is intentionally explicit because the denominator must
+# be audited. Supply these only after identifying the reference cohort.
+species_data: null
+species_column: host_standardized
+species_category_column: host_group
+species_cohort: null
+
+# Legacy conversion audit. Either supply an audited template or an explicit
+# constant plus units. Do not use the old approximate 625 km^2 label when the
+# current Phase 3 template gives a different exact value.
+cell_area_template: null
+cell_area: null
+cell_area_units: "km^2"
+
+# RPI is generated only when the semantic gate passes.
+observations: null
+rpi:
+  gen_days: 21
+  days_per_layer: 7
+  cut_quant: 0.10
+  class_boundaries: [3, 8, 15]
