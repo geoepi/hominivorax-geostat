@@ -10,6 +10,16 @@ RESULTS PIPELINE     extract -> canonical objects -> tables/figures -> later rep
 
 The reporting module is [R/postfit_reporting.R](/D:/Github/hominivorax-geostat/R/postfit_reporting.R). It consumes explicit artifact paths and run IDs. It does not alter model specification, preprocessing, likelihoods, priors, SPDE/copy-field structure, holdouts, validation, projection, or rasterization.
 
+The reference fit `20725437` was used to develop and validate the reporting
+mechanics. The canonical object, table, figure, manifest, and portability
+interfaces are now frozen in [docs/post-fit-reporting-schema.md](post-fit-reporting-schema.md)
+for migration to a future accepted production fit. Host composition is an
+independent descriptive product from the real observation CSV, not a fit or
+RPI-provenance input. Map aesthetics may be revisited after production-fit
+acceptance, but the deterministic map-selection rule and product interfaces
+should remain unchanged. RPI remains blocked pending historical
+observation-calibration provenance.
+
 Atlas runtime recovery and spatial preflight belong to the canonical
 [Atlas environment record](atlas-environment.md). In particular, reporting
 must use the compute-node module stack and `.libPaths()` before concluding that
@@ -46,6 +56,14 @@ Every table and figure is derived from a canonical object. The initial object sc
 - `selected_map_values`: direct values read from selected Phase 3 rasters, with the selection rule and source paths.
 - `model_summary`: factual fit context, not a diagnostics verdict.
 - `rpi_readiness_audit`: the semantic gate and parameters; a final RPI product is written only when the gate passes.
+
+The stable schemas and logical product names are defined in
+[docs/post-fit-reporting-schema.md](post-fit-reporting-schema.md). The cattle
+axis is supported as `Cattle density (individuals/km²)` when the Stage 2
+provenance resolves the configured `cattle_density.tif` /
+`GLW4-2020.D-DA.CTL` layer. Reporting records the raw source variable,
+`log1p` transformation, quantile-midpoint definition, and units without
+rescaling the fitted partial contribution.
 
 Canonical tables are saved as both RDS and CSV. Plots are saved as RDS plus PDF/PNG where generated.
 

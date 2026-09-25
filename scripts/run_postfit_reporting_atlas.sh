@@ -31,7 +31,8 @@ PHASE2_ROOT="${POSTFIT_REPORTING_PHASE2:-/project/disease_ecology/nws-geostat-ou
 PHASE3_ROOT="${POSTFIT_REPORTING_PHASE3:-/project/disease_ecology/nws-geostat-output/joint_inla_fit/raster_surfaces_${RUN_ID}}"
 OBSERVATION_INPUT="${POSTFIT_REPORTING_OBSERVATION_INPUT:-/project/disease_ecology/NWScrewworm/data/processed_data/case_detections/combined_clean_obs_2027-07-31.csv}"
 HOST_COLUMN="${POSTFIT_REPORTING_HOST_COLUMN:-host}"
-MAPPING_VERSION="${POSTFIT_REPORTING_MAPPING_VERSION:-historical-host-normalization-v1}"
+CATTLE_UNITS="${POSTFIT_REPORTING_CATTLE_UNITS:-}"
+MAPPING_VERSION="${POSTFIT_REPORTING_MAPPING_VERSION:-historical-host-normalization-v2}"
 
 cd "${PROJECT_ROOT}"
 
@@ -58,6 +59,7 @@ R_ARGS=(
   --host-column "${HOST_COLUMN}"
   --mapping-version "${MAPPING_VERSION}"
 )
+if [[ -n "${CATTLE_UNITS}" ]]; then R_ARGS+=(--cattle-units "${CATTLE_UNITS}"); fi
 if [[ -n "${POSTFIT_REPORTING_BOUNDARY:-}" ]]; then R_ARGS+=(--boundary "${POSTFIT_REPORTING_BOUNDARY}"); fi
 if [[ -n "${POSTFIT_REPORTING_CELL_AREA_TEMPLATE:-}" ]]; then R_ARGS+=(--cell-area-template "${POSTFIT_REPORTING_CELL_AREA_TEMPLATE}"); fi
 if [[ -n "${POSTFIT_REPORTING_CELL_AREA:-}" ]]; then R_ARGS+=(--cell-area "${POSTFIT_REPORTING_CELL_AREA}"); fi

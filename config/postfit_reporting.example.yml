@@ -14,7 +14,8 @@ boundary: null
 # CSV is separate from fit provenance and is not implicitly the RPI source.
 observation_input: "/project/disease_ecology/NWScrewworm/data/processed_data/case_detections/combined_clean_obs_2027-07-31.csv"
 host_column: host
-mapping_version: "historical-host-normalization-v1"
+mapping_version: "historical-host-normalization-v2"
+cattle_units: "individuals/km²"
 
 # Legacy/generic species input remains available only when its cohort and
 # denominator are explicit.

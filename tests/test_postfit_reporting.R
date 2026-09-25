@@ -124,8 +124,30 @@ testthat::test_that("authoritative host composition expands compound records and
   testthat::expect_true(all(c("Cattle", "Pig", "Unreported") %in% object$table$common_name))
   testthat::expect_true(all(c("raw_host", "cleaned_host", "pattern", "common_name", "broad_group") %in% names(object$assignment_table)))
   testthat::expect_true(nrow(object$first_host_sensitivity) >= 1L)
-  testthat::expect_equal(object$lookup$mapping_version, rep("historical-host-normalization-v1", nrow(object$lookup)))
+  testthat::expect_equal(object$lookup$mapping_version, rep("historical-host-normalization-v2", nrow(object$lookup)))
   if (requireNamespace("digest", quietly = TRUE)) testthat::expect_false(is.na(object$audit$source_sha256))
+})
+
+testthat::test_that("host cleanup resolves only documented unmatched labels", {
+  x <- data.frame(host = c("MONKEY", "WILDLIFE", "Buffalino", "Avian", "mystery"), stringsAsFactors = FALSE)
+  object <- postfit_reporting_host_composition(x)
+  testthat::expect_equal(object$audit$n_unmatched_before_cleanup, 5L)
+  testthat::expect_equal(object$audit$n_unmatched_after_cleanup, 1L)
+  testthat::expect_equal(object$audit$n_unmatched_submission_rows, 1L)
+  testthat::expect_true(all(c("Monkey", "Unspecified Wildlife", "Water Buffalo", "Birds") %in% object$table$common_name))
+  testthat::expect_true(all(c("source_row_id", "host_raw", "host_normalized", "match_status", "proposed_mapping", "proposed_common_name", "proposed_broad_group", "mapping_evidence", "action") %in% names(object$unmatched_audit)))
+  testthat::expect_equal(sum(object$unmatched_audit$match_status == "resolved_conservative_extension"), 4L)
+  testthat::expect_equal(object$unmatched_audit$proposed_common_name[object$unmatched_audit$host_normalized == "mystery"], NA_character_)
+})
+
+testthat::test_that("cattle provenance supports explicit units without changing contribution semantics", {
+  fixture <- make_reporting_fixture()
+  provenance <- postfit_reporting_cattle_provenance(fixture$stage2, cattle_units = "individuals/km²")
+  cattle <- postfit_reporting_cattle_effect(fixture$fit, fixture$stage2, units = provenance$cattle_density_units)
+  testthat::expect_equal(provenance$cattle_density_units, "individuals/km²")
+  testthat::expect_equal(provenance$units_status, "PASS")
+  testthat::expect_equal(cattle$units, rep("individuals/km²", nrow(cattle)))
+  testthat::expect_equal(cattle$posterior_mean, c(.1, 1, 3))
 })
 
 testthat::test_that("host composition retains the minor-host tier", {
@@ -193,5 +215,12 @@ testthat::test_that("run-specific output roots cannot collide", {
   dir.create(paths_a$root, recursive = TRUE)
   file.create(file.path(paths_a$root, "sentinel"))
   testthat::expect_error(postfit_reporting_assert_output_isolated(base, "reference_20725437"), "non-empty")
+})
+
+testthat::test_that("reporting accepts an arbitrary future run identifier", {
+  future <- postfit_reporting_output_paths(tempdir(), "arbitrary_new_run")
+  testthat::expect_match(future$root, "arbitrary_new_run")
+  testthat::expect_false(grepl("20725437", future$root, fixed = TRUE))
+  testthat::expect_true(all(c("fixed_effects_tier1", "species_composition", "cattle_effect", "selected_week_maps", "model_summary", "potential_abundance", "rpi_readiness") %in% postfit_reporting_product_names()))
 })
 cat("Post-fit reporting tests passed\\n")

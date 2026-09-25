@@ -40,6 +40,14 @@ postfit_reporting_output_paths <- function(output_root, run_id) {
   )
 }
 
+postfit_reporting_product_names <- function() {
+  c(
+    "fixed_effects_tier1", "fixed_effects_tier2", "species_composition",
+    "cattle_effect", "temporal_effects", "selected_week_maps", "model_summary",
+    "potential_abundance", "rpi_readiness"
+  )
+}
+
 postfit_reporting_assert_output_isolated <- function(output_root, run_id, overwrite = FALSE) {
   paths <- postfit_reporting_output_paths(output_root, run_id)
   if (dir.exists(paths$root) && length(list.files(paths$root, all.files = TRUE, recursive = TRUE, no.. = TRUE)) && !isTRUE(overwrite)) {
@@ -169,7 +177,63 @@ postfit_reporting_weight_summary <- function(mean, sd, q025, median, q975, weigh
   }
 }
 
-postfit_reporting_cattle_effect <- function(fit_artifact, stage2) {
+postfit_reporting_cattle_provenance <- function(stage2, cattle_units = NULL) {
+  source_model_inputs <- stage2$provenance$source_model_inputs %||% NA_character_
+  source_model_inputs <- if (length(source_model_inputs) == 1L) as.character(source_model_inputs) else NA_character_
+  model_inputs <- NULL
+  if (!is.na(source_model_inputs) && file.exists(source_model_inputs)) {
+    model_inputs <- tryCatch(readRDS(source_model_inputs), error = function(e) NULL)
+  }
+  configuration <- model_inputs$configuration %||% list()
+  static_covariates <- configuration$static_covariates %||% list()
+  cattle_source_path <- static_covariates$cattle %||% NA_character_
+  cattle_source_path <- if (length(cattle_source_path) == 1L) as.character(cattle_source_path) else NA_character_
+  source_layer <- NA_character_
+  source_crs <- NA_character_
+  source_resolution <- c(NA_real_, NA_real_)
+  if (!is.na(cattle_source_path) && file.exists(cattle_source_path) && requireNamespace("terra", quietly = TRUE)) {
+    raster <- tryCatch(terra::rast(cattle_source_path), error = function(e) NULL)
+    if (!is.null(raster)) {
+      source_layer <- names(raster)[[1L]] %||% NA_character_
+      source_crs <- terra::crs(raster, proj = TRUE)
+      source_resolution <- as.numeric(terra::res(raster))
+    }
+  }
+  derived_units <- if (!is.na(cattle_source_path) && grepl("cattle_density\\.tif$", cattle_source_path, ignore.case = TRUE) &&
+                        identical(source_layer, "GLW4-2020.D-DA.CTL")) "individuals/km²" else NA_character_
+  resolved_units <- if (!is.null(cattle_units) && length(cattle_units) == 1L && !is.na(cattle_units) && nzchar(cattle_units)) as.character(cattle_units) else derived_units
+  units_status <- if (is.na(resolved_units)) "WARNING" else "PASS"
+  units_evidence <- if (!is.na(cattle_units %||% NA_character_)) {
+    "Explicit reporting input supplied by the caller."
+  } else if (!is.na(derived_units)) {
+    paste0("Stage 1 configuration points to ", cattle_source_path, "; the source band is ", source_layer,
+           "; the raster CRS uses kilometres and the source variable is cattle density.")
+  } else {
+    "Exact cattle-density units were not established from the supplied Stage 2/Stage 1 provenance."
+  }
+  specification <- stage2$feature_metadata$specifications$cattle %||% list()
+  bins <- specification$effective_bins %||% specification$requested_bins %||% NA_integer_
+  transformation <- specification$transformation %||% "log1p(midpoint)"
+  mid_definition <- paste0(
+    "Midpoint of the ", bins, " Stage 2 Tier 2-fitted type-7 quantile bins on raw cattle density; ",
+    "cattle_mid_log1p = log1p(cattle_mid), and cattle_q indexes the fitted support."
+  )
+  list(
+    cattle_density_units = resolved_units,
+    units_status = units_status,
+    units_evidence = units_evidence,
+    cattle_source_variable = "cattle",
+    cattle_source_path = cattle_source_path,
+    cattle_source_layer = source_layer,
+    cattle_source_crs = source_crs,
+    cattle_source_resolution = source_resolution,
+    cattle_transformation = transformation,
+    cattle_mid_definition = mid_definition,
+    cattle_contribution_definition = "Weighted cattle_q RW2 posterior summary: latent RW2 summary multiplied by cattle_mid_log1p; raw latent summaries are retained separately."
+  )
+}
+
+postfit_reporting_cattle_effect <- function(fit_artifact, stage2, units = NA_character_) {
   if (!exists("joint_inla_extract_cattle_effects", mode = "function")) stop("Source R/joint_inla_extract.R before extracting cattle effects.")
   raw <- joint_inla_extract_cattle_effects(fit_artifact, stage2)
   raw$cattle_q <- as.integer(raw$cattle_q)
@@ -202,6 +266,7 @@ postfit_reporting_cattle_effect <- function(fit_artifact, stage2) {
     q025 = weighted[, "q025"],
     median = weighted[, "median"],
     q975 = weighted[, "q975"],
+    units = rep(as.character(units), nrow(raw)),
     contribution_definition = "posterior cattle_q RW2 summary multiplied by cattle_mid_log1p, matching f(cattle_q, cattle_mid_log1p, model='rw2')",
     stringsAsFactors = FALSE
   )
@@ -249,8 +314,36 @@ postfit_reporting_temporal_effects <- function(build, fit_artifact, stage2) {
   out
 }
 
-postfit_reporting_host_lookup <- function(mapping_version = "historical-host-normalization-v1") {
+postfit_reporting_host_cleanup_proposals <- function() {
   data.frame(
+    host_normalized = c("monkey", "wildlife", "buffalino", "avian"),
+    pattern = c("monkey", "wildlife", "buffal", "avian"),
+    classification = c(
+      "genuine additional identifiable host",
+      "obvious spelling/format variant of an existing mapped host",
+      "obvious spelling/format variant of an existing mapped host",
+      "obvious spelling/format variant of an existing mapped host"
+    ),
+    proposed_common_name = c("Monkey", "Unspecified Wildlife", "Water Buffalo", "Birds"),
+    proposed_broad_group = rep("Wildlife", 4L),
+    mapping_evidence = c(
+      "The existing preprocessing legacy_host_standardization() explicitly recognizes monkey as wildlife; the raw label is an identifiable host.",
+      "The raw broad wildlife label is semantically covered by the existing Unspecified Wildlife reporting category; no species-level guess is made.",
+      "The existing reporting lookup maps the bufal prefix to Water Buffalo, and legacy_host_standardization() explicitly lists buffalino as a bovine spelling variant; the doubled-f form is a conservative extension of that reporting lookup.",
+      "Avian is a direct language variant of the existing Birds category; the existing lookup already recognizes bird/ave/aviar/ardeid labels."
+    ),
+    action = c(
+      "Add the canonical monkey pattern under Wildlife.",
+      "Add the wildlife pattern to the existing Unspecified Wildlife category.",
+      "Add the doubled-f buffalo pattern to the existing Water Buffalo category.",
+      "Add the avian pattern to the existing Birds category."
+    ),
+    stringsAsFactors = FALSE
+  )
+}
+
+postfit_reporting_host_lookup <- function(mapping_version = "historical-host-normalization-v2", include_cleanup = TRUE) {
+  base <- data.frame(
     pattern = c(
       "bovin", "bufal", "suin|porc", "(?<!b)ovin", "caprin",
       "equin", "burro", "canin|carin", "felin", "human",
@@ -272,6 +365,16 @@ postfit_reporting_host_lookup <- function(mapping_version = "historical-host-nor
     mapping_version = mapping_version,
     stringsAsFactors = FALSE
   )
+  if (!isTRUE(include_cleanup)) return(base)
+  cleanup <- postfit_reporting_host_cleanup_proposals()
+  extra <- data.frame(
+    pattern = cleanup$pattern,
+    common_name = cleanup$proposed_common_name,
+    broad_group = cleanup$proposed_broad_group,
+    mapping_version = mapping_version,
+    stringsAsFactors = FALSE
+  )
+  rbind(base, extra)
 }
 
 postfit_reporting_clean_host <- function(value) {
@@ -311,8 +414,51 @@ postfit_reporting_host_composition_table <- function(assignments, denominator, d
   counts[, c("common_name", "broad_group", "count", "prop", "pct", "tier", "denominator", "denominator_type", "source_file", "mapping_version"), drop = FALSE]
 }
 
+postfit_reporting_host_unmatched_audit <- function(data, host_column = "host", source_file = NA_character_,
+                                                   mapping_version = "historical-host-normalization-v2") {
+  if (!is.data.frame(data)) stop("Host audit source must be a data frame.")
+  if (length(host_column) != 1L || !host_column %in% names(data)) stop("Host audit source is missing host column: ", host_column)
+  baseline <- postfit_reporting_host_lookup(mapping_version, include_cleanup = FALSE)
+  proposals <- postfit_reporting_host_cleanup_proposals()
+  raw_host <- as.character(data[[host_column]])
+  normalized <- postfit_reporting_clean_host(raw_host)
+  matched_baseline <- vapply(normalized, function(value) {
+    nzchar(value) && any(vapply(baseline$pattern, function(pattern) grepl(pattern, value, perl = TRUE), logical(1L)))
+  }, logical(1L))
+  unmatched <- which(!matched_baseline)
+  if (!length(unmatched)) {
+    return(data.frame(
+      source_row_id = integer(), host_raw = character(), host_normalized = character(),
+      match_status = character(), proposed_mapping = character(), proposed_common_name = character(),
+      proposed_broad_group = character(), classification = character(), mapping_evidence = character(),
+      action = character(), source_file = character(), mapping_version = character(),
+      stringsAsFactors = FALSE
+    ))
+  }
+  rows <- lapply(unmatched, function(i) {
+    proposal <- proposals[match(normalized[[i]], proposals$host_normalized), , drop = FALSE]
+    has_proposal <- nrow(proposal) == 1L && !is.na(proposal$proposed_common_name[[1L]])
+    data.frame(
+      source_row_id = as.integer(i),
+      host_raw = raw_host[[i]],
+      host_normalized = normalized[[i]],
+      match_status = if (has_proposal) "resolved_conservative_extension" else "unresolved",
+      proposed_mapping = if (has_proposal) proposal$pattern[[1L]] else NA_character_,
+      proposed_common_name = if (has_proposal) proposal$proposed_common_name[[1L]] else NA_character_,
+      proposed_broad_group = if (has_proposal) proposal$proposed_broad_group[[1L]] else NA_character_,
+      classification = if (has_proposal) proposal$classification[[1L]] else "truly unknown/unreported",
+      mapping_evidence = if (has_proposal) proposal$mapping_evidence[[1L]] else "No conservative mapping was established from the raw label or repository documentation.",
+      action = if (has_proposal) proposal$action[[1L]] else "Retain as Unreported; do not guess.",
+      source_file = if (length(source_file) == 1L) as.character(source_file) else NA_character_,
+      mapping_version = mapping_version,
+      stringsAsFactors = FALSE
+    )
+  })
+  do.call(rbind, rows)
+}
+
 postfit_reporting_host_composition <- function(data, host_column = "host", source_file = NA_character_,
-                                               mapping_version = "historical-host-normalization-v1",
+                                               mapping_version = "historical-host-normalization-v2",
                                                major_threshold_pct = 1) {
   if (!is.data.frame(data)) stop("Host-composition source must be a data frame.")
   if (length(host_column) != 1L || !host_column %in% names(data)) stop("Host-composition source is missing host column: ", host_column)
@@ -320,6 +466,7 @@ postfit_reporting_host_composition <- function(data, host_column = "host", sourc
   if (length(major_threshold_pct) != 1L || !is.finite(major_threshold_pct) || major_threshold_pct <= 0) stop("major_threshold_pct must be positive.")
 
   lookup <- postfit_reporting_host_lookup(mapping_version)
+  unmatched_audit <- postfit_reporting_host_unmatched_audit(data, host_column, source_file, mapping_version)
   raw_host <- as.character(data[[host_column]])
   cleaned_host <- postfit_reporting_clean_host(raw_host)
   matched_patterns <- lapply(cleaned_host, function(value) {
@@ -399,6 +546,8 @@ postfit_reporting_host_composition <- function(data, host_column = "host", sourc
     n_compound_submission_rows = sum(n_matches > 1L),
     n_unmatched_submission_rows = sum(n_matches == 0L),
     n_assignments_unreported = sum(assignments$broad_group == "Unreported"),
+    n_unmatched_before_cleanup = nrow(unmatched_audit),
+    n_unmatched_after_cleanup = sum(n_matches == 0L),
     denominator_type = "expanded_host_assignments",
     denominator_discrepancy = denominator != nrow(data),
     mapping_version = mapping_version,
@@ -411,7 +560,8 @@ postfit_reporting_host_composition <- function(data, host_column = "host", sourc
     assignment_table = assignments,
     first_host_assignment_table = first_assignments,
     first_host_table = first_table,
-    first_host_sensitivity = sensitivity
+    first_host_sensitivity = sensitivity,
+    unmatched_audit = unmatched_audit
   )
 }
 
@@ -693,6 +843,10 @@ postfit_reporting_potential_abundance <- function(tier2_paths, cell_area_info, o
     paths = unname(paths),
     definition = "potential_abundance = tier2_intensity_plugin × nominal_average_raster_cell_area",
     quantity_label = "standardized potential abundance for a nominal raster cell",
+    source_quantity = "tier2_intensity_plugin",
+    conversion_type = "nominal_average_cell_area",
+    cell_area_km2 = unname(cell_area_info$nominal_average_raster_cell_area),
+    direct_model_output = FALSE,
     cell_area = cell_area_info
   )
 }
@@ -838,8 +992,11 @@ postfit_reporting_write_manifest <- function(paths, source_run, generated_at = p
     info <- file.info(path)
     type <- if (grepl("^tables/", relative)) "table" else if (grepl("^figures/", relative)) "figure" else if (grepl("^spatial/", relative)) "spatial" else if (grepl("^metadata/", relative)) "metadata" else if (grepl("^qa/", relative)) "qa" else "object"
     stem <- tools::file_path_sans_ext(basename(relative))
+    product_name <- stem
+    if (type == "object" && grepl("^plot_", product_name)) product_name <- sub("^plot_", "", product_name)
+    if (identical(product_name, "rpi_readiness_audit")) product_name <- "rpi_readiness"
     object <- if (type == "table") file.path("objects", paste0(stem, ".rds")) else if (type == "figure") file.path("objects", paste0("plot_", stem, ".rds")) else if (type == "object") relative else NA_character_
-    data.frame(artifact_type = type, logical_product_name = stem, path = relative, file_format = postfit_reporting_file_format(path), source_object = gsub("\\\\", "/", object), source_run = source_run, checksum_sha256 = postfit_reporting_hash_file(path), generated_at_utc = generated_at, bytes = as.numeric(info$size), stringsAsFactors = FALSE)
+    data.frame(artifact_type = type, logical_product_name = product_name, path = relative, file_format = postfit_reporting_file_format(path), source_object = gsub("\\\\", "/", object), source_run = source_run, checksum_sha256 = postfit_reporting_hash_file(path), generated_at_utc = generated_at, bytes = as.numeric(info$size), stringsAsFactors = FALSE)
   }))
   if (is.null(manifest)) manifest <- data.frame()
   utils::write.csv(manifest, paths$manifest, row.names = FALSE, na = "")

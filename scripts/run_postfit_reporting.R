@@ -44,7 +44,7 @@ if (is.null(observation_path) && is.null(species_cohort) && !is.null(species_pat
 species_column <- arg(args, "species-column", "host_standardized")
 species_category_column <- arg(args, "species-category-column")
 host_column <- arg(args, "host-column", "host")
-mapping_version <- arg(args, "mapping-version", "historical-host-normalization-v1")
+mapping_version <- arg(args, "mapping-version", "historical-host-normalization-v2")
 cell_area_template <- arg(args, "cell-area-template")
 cell_area_value <- arg(args, "cell-area")
 cell_area_units <- arg(args, "cell-area-units")
@@ -71,9 +71,10 @@ for (directory in paths[c("objects", "tables", "figures", "spatial", "metadata",
 build <- readRDS(build_path)
 fit_artifact <- readRDS(fit_path)
 stage2 <- readRDS(stage2_path)
+cattle_provenance <- postfit_reporting_cattle_provenance(stage2, cattle_units = cattle_units)
 
 fixed <- postfit_reporting_fixed_effects(fit_artifact)
-cattle <- postfit_reporting_cattle_effect(fit_artifact, stage2)
+cattle <- postfit_reporting_cattle_effect(fit_artifact, stage2, units = cattle_provenance$cattle_density_units)
 temporal <- postfit_reporting_temporal_effects(build, fit_artifact, stage2)
 model_summary <- postfit_reporting_model_summary(build, fit_artifact, stage2)
 
@@ -96,8 +97,9 @@ save_figure <- function(plot, name, width, height) {
   generated_figures[[name]] <<- result
   generated_objects[[paste0("plot_", name)]] <<- result$rds
 }
-save_figure(postfit_reporting_plot_cattle(cattle, cattle_units = cattle_units), "cattle_effect", 8, 5)
+save_figure(postfit_reporting_plot_cattle(cattle, cattle_units = cattle_provenance$cattle_density_units), "cattle_effect", 8, 5)
 save_figure(postfit_reporting_plot_temporal(temporal), "temporal_effects", 10, 8)
+utils::write.csv(postfit_reporting_metadata_table(cattle_provenance), file.path(paths$metadata, "cattle_effect_provenance.csv"), row.names = FALSE, na = "")
 
 species_audit <- list(status = "UNRESOLVED", reason = "No explicit species source cohort was supplied; denominator was not guessed.")
 if (!is.null(observation_path)) {
@@ -113,6 +115,7 @@ if (!is.null(observation_path)) {
   write_table(species$first_host_assignment_table, "host_assignments_first_host")
   write_table(species$first_host_table, "species_composition_first_host")
   write_table(species$first_host_sensitivity, "species_composition_first_host_sensitivity")
+  write_table(species$unmatched_audit, "host_unmatched_audit")
   save_figure(postfit_reporting_plot_species(species), "species_composition", 9, 8)
   species_audit <- species$audit
 } else if (!is.null(species_path)) {
@@ -141,6 +144,9 @@ if (!is.null(phase3_root) && dir.exists(phase3_root)) {
   }
   map_manifest <- postfit_reporting_map_manifest(phase3_root)
   selected <- postfit_reporting_select_map_weeks(map_manifest, n = 4L)
+  selected$run_id <- run_id
+  selected$tier1_raster <- selected$tier1_probability_path
+  selected$tier2_raster <- selected$tier2_intensity_path
   map_object <- postfit_reporting_selected_map_values(selected, raster_root = phase3_root, boundary = boundary)
   saveRDS(map_object, file.path(paths$objects, "selected_map_values.rds")); generated_objects$selected_map_values <- file.path(paths$objects, "selected_map_values.rds")
   selected_map_plot <- postfit_reporting_plot_selected_maps(map_object)
@@ -187,7 +193,7 @@ qa_checks <- data.frame(
   check = c(
     "reference_fit_available", "stage2_provenance", "stage3a_provenance", "host_csv_availability",
     "host_mapping_coverage", "denominator_reconciliation", "denominator_label_accuracy",
-    "species_product", "coefficient_tables", "cattle_product", "temporal_product",
+    "species_product", "coefficient_tables", "cattle_product", "cattle_unit_provenance", "temporal_product",
     "phase3_raster_access", "map_generation", "potential_abundance_conversion",
     "rpi_observation_provenance", "rpi_readiness", "manifest_checksum_prerequisites"
   ),
@@ -202,6 +208,7 @@ qa_checks <- data.frame(
     if (file.exists(file.path(paths$tables, "species_composition.csv")) && file.exists(file.path(paths$figures, "species_composition.png"))) "PASS" else "FAIL",
     if (file.exists(file.path(paths$tables, "fixed_effects_tier1.csv")) && file.exists(file.path(paths$tables, "fixed_effects_tier2.csv"))) "PASS" else "FAIL",
     if (file.exists(file.path(paths$tables, "cattle_effect.csv")) && file.exists(file.path(paths$figures, "cattle_effect.png"))) "PASS" else "FAIL",
+    cattle_provenance$units_status,
     if (file.exists(file.path(paths$tables, "temporal_effects.csv")) && file.exists(file.path(paths$figures, "temporal_effects.png"))) "PASS" else "FAIL",
     if (!is.null(map_manifest) && nrow(map_manifest) >= 1L) "PASS" else "FAIL",
     if (file.exists(file.path(paths$figures, "selected_week_maps.png"))) "PASS" else "FAIL",
@@ -221,6 +228,7 @@ qa_checks <- data.frame(
     "Species-composition table and rendered figure were written.",
     "Tier 1 and Tier 2 coefficient tables were written.",
     "Cattle RW2 table and rendered figure were written.",
+    cattle_provenance$units_evidence,
     "Two-panel temporal table and rendered figure were written.",
     "Validated Phase 3 raster manifest was available.",
     "Deterministic selected-week map figure was written.",
@@ -255,10 +263,12 @@ metadata <- list(
   generated_objects = generated_objects,
   generated_tables = generated_tables,
   generated_figures = generated_figures,
+  product_names = postfit_reporting_product_names(),
   selected_map_week_rule = map_audit$selection_rule %||% NA_character_,
   observation_input = if (is.null(observation_path)) NULL else list(path = normalizePath(observation_path, mustWork = TRUE), sha256 = postfit_reporting_hash_file(observation_path), role = "authoritative descriptive host-composition source; not fit provenance and not assumed to be the RPI observation set"),
   species_composition = species_audit,
-  cattle_effect_semantics = "Weighted cattle_q RW2 posterior summary: latent RW2 summary × cattle_mid_log1p.",
+  cattle_effect_semantics = cattle_provenance$cattle_contribution_definition,
+  cattle_provenance = cattle_provenance,
   temporal_effect_semantics = "week_steps is Tier 1 latent logit deviation; tier2_week is Tier 2 latent log-intensity deviation; Stage 2 mapping is authoritative.",
   cell_area = cell_area,
   potential_abundance = if (is.null(potential)) list(status = "BLOCKED", reason = "Potential abundance requires a validated cell-area audit and Phase 3 map manifest.", cell_area = cell_area) else potential,
