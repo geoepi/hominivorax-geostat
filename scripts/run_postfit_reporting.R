@@ -158,11 +158,14 @@ rpi_audit <- postfit_reporting_rpi_audit(
   observed_source = observations_path,
   time_span_weeks = if (is.null(map_manifest)) NULL else nrow(map_manifest)
 )
-if (!isTRUE(args[["no-rpi"]]) && isTRUE(rpi_audit$enabled) && !is.null(map_manifest)) {
+potential <- NULL
+if (identical(cell_area$status, "PASS") && !is.null(map_manifest)) {
   tier2_paths <- map_manifest$tier2_intensity_path
   potential <- postfit_reporting_potential_abundance(tier2_paths, cell_area, file.path(paths$spatial, "potential_abundance"), overwrite = overwrite)
   generated_objects$potential_abundance <- file.path(paths$objects, "potential_abundance.rds")
   saveRDS(potential, generated_objects$potential_abundance)
+}
+if (!isTRUE(args[["no-rpi"]]) && isTRUE(rpi_audit$enabled) && !is.null(potential)) {
   count_stack <- terra::rast(potential$paths)
   observations <- utils::read.csv(observations_path, stringsAsFactors = FALSE, check.names = FALSE)
   rpi <- postfit_reporting_calc_rpi(count_stack, observations, gen_days = rpi_audit$parameters$gen_days, days_per_layer = rpi_audit$parameters$days_per_layer, cut_quant = rpi_audit$parameters$cut_quant)
@@ -173,9 +176,8 @@ if (!isTRUE(args[["no-rpi"]]) && isTRUE(rpi_audit$enabled) && !is.null(map_manif
   save_figure(postfit_reporting_plot_rpi(rpi$stability_class), "rpi_classes", 8, 7)
   rpi_audit$output_status <- "GENERATED"
   rpi_audit$output_paths <- c(rpi = file.path(paths$spatial, "rpi.tif"), classes = file.path(paths$spatial, "rpi_classes.tif"))
-} else {
-  utils::write.csv(rpi_audit$checks, file.path(paths$metadata, "rpi_readiness_audit.csv"), row.names = FALSE, na = "")
 }
+utils::write.csv(rpi_audit$checks, file.path(paths$metadata, "rpi_readiness_audit.csv"), row.names = FALSE, na = "")
 saveRDS(rpi_audit, file.path(paths$objects, "rpi_readiness_audit.rds")); generated_objects$rpi_readiness_audit <- file.path(paths$objects, "rpi_readiness_audit.rds")
 
 metadata <- list(
@@ -197,7 +199,8 @@ metadata <- list(
   species_composition = species_audit,
   cattle_effect_semantics = "Weighted cattle_q RW2 posterior summary: latent RW2 summary × cattle_mid_log1p.",
   temporal_effect_semantics = "week_steps is Tier 1 latent logit deviation; tier2_week is Tier 2 latent log-intensity deviation; Stage 2 mapping is authoritative.",
-  potential_abundance = cell_area,
+  cell_area = cell_area,
+  potential_abundance = if (is.null(potential)) list(status = "BLOCKED", reason = "Potential abundance requires a validated cell-area audit and Phase 3 map manifest.", cell_area = cell_area) else potential,
   rpi = rpi_audit,
   model_summary = model_summary
 )

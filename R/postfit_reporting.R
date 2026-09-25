@@ -683,7 +683,12 @@ postfit_reporting_potential_abundance <- function(tier2_paths, cell_area_info, o
     terra::writeRaster(raster * cell_area_info$nominal_average_raster_cell_area, output, overwrite = TRUE, datatype = "FLT8S")
     normalizePath(output, mustWork = TRUE)
   }, character(1L))
-  list(paths = unname(paths), definition = "potential_abundance = tier2_intensity_plugin × nominal_average_raster_cell_area", cell_area = cell_area_info)
+  list(
+    paths = unname(paths),
+    definition = "potential_abundance = tier2_intensity_plugin × nominal_average_raster_cell_area",
+    quantity_label = "standardized potential abundance for a nominal raster cell",
+    cell_area = cell_area_info
+  )
 }
 
 postfit_reporting_rpi_audit <- function(count_stack_semantics, observed_source = NULL, time_span_weeks = NULL,
