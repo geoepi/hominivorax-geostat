@@ -49,6 +49,11 @@ counts.
 
 ## Canonical Atlas runtime
 
+The operational lessons, interactive compute-node validation workflow, package
+paths, and GEOS ABI observation are maintained in
+[docs/atlas-environment.md](atlas-environment.md). Read that document before
+diagnosing Atlas package availability or changing a wrapper.
+
 Atlas jobs establish the environment themselves:
 
 ```bash
