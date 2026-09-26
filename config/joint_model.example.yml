@@ -1,0 +1,40 @@
+project:
+  output_directory: outputs/joint_model
+
+inputs:
+  model_inputs: outputs/preprocessing/model_inputs.rds
+
+reporting_censoring:
+  enabled: true
+  cutoff_epiyear: 2025
+  cutoff_epiweek: 32
+  rule: stopped_reporting_after_cutoff
+
+holdout:
+  seed: 123
+  tier1:
+    enabled: true
+    positive_fraction: 0.10
+  tier2:
+    enabled: true
+    positive_fraction: 0.20
+
+tier2:
+  zero_count_policy: exclude
+
+temporal:
+  derive_two_week_index: true
+  derive_quarter_index: true
+  derive_six_month_index: true
+  derive_year_index: true
+
+livestock_rw2:
+  enabled: true
+  bins: 22
+  variables: [cattle, pigs, sheep, goats, horses]
+
+outputs:
+  joint_model_inputs: joint_model_inputs.rds
+  preparation_audit: joint_model_preparation_audit.csv
+
+# This is a tracked example only. Keep operational paths and configurations private.

@@ -65,8 +65,11 @@ library(INLA) # mesh construction, inference
 ## Custom Functions 
 Load customized functions.  
 ```{r, warning=FALSE, message=FALSE}
+source(here("R/load_preprocessing.R"))
+load_preprocessing(here())
 source(here("R/utilities.R"))
-source_dir(here("R"))
+source(here("R/plot_mesh.R"))
+source(here("R/plot_duel_mesh.R"))
 ```
 
 
@@ -90,7 +93,7 @@ areas <- st_area(poly_single)
 threshold <- units::set_units(500, km^2)
 
 # remove islands
-states_simple <- poly_single[areas > threshold, ]
+states_simple <- poly_single[areas > threshold]
 ```
 
 
@@ -109,28 +112,16 @@ Define spatial domain through construction of a spatial triangulation (mesh). Re
    
 Note that because the simulated points used in this script differ from the data presented in the associated paper, results here may be slightly different.     
 ```{r warning=FALSE, eval=TRUE, message=FALSE}
-# process requires classic spatial objects
-points_sp <- as(nws_points, "Spatial")
-
-# slight buffer distance to smooth edges
-states_simple_buf <- st_buffer(states_simple, dist = 20)
-simple_union <- st_union(states_simple_buf) # dissolve states
-
-# convert to Spatial
-dom_bnds <-  as(simple_union, "Spatial")
-
-# to INLA format
-dom_seg <- inla.sp2segment(dom_bnds)
-
-set.seed(1976) # random seed
-mesh.dom <- inla.mesh.2d(boundary = dom_seg, 
-                        loc = points_sp,
-                        cutoff = 25, 
-                        max.edge = c(50, 200),
-                        offset = c(100,250),
-                        min.angle = 30) 
-
-mesh.dom$n # node number
+cfg_preprocess <- list(
+  project = list(seed = 1976),
+  study = list(projected_crs = sf::st_crs(states_proj)),
+  mesh = list(boundary_buffer_km = 20, cutoff_km = 25, max_edge_km = c(50, 200),
+              offset_km = c(100, 250), minimum_angle_degrees = 30,
+              island_area_threshold_km2 = 500)
+)
+support <- build_spatial_support(states_proj, as.data.frame(nws_points, geom = "xy"), cfg_preprocess)
+mesh.dom <- support$mesh
+mesh.dom$n
 ```
 
 ### View Mesh
@@ -146,14 +137,8 @@ plot_mesh(mesh.dom)
 Apply tessellation to mesh vertices to identify area of support, or natural neighborhoods around each. Here, this is done using the custom *convert_mesh_poly()* function.   
 ```{r message=FALSE, warning=FALSE, warning=FALSE, message=FALSE}
 # mesh areas to polygons
-mesh_polys <- convert_mesh_poly(mesh.dom)
-
-# to spatvector and project
-mesh_polys <- vect(mesh_polys)
-crs(mesh_polys) <- crs(states_proj)
-
-# calculate area
-mesh_polys$area <- expanse(mesh_polys, unit = "km")
+mesh_polys <- terra::vect(support$mesh_polygons)
+mesh_polys$area <- support$mesh_polygons$area_km2
 ```
 
 ### Plot Neighborhoods  
