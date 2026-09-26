@@ -65,6 +65,7 @@ if [[ -n "${POSTFIT_REPORTING_CELL_AREA_TEMPLATE:-}" ]]; then R_ARGS+=(--cell-ar
 if [[ -n "${POSTFIT_REPORTING_CELL_AREA:-}" ]]; then R_ARGS+=(--cell-area "${POSTFIT_REPORTING_CELL_AREA}"); fi
 if [[ -n "${POSTFIT_REPORTING_CELL_AREA_UNITS:-}" ]]; then R_ARGS+=(--cell-area-units "${POSTFIT_REPORTING_CELL_AREA_UNITS}"); fi
 if [[ -n "${POSTFIT_REPORTING_OBSERVATIONS:-}" ]]; then R_ARGS+=(--observations "${POSTFIT_REPORTING_OBSERVATIONS}"); fi
+if [[ -n "${POSTFIT_REPORTING_RPI_OBSERVATIONS:-}" ]]; then R_ARGS+=(--rpi-observations "${POSTFIT_REPORTING_RPI_OBSERVATIONS}"); fi
 if [[ "${POSTFIT_REPORTING_NO_RPI:-0}" == "1" ]]; then R_ARGS+=(--no-rpi); fi
 if [[ "${POSTFIT_REPORTING_OVERWRITE:-0}" == "1" ]]; then R_ARGS+=(--overwrite); fi
 

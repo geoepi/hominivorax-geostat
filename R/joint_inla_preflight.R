@@ -100,7 +100,7 @@ joint_inla_preflight_formula_fixed_names <- function(formula) {
   }), use.names = FALSE))
 }
 
-joint_inla_preflight_theta_inventory <- function() {
+joint_inla_preflight_theta_inventory <- function(theta_order = NULL) {
   component_inventory <- paste(c(
     "tier1_field SPDE hyperparameters",
     "tier1_field group iid hyperparameter",
@@ -113,12 +113,14 @@ joint_inla_preflight_theta_inventory <- function() {
     "cattle_q RW2 hyperparameter",
     "any additional reference-model hyperparameter exposed by INLA"
   ), collapse = "; ")
+  verified <- !is.null(theta_order) && length(theta_order) == 10L && all(nzchar(as.character(theta_order)))
+  labels <- if (verified) as.character(theta_order) else paste0("historical_theta_", sprintf("%02d", seq_len(10L)))
   data.frame(
     position = seq_len(10L),
-    assumed_label = paste0("historical_theta_", sprintf("%02d", seq_len(10L)), " (semantic label unverified)"),
+    assumed_label = if (verified) labels else paste0(labels, " (semantic label unverified)"),
     expected_model_components = component_inventory,
-    assumed_order_note = "Retain historical INLA theta position; semantic order is not established from Stage 3A metadata.",
-    order_verified = FALSE,
+    assumed_order_note = if (verified) "Canonical theta order is reconstructed from the verified Stage 3A model signature." else "Retain historical INLA theta position; semantic order is not established from Stage 3A metadata.",
+    order_verified = verified,
     stringsAsFactors = FALSE
   )
 }
@@ -580,8 +582,13 @@ joint_inla_preflight_build <- function(build, build_path = NA_character_, expect
   theta_valid <- theta_type_ok && length(theta) == 10L && all(is.finite(theta))
   if (theta_valid) pass("theta", "historical_theta_shape", paste(typeof(theta), length(theta)), "numeric finite vector length 10", "Historical theta has the required production shape.")
   else fail("theta", "historical_theta_shape", if (is.null(theta)) "missing" else paste(typeof(theta), length(theta)), "numeric finite vector length 10", "Historical theta must be numeric, finite, and length 10.")
-  theta_inventory <- joint_inla_preflight_theta_inventory()
-  warn("theta", "historical_theta_order", "unverified", "explicit order equivalence", paste0("PROMINENT WARNING: historical theta order cannot be established from Stage 3A metadata. Prefer initialization mode 'default' for the first production fit; assumed inventory is retained without claiming equivalence. Artifact: ", build_path))
+  theta_order <- if (is.list(build$model_signature) && isTRUE(build$model_signature$theta_order_verified)) build$model_signature$theta_order else NULL
+  theta_inventory <- joint_inla_preflight_theta_inventory(theta_order)
+  if (isTRUE(theta_inventory$order_verified[[1L]])) {
+    pass("theta", "historical_theta_order", paste(theta_order, collapse = ","), "verified Stage 3A theta order", "Canonical theta order is established from the Stage 3A model signature.")
+  } else {
+    warn("theta", "historical_theta_order", "unverified", "explicit order equivalence", paste0("PROMINENT WARNING: historical theta order cannot be established from Stage 3A metadata. Prefer initialization mode 'default' for the first production fit; assumed inventory is retained without claiming equivalence. Artifact: ", build_path))
+  }
   warn("theta", "historical_fit_comparison", "not performed", "optional external comparison", "An external historical fit artifact was not required or supplied.")
 
   audit <- do.call(rbind, checks)

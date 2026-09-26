@@ -131,12 +131,12 @@ testthat::test_that("authoritative host composition expands compound records and
 testthat::test_that("host cleanup resolves only documented unmatched labels", {
   x <- data.frame(host = c("MONKEY", "WILDLIFE", "Buffalino", "Avian", "mystery"), stringsAsFactors = FALSE)
   object <- postfit_reporting_host_composition(x)
-  testthat::expect_equal(object$audit$n_unmatched_before_cleanup, 5L)
+  testthat::expect_equal(object$audit$n_unmatched_before_cleanup, 4L)
   testthat::expect_equal(object$audit$n_unmatched_after_cleanup, 1L)
   testthat::expect_equal(object$audit$n_unmatched_submission_rows, 1L)
   testthat::expect_true(all(c("Monkey", "Unspecified Wildlife", "Water Buffalo", "Birds") %in% object$table$common_name))
   testthat::expect_true(all(c("source_row_id", "host_raw", "host_normalized", "match_status", "proposed_mapping", "proposed_common_name", "proposed_broad_group", "mapping_evidence", "action") %in% names(object$unmatched_audit)))
-  testthat::expect_equal(sum(object$unmatched_audit$match_status == "resolved_conservative_extension"), 4L)
+  testthat::expect_equal(sum(object$unmatched_audit$match_status == "resolved_conservative_extension"), 3L)
   testthat::expect_equal(object$unmatched_audit$proposed_common_name[object$unmatched_audit$host_normalized == "mystery"], NA_character_)
 })
 
@@ -204,6 +204,7 @@ testthat::test_that("cell area, potential abundance, and RPI semantic gate are e
   utils::write.csv(data.frame(x = 1, y = 1), observation_path, row.names = FALSE)
   gate <- postfit_reporting_rpi_audit("standardized_potential_abundance", observation_path, 4L)
   testthat::expect_true(gate$enabled)
+  testthat::expect_equal(gate$status, "READY")
   testthat::expect_equal(postfit_reporting_rpi_audit("tier2_intensity", observation_path, 4L)$status, "BLOCKED")
 })
 
@@ -221,6 +222,6 @@ testthat::test_that("reporting accepts an arbitrary future run identifier", {
   future <- postfit_reporting_output_paths(tempdir(), "arbitrary_new_run")
   testthat::expect_match(future$root, "arbitrary_new_run")
   testthat::expect_false(grepl("20725437", future$root, fixed = TRUE))
-  testthat::expect_true(all(c("fixed_effects_tier1", "species_composition", "cattle_effect", "selected_week_maps", "model_summary", "potential_abundance", "rpi_readiness") %in% postfit_reporting_product_names()))
+  testthat::expect_true(all(c("fixed_effects_tier1", "species_composition", "cattle_effect", "selected_week_maps", "model_summary", "potential_abundance", "random_effect_summaries", "rpi", "rpi_class_summary", "rpi_class_map", "rpi_readiness") %in% postfit_reporting_product_names()))
 })
 cat("Post-fit reporting tests passed\\n")

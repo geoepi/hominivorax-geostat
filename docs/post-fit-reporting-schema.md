@@ -18,6 +18,10 @@ temporal_effects
 selected_week_maps
 model_summary
 potential_abundance
+random_effect_summaries
+rpi
+rpi_class_summary
+rpi_class_map
 rpi_readiness
 ```
 
@@ -198,6 +202,26 @@ log_marginal_likelihood
 
 It is not a diagnostics verdict or a biological interpretation.
 
+### Random-effect summaries and comparison
+
+`random_effect_summaries` is the canonical fitted-hyperparameter table. It
+contains actual INLA posterior summaries with stable columns:
+
+```text
+component, parameter, mean, sd, q025, median, q975, mode, units, scale, source
+```
+
+The accepted model exposes at least Tier 1 and Tier 2 SPDE range/stdev, Tier 1
+weekly RW1 and administrative IID precision, Tier 2 weekly RW1 precision,
+cattle RW2 precision, the Tier 2 copy coefficient, and the negative-binomial
+size/dispersion parameter. SPDE ranges are reported in km only after checking
+the Stage 3A `spde_metadata` coordinate-unit and prior-range fields. `mode` is
+`NA` when INLA does not expose a posterior mode on the reported scale.
+
+When both accepted runs are supplied, `random_effect_comparison` compares
+fitted means with `reference_20725437`, `production_20742007`,
+`absolute_difference`, and `ratio_or_fold_change` columns.
+
 ### Potential abundance and RPI readiness
 
 `potential_abundance` is explicitly:
@@ -212,10 +236,23 @@ direct_model_output = FALSE
 Its human-readable label is `standardized potential abundance`; it is not
 called `expected_count`.
 
-`rpi_readiness` is always defined as a readiness object, even when blocked.
-The blocked reference run has no authoritative RPI raster or figure. The
-historical `nws_obs` calibration provenance must be recovered before any RPI
-product is generated.
+`rpi_readiness` is always defined as a readiness object. Its status is
+`BLOCKED` only when the standardized potential-abundance stack, cleaned
+observation representation, continuous time span, or semantic parameters are
+missing. With the accepted cleaned observations and potential-abundance
+stack, the status is `READY` and canonical RPI products can be completed.
+
+RPI uses `tier2_intensity_plugin × nominal_average_raster_cell_area`, with
+area derived dynamically from the supplied raster template. It calibrates the
+10th percentile at cleaned observation locations, finds the longest
+consecutive suitable-week run, converts weeks to generations using 21 and 7
+days, and applies `<3`, `3–<8`, `8–<15`, and `>=15` generation classes.
+Canonical outputs include `objects/rpi.rds`,
+`tables/rpi_class_summary.csv`, `spatial/rpi_continuous.tif`,
+`spatial/rpi_class.tif`, `figures/rpi_class.pdf/png`, and
+`metadata/rpi_metadata.rds/csv`. `rpi_class_summary` contains
+`class_id`, `class_label`, `cell_count`, `area_km2`, and
+`proportion_of_supported_cells`.
 
 ## Figure interfaces
 
@@ -265,6 +302,7 @@ observation-source, output-root, and run-ID inputs. A future run such as
 as special. Reference mode may continue to use the historical identifier in
 examples and regression fixtures only.
 
-The reference RPI status remains `BLOCKED` pending historical calibration
-observation provenance. No fitting, validation, projection, or rasterization
-semantics are part of this reporting schema.
+Historical documentation may describe an earlier blocked run, but the current
+contract recognizes the accepted private cleaned-observation source and no
+longer treats RPI as globally blocked. No fitting, validation, projection, or
+rasterization semantics are part of this reporting schema.

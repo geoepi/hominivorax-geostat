@@ -49,6 +49,10 @@ cell_area_template <- arg(args, "cell-area-template")
 cell_area_value <- arg(args, "cell-area")
 cell_area_units <- arg(args, "cell-area-units")
 observations_path <- arg(args, "observations")
+rpi_observation_path <- arg(args, "rpi-observations", observations_path)
+reference_fit_path <- arg(args, "reference-fit")
+reference_build_path <- arg(args, "reference-build")
+reference_run_id <- arg(args, "reference-run", "20725437")
 cattle_units <- arg(args, "cattle-units")
 overwrite <- isTRUE(args[["overwrite"]])
 
@@ -78,6 +82,7 @@ fixed <- postfit_reporting_fixed_effects(fit_artifact)
 cattle <- postfit_reporting_cattle_effect(fit_artifact, stage2, units = cattle_provenance$cattle_density_units)
 temporal <- postfit_reporting_temporal_effects(build, fit_artifact, stage2)
 model_summary <- postfit_reporting_model_summary(build, fit_artifact, stage2)
+random_effect_summaries <- postfit_reporting_random_effect_summaries(fit_artifact, build)
 
 generated_tables <- list()
 generated_objects <- list()
@@ -90,7 +95,19 @@ write_table(fixed$tier1, "fixed_effects_tier1")
 write_table(fixed$tier2, "fixed_effects_tier2")
 write_table(cattle, "cattle_effect")
 write_table(temporal, "temporal_effects")
+write_table(random_effect_summaries, "random_effect_summaries")
 saveRDS(model_summary, file.path(paths$objects, "model_summary.rds")); generated_objects$model_summary <- file.path(paths$objects, "model_summary.rds")
+
+if (xor(is.null(reference_fit_path), is.null(reference_build_path))) {
+  stop("Supply both --reference-fit and --reference-build to generate the reference-vs-production random-effect comparison.")
+}
+if (!is.null(reference_fit_path)) {
+  if (!file.exists(reference_fit_path) || !file.exists(reference_build_path)) stop("Reference fit/build paths for random-effect comparison must exist.")
+  reference_summaries <- postfit_reporting_random_effect_summaries(readRDS(reference_fit_path), readRDS(reference_build_path))
+  comparison <- postfit_reporting_random_effect_comparison(reference_summaries, random_effect_summaries,
+                                                           reference_run = reference_run_id, production_run = run_id)
+  write_table(comparison, "random_effect_comparison")
+}
 
 generated_figures <- list()
 save_figure <- function(plot, name, width, height) {
@@ -162,9 +179,10 @@ utils::write.csv(postfit_reporting_metadata_table(cell_area), file.path(paths$me
 
 rpi_audit <- postfit_reporting_rpi_audit(
   count_stack_semantics = if (identical(cell_area$status, "PASS") && !is.null(map_manifest)) "standardized_potential_abundance" else "tier2_intensity",
-  observed_source = observations_path,
+  observed_source = rpi_observation_path,
   time_span_weeks = if (is.null(map_manifest)) NULL else nrow(map_manifest)
 )
+rpi_observations <- if (!is.null(rpi_observation_path) && file.exists(rpi_observation_path)) postfit_reporting_read_rpi_observations(rpi_observation_path) else NULL
 potential <- NULL
 if (identical(cell_area$status, "PASS") && !is.null(map_manifest)) {
   tier2_paths <- map_manifest$tier2_intensity_path
@@ -172,17 +190,26 @@ if (identical(cell_area$status, "PASS") && !is.null(map_manifest)) {
   generated_objects$potential_abundance <- file.path(paths$objects, "potential_abundance.rds")
   saveRDS(potential, generated_objects$potential_abundance)
 }
-if (!isTRUE(args[["no-rpi"]]) && isTRUE(rpi_audit$enabled) && !is.null(potential)) {
+if (!isTRUE(args[["no-rpi"]]) && isTRUE(rpi_audit$enabled) && !is.null(potential) && !is.null(rpi_observations)) {
   count_stack <- terra::rast(potential$paths)
-  observations <- utils::read.csv(observations_path, stringsAsFactors = FALSE, check.names = FALSE)
-  rpi <- postfit_reporting_calc_rpi(count_stack, observations, gen_days = rpi_audit$parameters$gen_days, days_per_layer = rpi_audit$parameters$days_per_layer, cut_quant = rpi_audit$parameters$cut_quant)
-  terra::writeRaster(rpi$rpi, file.path(paths$spatial, "rpi.tif"), overwrite = TRUE)
-  terra::writeRaster(rpi$stability_class, file.path(paths$spatial, "rpi_classes.tif"), overwrite = TRUE)
+  rpi <- postfit_reporting_calc_rpi(count_stack, rpi_observations$data, gen_days = rpi_audit$parameters$gen_days, days_per_layer = rpi_audit$parameters$days_per_layer, cut_quant = rpi_audit$parameters$cut_quant)
+  rpi_continuous_path <- file.path(paths$spatial, "rpi_continuous.tif")
+  rpi_class_path <- file.path(paths$spatial, "rpi_class.tif")
+  terra::writeRaster(rpi$rpi, rpi_continuous_path, overwrite = TRUE)
+  terra::writeRaster(rpi$stability_class, rpi_class_path, overwrite = TRUE)
+  generated_objects$rpi <- file.path(paths$objects, "rpi.rds"); saveRDS(rpi, generated_objects$rpi)
   class_area <- postfit_reporting_rpi_class_area(rpi$stability_class, cell_area)
-  write_table(class_area, "rpi_class_area")
-  save_figure(postfit_reporting_plot_rpi(rpi$stability_class), "rpi_classes", 8, 7)
-  rpi_audit$output_status <- "GENERATED"
-  rpi_audit$output_paths <- c(rpi = file.path(paths$spatial, "rpi.tif"), classes = file.path(paths$spatial, "rpi_classes.tif"))
+  write_table(class_area, "rpi_class_summary")
+  save_figure(postfit_reporting_plot_rpi(rpi$stability_class), "rpi_class", 8, 7)
+  rpi_metadata <- list(run_id = run_id, threshold = rpi$calibrated_threshold, parameters = rpi$parameters,
+                       source_observations = rpi_observations$provenance, potential_abundance = potential,
+                       output_paths = c(rpi = rpi_continuous_path, rpi_class_map = rpi_class_path),
+                       class_summary = class_area)
+  saveRDS(rpi_metadata, file.path(paths$metadata, "rpi_metadata.rds"))
+  utils::write.csv(postfit_reporting_metadata_table(rpi_metadata), file.path(paths$metadata, "rpi_metadata.csv"), row.names = FALSE, na = "")
+  rpi_audit$status <- "COMPLETED"
+  rpi_audit$output_status <- "COMPLETED"
+  rpi_audit$output_paths <- c(rpi = rpi_continuous_path, rpi_class_map = rpi_class_path)
 }
 utils::write.csv(rpi_audit$checks, file.path(paths$metadata, "rpi_readiness_audit.csv"), row.names = FALSE, na = "")
 saveRDS(rpi_audit, file.path(paths$objects, "rpi_readiness_audit.rds")); generated_objects$rpi_readiness_audit <- file.path(paths$objects, "rpi_readiness_audit.rds")
@@ -215,7 +242,7 @@ qa_checks <- data.frame(
     if (file.exists(file.path(paths$figures, "selected_week_maps.png"))) "PASS" else "FAIL",
     if (!is.null(potential) && length(potential$paths) == nrow(map_manifest)) "PASS" else "WARNING",
     if (any(rpi_audit$checks$check == "observed_source" & rpi_audit$checks$status == "PASS")) "PASS" else "WARNING",
-    if (identical(rpi_audit$status, "PASS")) "PASS" else "WARNING",
+    if (rpi_audit$status %in% c("READY", "COMPLETED")) "PASS" else "WARNING",
     if (requireNamespace("digest", quietly = TRUE)) "PASS" else "WARNING"
   ),
   detail = c(
@@ -234,7 +261,7 @@ qa_checks <- data.frame(
     "Validated Phase 3 raster manifest was available.",
     "Deterministic selected-week map figure was written.",
     if (is.null(potential)) "Potential abundance was not generated." else paste0("Generated ", length(potential$paths), " nominal-cell potential-abundance rasters."),
-    if (identical(rpi_audit$status, "PASS")) "Historical calibration observation source was supplied." else "Historical nws_obs calibration provenance was not established; no authoritative RPI product generated.",
+    if (rpi_audit$status %in% c("READY", "COMPLETED")) "Cleaned observations for historical RPI threshold calibration were supplied." else "Cleaned RPI observations were not supplied; RPI remains blocked.",
     paste0("RPI gate status: ", rpi_audit$status, "."),
     "SHA-256 checksum support was available for manifest generation."
   ),
@@ -267,6 +294,7 @@ metadata <- list(
   product_names = postfit_reporting_product_names(),
   selected_map_week_rule = map_audit$selection_rule %||% NA_character_,
   observation_input = if (is.null(observation_path)) NULL else list(path = normalizePath(observation_path, mustWork = TRUE), sha256 = postfit_reporting_hash_file(observation_path), role = "authoritative descriptive host-composition source; not fit provenance and not assumed to be the RPI observation set"),
+  rpi_observations = if (is.null(rpi_observations)) NULL else rpi_observations$provenance,
   species_composition = species_audit,
   cattle_effect_semantics = cattle_provenance$cattle_contribution_definition,
   cattle_provenance = cattle_provenance,

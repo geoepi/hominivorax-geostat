@@ -44,8 +44,91 @@ postfit_reporting_product_names <- function() {
   c(
     "fixed_effects_tier1", "fixed_effects_tier2", "species_composition",
     "cattle_effect", "temporal_effects", "selected_week_maps", "model_summary",
-    "potential_abundance", "rpi_readiness"
+    "potential_abundance", "random_effect_summaries", "rpi", "rpi_class_summary",
+    "rpi_class_map", "rpi_readiness"
   )
+}
+
+postfit_reporting_spde_unit_audit <- function(build) {
+  metadata <- build$spde_metadata
+  if (!is.list(metadata) || !is.list(metadata$tier1) || !is.list(metadata$tier2)) {
+    stop("Stage 3A metadata must expose tier1 and tier2 SPDE parameterization before spatial ranges can be reported.")
+  }
+  unit_to_m <- vapply(metadata[c("tier1", "tier2")], function(x) as.numeric(x$coordinate_unit_to_m %||% NA_real_), numeric(1L))
+  prior_range <- vapply(metadata[c("tier1", "tier2")], function(x) as.numeric(x$prior_range_km %||% NA_real_), numeric(1L))
+  if (any(!is.finite(unit_to_m)) || any(unit_to_m <= 0) || any(!is.finite(prior_range)) || any(prior_range <= 0)) {
+    stop("Stage 3A SPDE metadata does not establish finite coordinate units and prior ranges for both tiers.")
+  }
+  list(
+    status = "PASS",
+    units = "km",
+    coordinate_unit_to_m = unit_to_m,
+    range_coordinate_units_to_km = unit_to_m / 1000,
+    prior_range_km = prior_range,
+    evidence = "Stage 3A spde_metadata records coordinate_unit_to_m and prior_range_km; posterior ranges are converted from mesh coordinate units to km using that metadata."
+  )
+}
+
+postfit_reporting_hyperparameter_semantics <- function(parameter) {
+  value <- tolower(as.character(parameter))
+  if (grepl("range.*(tier1|tier1_field)|(tier1|tier1_field).*range", value)) return(c(component = "Tier 1 SPDE", parameter = "range", units = "km", scale = "spatial correlation distance"))
+  if (grepl("stdev|standard.?deviation", value) && grepl("tier1|tier1_field", value)) return(c(component = "Tier 1 SPDE", parameter = "stdev", units = "latent scale", scale = "latent standard deviation"))
+  if (grepl("precision", value) && grepl("week_steps|tier1.*week|weekly", value)) return(c(component = "Tier 1 weekly RW1", parameter = "precision", units = "inverse latent variance", scale = "RW1 precision"))
+  if (grepl("precision", value) && grepl("admin", value)) return(c(component = "Tier 1 administrative IID", parameter = "precision", units = "inverse latent variance", scale = "IID precision"))
+  if (grepl("range.*(tier2|tier2_field)|(tier2|tier2_field).*range", value)) return(c(component = "Tier 2 SPDE", parameter = "range", units = "km", scale = "spatial correlation distance"))
+  if (grepl("stdev|standard.?deviation", value) && grepl("tier2|tier2_field", value)) return(c(component = "Tier 2 SPDE", parameter = "stdev", units = "latent scale", scale = "latent standard deviation"))
+  if (grepl("copy|beta", value) && grepl("tier2|shared", value)) return(c(component = "Tier 2 copy/shared field", parameter = "copy coefficient", units = "coefficient", scale = "copy coefficient"))
+  if (grepl("precision", value) && grepl("tier2.*week|tier2_week", value)) return(c(component = "Tier 2 weekly RW1", parameter = "precision", units = "inverse latent variance", scale = "RW1 precision"))
+  if (grepl("precision", value) && grepl("cattle", value)) return(c(component = "Cattle RW2", parameter = "precision", units = "inverse latent variance", scale = "RW2 precision"))
+  if (grepl("size|dispersion|nbinomial|negative.?binomial", value)) return(c(component = "Negative-binomial likelihood", parameter = "size/dispersion", units = "count-dispersion parameter", scale = "negative-binomial size"))
+  c(component = "INLA hyperparameter", parameter = as.character(parameter), units = "model scale", scale = "reported INLA scale")
+}
+
+postfit_reporting_random_effect_summaries <- function(fit_artifact, build) {
+  fit <- if (exists("joint_inla_extract_fit", mode = "function")) joint_inla_extract_fit(fit_artifact) else if (is.list(fit_artifact) && !is.null(fit_artifact$fit)) fit_artifact$fit else fit_artifact
+  hyper <- as.data.frame(fit$summary.hyperpar, stringsAsFactors = FALSE)
+  if (!nrow(hyper)) stop("The fit does not expose summary.hyperpar; random-effect summaries cannot be restored.")
+  parameters <- rownames(hyper)
+  if (is.null(parameters) || any(!nzchar(parameters))) {
+    if ("parameter" %in% names(hyper)) parameters <- as.character(hyper$parameter) else stop("INLA hyperparameter names are unavailable; refusing to invent random-effect labels.")
+  }
+  unit_audit <- postfit_reporting_spde_unit_audit(build)
+  rows <- lapply(seq_len(nrow(hyper)), function(i) {
+    semantics <- postfit_reporting_hyperparameter_semantics(parameters[[i]])
+    mean <- postfit_reporting_summary_value(hyper[i, , drop = FALSE], c("mean", "Mean"), "hyperparameter mean")[[1L]]
+    sd <- postfit_reporting_summary_value(hyper[i, , drop = FALSE], c("sd", "SD"), "hyperparameter sd")[[1L]]
+    q025 <- postfit_reporting_summary_value(hyper[i, , drop = FALSE], c("0.025quant", "q025", "quant0.025"), "hyperparameter 2.5% quantile")[[1L]]
+    median <- postfit_reporting_summary_value(hyper[i, , drop = FALSE], c("0.5quant", "median", "q50"), "hyperparameter median")[[1L]]
+    q975 <- postfit_reporting_summary_value(hyper[i, , drop = FALSE], c("0.975quant", "q975", "quant0.975"), "hyperparameter 97.5% quantile")[[1L]]
+    mode <- postfit_reporting_summary_value(hyper[i, , drop = FALSE], c("mode", "Mode"), "hyperparameter mode", required = FALSE)[[1L]]
+    scale_factor <- if (identical(semantics[["units"]], "km")) unit_audit$range_coordinate_units_to_km[[if (grepl("Tier 1", semantics[["component"]])) 1L else 2L]] else 1
+    data.frame(component = unname(semantics[["component"]]), parameter = unname(semantics[["parameter"]]),
+               mean = mean * scale_factor, sd = sd * scale_factor, q025 = q025 * scale_factor,
+               median = median * scale_factor, q975 = q975 * scale_factor, mode = mode * scale_factor,
+               units = unname(semantics[["units"]]), scale = unname(semantics[["scale"]]),
+               source = "fit$summary.hyperpar", stringsAsFactors = FALSE)
+  })
+  out <- do.call(rbind, rows)
+  rownames(out) <- NULL
+  attr(out, "spde_unit_audit") <- unit_audit
+  out
+}
+
+postfit_reporting_random_effect_comparison <- function(reference, production,
+                                                        reference_run = "20725437", production_run = "20742007",
+                                                        statistic = "mean") {
+  required <- c("component", "parameter", statistic)
+  if (!is.data.frame(reference) || !is.data.frame(production) || length(setdiff(required, names(reference))) || length(setdiff(required, names(production)))) {
+    stop("Reference and production random-effect summaries must contain component, parameter, and the requested statistic.")
+  }
+  ref <- reference[, c("component", "parameter", statistic), drop = FALSE]
+  prod <- production[, c("component", "parameter", statistic), drop = FALSE]
+  names(ref)[3L] <- paste0("reference_", reference_run)
+  names(prod)[3L] <- paste0("production_", production_run)
+  out <- merge(ref, prod, by = c("component", "parameter"), all = FALSE)
+  out$absolute_difference <- out[[paste0("production_", production_run)]] - out[[paste0("reference_", reference_run)]]
+  out$ratio_or_fold_change <- ifelse(out[[paste0("reference_", reference_run)]] == 0, NA_real_, out[[paste0("production_", production_run)]] / out[[paste0("reference_", reference_run)]])
+  out[, c("component", "parameter", paste0("reference_", reference_run), paste0("production_", production_run), "absolute_difference", "ratio_or_fold_change"), drop = FALSE]
 }
 
 postfit_reporting_assert_output_isolated <- function(output_root, run_id, overwrite = FALSE) {
@@ -325,7 +408,7 @@ postfit_reporting_host_cleanup_proposals <- function() {
       "obvious spelling/format variant of an existing mapped host"
     ),
     proposed_common_name = c("Monkey", "Unspecified Wildlife", "Water Buffalo", "Birds"),
-    proposed_broad_group = rep("Wildlife", 4L),
+    proposed_broad_group = c("Wildlife", "Wildlife", "Livestock", "Birds"),
     mapping_evidence = c(
       "The existing preprocessing legacy_host_standardization() explicitly recognizes monkey as wildlife; the raw label is an identifiable host.",
       "The raw broad wildlife label is semantically covered by the existing Unspecified Wildlife reporting category; no species-level guess is made.",
@@ -335,7 +418,7 @@ postfit_reporting_host_cleanup_proposals <- function() {
     action = c(
       "Add the canonical monkey pattern under Wildlife.",
       "Add the wildlife pattern to the existing Unspecified Wildlife category.",
-      "Add the doubled-f buffalo pattern to the existing Water Buffalo category.",
+      "Add the doubled-f buffalo pattern to the existing Water Buffalo / Livestock category.",
       "Add the avian pattern to the existing Birds category."
     ),
     stringsAsFactors = FALSE
@@ -345,7 +428,7 @@ postfit_reporting_host_cleanup_proposals <- function() {
 postfit_reporting_host_lookup <- function(mapping_version = "historical-host-normalization-v2", include_cleanup = TRUE) {
   base <- data.frame(
     pattern = c(
-      "bovin", "bufal", "suin|porc", "(?<!b)ovin", "caprin",
+      "bovin", "bufal|buffal", "suin|porc", "(?<!b)ovin", "caprin",
       "equin", "burro", "canin|carin", "felin", "human",
       "bird|ave|aviar|ardeid", "kinkaju", "sloth|perezos",
       "porcupin|porcuspin", "rabbit|lapine|leporid", "procyonlotor",
@@ -367,13 +450,9 @@ postfit_reporting_host_lookup <- function(mapping_version = "historical-host-nor
   )
   if (!isTRUE(include_cleanup)) return(base)
   cleanup <- postfit_reporting_host_cleanup_proposals()
-  extra <- data.frame(
-    pattern = cleanup$pattern,
-    common_name = cleanup$proposed_common_name,
-    broad_group = cleanup$proposed_broad_group,
-    mapping_version = mapping_version,
-    stringsAsFactors = FALSE
-  )
+  extra <- cleanup[cleanup$host_normalized != "buffalino", c("pattern", "proposed_common_name", "proposed_broad_group"), drop = FALSE]
+  names(extra) <- c("pattern", "common_name", "broad_group")
+  extra$mapping_version <- mapping_version
   rbind(base, extra)
 }
 
@@ -851,6 +930,22 @@ postfit_reporting_potential_abundance <- function(tier2_paths, cell_area_info, o
   )
 }
 
+postfit_reporting_read_rpi_observations <- function(path) {
+  if (is.null(path) || length(path) != 1L || is.na(path) || !file.exists(path)) stop("RPI cleaned-observation input does not exist: ", path)
+  ext <- tolower(tools::file_ext(path))
+  object <- if (identical(ext, "rds")) readRDS(path) else if (identical(ext, "csv")) utils::read.csv(path, stringsAsFactors = FALSE, check.names = FALSE) else stop("RPI observation input must be a cleaned CSV or RDS representation.")
+  provenance <- list(path = normalizePath(path, mustWork = TRUE), sha256 = postfit_reporting_hash_file(path), role = "cleaned observations for RPI threshold calibration")
+  if (is.list(object) && !is.data.frame(object)) {
+    data <- object$data %||% object$observations
+    provenance <- c(provenance, object$provenance %||% list())
+  } else data <- object
+  if (!is.data.frame(data) || length(setdiff(c("x", "y"), names(data)))) stop("RPI cleaned observations must be a data frame with x and y columns.")
+  coordinates <- data[, c("x", "y"), drop = FALSE]
+  coordinates$x <- as.numeric(coordinates$x); coordinates$y <- as.numeric(coordinates$y)
+  if (!nrow(coordinates) || any(!is.finite(as.matrix(coordinates)))) stop("RPI cleaned observations must contain at least one finite location.")
+  list(data = coordinates, provenance = provenance)
+}
+
 postfit_reporting_rpi_audit <- function(count_stack_semantics, observed_source = NULL, time_span_weeks = NULL,
                                         gen_days = 21, days_per_layer = 7, cut_quant = 0.10,
                                         class_boundaries = c(3, 8, 15)) {
@@ -872,9 +967,22 @@ postfit_reporting_rpi_audit <- function(count_stack_semantics, observed_source =
     ), stringsAsFactors = FALSE
   )
   enabled <- all(checks$status == "PASS")
-  list(status = if (enabled) "PASS" else "BLOCKED", enabled = enabled, checks = checks,
+  list(status = if (enabled) "READY" else "BLOCKED", enabled = enabled, checks = checks,
        parameters = list(gen_days = gen_days, days_per_layer = days_per_layer, cut_quant = cut_quant, class_boundaries = class_boundaries),
-       source_function = "R/calc_RPI.R", semantic_note = "No RPI product is generated when the semantic gate is blocked.")
+       source_function = "R/calc_RPI.R", semantic_note = "RPI is READY when cleaned observations and standardized potential abundance are available; it becomes COMPLETED after canonical outputs are written.")
+}
+
+postfit_reporting_max_consecutive_suitable <- function(x, threshold) {
+  if (all(is.na(x))) return(NA_real_)
+  suitable <- x > threshold; suitable[is.na(suitable)] <- FALSE
+  runs <- rle(suitable)
+  if (!any(runs$values)) return(0)
+  max(runs$lengths[runs$values])
+}
+
+postfit_reporting_rpi_classify <- function(rpi) {
+  postfit_reporting_require("terra")
+  terra::classify(rpi, rcl = matrix(c(-Inf, 3, 0, 3, 8, 1, 8, 15, 2, 15, Inf, 3), ncol = 3, byrow = TRUE), right = FALSE)
 }
 
 postfit_reporting_calc_rpi <- function(count_stk, nws_obs, gen_days = 21, days_per_layer = 7, cut_quant = 0.10) {
@@ -885,21 +993,15 @@ postfit_reporting_calc_rpi <- function(count_stk, nws_obs, gen_days = 21, days_p
   obs_pts <- terra::vect(nws_obs, geom = c("x", "y"), crs = terra::crs(count_stk))
   extracted <- terra::extract(count_stk, obs_pts)
   values <- as.matrix(extracted[, setdiff(names(extracted), "ID"), drop = FALSE])
+  if (!length(values) || !any(is.finite(values))) stop("RPI observation locations do not intersect finite potential-abundance values.")
   threshold <- as.numeric(stats::quantile(as.numeric(values), cut_quant, na.rm = TRUE, names = FALSE))
-  max_run <- function(x) {
-    if (all(is.na(x))) return(NA_real_)
-    suitable <- x > threshold; suitable[is.na(suitable)] <- FALSE
-    runs <- rle(suitable)
-    if (!any(runs$values)) return(0)
-    max(runs$lengths[runs$values])
-  }
-  max_run_weeks <- terra::app(count_stk, fun = max_run)
+  max_run_weeks <- terra::app(count_stk, fun = function(x) postfit_reporting_max_consecutive_suitable(x, threshold))
   rpi <- (max_run_weeks * days_per_layer) / gen_days
-  classes <- terra::classify(rpi, rcl = matrix(c(-Inf, 3, 0, 3, 8, 1, 8, 15, 2, 15, Inf, 3), ncol = 3, byrow = TRUE))
+  classes <- postfit_reporting_rpi_classify(rpi)
   names(classes) <- "rpi_class"
   list(rpi = rpi, stability_class = classes, calibrated_threshold = threshold,
        parameters = list(gen_days = gen_days, days_per_layer = days_per_layer, cut_quant = cut_quant),
-       semantics = "Copied from R/calc_RPI.R with explicit terra namespace; class intervals retain the existing implementation's left-closed behavior.")
+       semantics = "Copied from R/calc_RPI.R with explicit terra namespace; suitability is value > the 10th percentile and class boundaries are <3, 3 to <8, 8 to <15, and >=15 generations.")
 }
 
 postfit_reporting_rpi_class_area <- function(stability_class, cell_area_info, labels = c("Transient/Sink", "Seasonal", "Multi-Season", "Endemic Core")) {
@@ -908,7 +1010,11 @@ postfit_reporting_rpi_class_area <- function(stability_class, cell_area_info, la
   values <- terra::values(stability_class, mat = FALSE)
   values <- values[is.finite(values)]
   counts <- table(factor(as.integer(values), levels = 0:3))
-  data.frame(class_code = 0:3, class_label = labels, cell_count = as.integer(counts), area = as.integer(counts) * cell_area_info$nominal_average_raster_cell_area, area_units = cell_area_info$units, stringsAsFactors = FALSE)
+  supported <- sum(as.integer(counts))
+  area <- as.integer(counts) * cell_area_info$nominal_average_raster_cell_area
+  data.frame(class_id = 0:3, class_label = labels, cell_count = as.integer(counts), area_km2 = area,
+             proportion_of_supported_cells = if (supported) as.integer(counts) / supported else NA_real_,
+             class_code = 0:3, area = area, area_units = cell_area_info$units, stringsAsFactors = FALSE)
 }
 
 postfit_reporting_plot_rpi <- function(stability_class, labels = c("Transient/Sink", "Seasonal", "Multi-Season", "Endemic Core")) {
@@ -995,6 +1101,8 @@ postfit_reporting_write_manifest <- function(paths, source_run, generated_at = p
     product_name <- stem
     if (type == "object" && grepl("^plot_", product_name)) product_name <- sub("^plot_", "", product_name)
     if (identical(product_name, "rpi_readiness_audit")) product_name <- "rpi_readiness"
+    if (identical(product_name, "rpi_continuous")) product_name <- "rpi"
+    if (identical(product_name, "rpi_class")) product_name <- "rpi_class_map"
     object <- if (type == "table") file.path("objects", paste0(stem, ".rds")) else if (type == "figure") file.path("objects", paste0("plot_", stem, ".rds")) else if (type == "object") relative else NA_character_
     data.frame(artifact_type = type, logical_product_name = product_name, path = relative, file_format = postfit_reporting_file_format(path), source_object = gsub("\\\\", "/", object), source_run = source_run, checksum_sha256 = postfit_reporting_hash_file(path), generated_at_utc = generated_at, bytes = as.numeric(info$size), stringsAsFactors = FALSE)
   }))

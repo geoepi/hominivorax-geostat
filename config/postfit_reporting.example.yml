@@ -31,8 +31,11 @@ cell_area_template: null
 cell_area: null
 cell_area_units: "km^2"
 
-# RPI is generated only when the semantic gate passes.
-observations: null
+# RPI uses a cleaned observation representation derived with the accepted
+# preprocessing semantics. The historical private source is documented as
+# /project/disease_ecology/NWScrewworm/data/processed_data/case_detections/combined_clean_obs_2027-07-31.csv.
+rpi_observations: null
+observations: null # Compatibility alias for rpi_observations.
 rpi:
   gen_days: 21
   days_per_layer: 7

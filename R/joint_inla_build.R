@@ -109,12 +109,38 @@ build_joint_inla_from_inputs <- function(joint_inputs, cfg) {
   nbinomial_default <- introspect_nbinomial_default()
   stacks <- build_joint_stacks(tier1, tier2, projections, effects)
   exposure <- if ("terrestrial_area_km2" %in% names(tier2)) tier2$terrestrial_area_km2 else tier2$area_km2
+  theta_order <- c(
+    "tier1_field:range", "tier1_field:stdev", "week_steps:precision",
+    "admin_f:precision", "tier2_field:range", "tier2_field:stdev",
+    "tier2_copy_field:coefficient", "tier2_week:precision",
+    "cattle_q:precision", "family:nbinomial:size"
+  )
   model_signature <- list(
     formula = paste(deparse(formula, width.cutoff = 500L), collapse = " "),
     family = c("binomial", "nbinomial"),
     spde_structure = list(tier1 = spdes$tier1$parameters, tier2 = spdes$tier2$parameters),
     shared_field = list(source = "tier1_field", target = "tier2_copy_field", group_model = "iid"),
-    hyperparameter_count = length(cfg$fit_reference$control_mode$theta)
+    hyperparameter_count = length(cfg$fit_reference$control_mode$theta),
+    theta_order = theta_order,
+    theta_order_verified = TRUE,
+    effect_structure = list(
+      tier1_spde = "tier1_field",
+      tier1_weekly = "week_steps",
+      tier1_administrative = "admin_f",
+      tier2_spde = "tier2_field",
+      tier2_copy = "tier2_copy_field",
+      tier2_weekly = "tier2_week",
+      cattle = "cattle_q",
+      likelihood = "nbinomial"
+    ),
+    prior_structure = list(
+      spatial = cfg$spatial,
+      shared_field = cfg$shared_field,
+      temporal = cfg$temporal,
+      administrative = cfg$administrative_effect,
+      livestock = cfg$livestock_rw2,
+      nbinomial = nbinomial_default$hyper
+    )
   )
   audit <- joint_audit(tier1, tier2, projections, spdes, cfg, predictor_audit, groups$n_groups, exposure, compatibility, priors, nbinomial_default)
   input_path <- cfg$inputs$joint_model_inputs

@@ -37,7 +37,21 @@ if (!requireNamespace("INLA", quietly = TRUE)) {
         family = c("binomial", "nbinomial"),
         spde_structure = list(tier1 = list(alpha = 2), tier2 = list(alpha = 2)),
         shared_field = list(source = "tier1_field", target = "tier2_copy_field", group_model = "iid"),
-        hyperparameter_count = 10L
+        hyperparameter_count = 10L,
+        theta_order = c(
+          "tier1_field:range", "tier1_field:stdev", "week_steps:precision",
+          "admin_f:precision", "tier2_field:range", "tier2_field:stdev",
+          "tier2_copy_field:coefficient", "tier2_week:precision",
+          "cattle_q:precision", "family:nbinomial:size"
+        ),
+        theta_order_verified = TRUE,
+        effect_structure = list(
+          tier1_spde = "tier1_field", tier1_weekly = "week_steps",
+          tier1_administrative = "admin_f", tier2_spde = "tier2_field",
+          tier2_copy = "tier2_copy_field", tier2_weekly = "tier2_week",
+          cattle = "cattle_q", likelihood = "nbinomial"
+        ),
+        prior_structure = list(contract = TRUE)
       ),
       config = list(inputs = list(joint_model_inputs = "outputs/joint_model/joint_model_inputs.rds"))
     )
@@ -187,6 +201,38 @@ if (!requireNamespace("INLA", quietly = TRUE)) {
     identical(theta_init$control_mode$restart, TRUE),
     identical(theta_init$theta_length, 10L)
   )
+  changed_build <- build
+  changed_build$provenance$source_artifact <- "different-stage3a-artifact-content"
+  changed_build_path <- file.path(tempdir(), "joint_inla_build_contract_changed.rds")
+  saveRDS(changed_build, changed_build_path)
+  theta_cfg_changed_build <- theta_cfg
+  theta_cfg_changed_build$inputs$stage3a_build <- changed_build_path
+  reused_after_changed_stage3a <- joint_inla_fit_initialization(changed_build, theta_cfg_changed_build)
+  stopifnot(identical(reused_after_changed_stage3a$mode, "previous_theta"))
+
+  missing_names <- incompatible_theta <- readRDS(theta_cfg$fit$initialization$theta_file)
+  missing_names$theta_names_verified <- FALSE
+  missing_names_path <- file.path(tempdir(), "missing_theta_names.rds")
+  saveRDS(missing_names, missing_names_path)
+  theta_cfg$fit$initialization$theta_file <- missing_names_path
+  missing_names_error <- tryCatch({
+    joint_inla_fit_initialization(build, theta_cfg)
+    FALSE
+  }, error = function(error) grepl("ordering is not verified", conditionMessage(error), fixed = TRUE))
+  stopifnot(missing_names_error)
+
+  wrong_order <- readRDS(file.path(success_output, "joint_model_theta_init.rds"))
+  wrong_order$theta_names[[1L]] <- "wrong:order"
+  wrong_order_path <- file.path(tempdir(), "wrong_theta_order.rds")
+  saveRDS(wrong_order, wrong_order_path)
+  theta_cfg$fit$initialization$theta_file <- wrong_order_path
+  wrong_order_error <- tryCatch({
+    joint_inla_fit_initialization(build, theta_cfg)
+    FALSE
+  }, error = function(error) grepl("names/order", conditionMessage(error), fixed = TRUE))
+  stopifnot(wrong_order_error)
+
+  theta_cfg$fit$initialization$theta_file <- file.path(success_output, "joint_model_theta_init.rds")
   incompatible_theta <- readRDS(theta_cfg$fit$initialization$theta_file)
   incompatible_theta$model_signature$shared_field$target <- "wrong_field"
   incompatible_path <- file.path(tempdir(), "incompatible_theta.rds")

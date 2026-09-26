@@ -9,6 +9,6 @@ This document records the accepted statistical structure. The workflow-closure t
 
 The formula, priors, mesh, copy-field semantics, exposure, zero policy, holdout definitions, projection mathematics, rasterization, and RPI class rules are preserved by the production contracts.
 
-The four artifacts are `model_inputs.rds`, `joint_model_inputs.rds`, `joint_inla_build.rds`, and `joint_model_fit.rds`. Stage 3B also writes `joint_model_theta_init.rds` from the exact fitted `fit$mode$theta` vector, with labels when exposed by INLA, source checksums, formula/family/SPDE signatures, hyperparameter count, and runtime versions. Reuse is disabled by default and fails closed when compatibility metadata are missing or inconsistent.
+The four artifacts are `model_inputs.rds`, `joint_model_inputs.rds`, `joint_inla_build.rds`, and `joint_model_fit.rds`. Stage 3B also writes `joint_model_theta_init.rds` from the exact fitted `fit$mode$theta` vector, with a verified canonical theta order, source checksums, formula/family/SPDE/effect/prior signatures, hyperparameter count, and runtime versions. Reuse is disabled by default, ignores Stage 3A data-identity checksums for compatibility, preserves those checksums as provenance, and fails closed when structural metadata are missing or inconsistent.
 
 Potential abundance remains Tier 2 intensity multiplied by nominal cell area. Physiological temperature masking is not part of the raw statistical product.

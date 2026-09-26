@@ -21,17 +21,38 @@ joint_inla_fit_model_signature <- function(build) {
   )
 }
 
-joint_inla_fit_theta_names <- function(fit) {
+joint_inla_fit_theta_order <- function(build) {
+  signature <- joint_inla_fit_model_signature(build)
+  if (is.null(signature) || !isTRUE(signature$theta_order_verified) ||
+      is.null(signature$theta_order) || !length(signature$theta_order) ||
+      any(!nzchar(as.character(signature$theta_order)))) return(NULL)
+  as.character(signature$theta_order)
+}
+
+joint_inla_fit_theta_names <- function(fit, build = NULL) {
   candidates <- list(
     if (!is.null(fit$mode)) fit$mode$theta.names else NULL,
     if (!is.null(fit$mode)) names(fit$mode$theta) else NULL,
     if (!is.null(fit$misc)) fit$misc$theta.names else NULL,
     if (!is.null(fit$misc)) fit$misc$theta.labels else NULL
   )
+  theta <- if (!is.null(fit$mode)) fit$mode$theta else NULL
   for (value in candidates) {
-    if (!is.null(value) && length(value) && all(nzchar(as.character(value)))) return(as.character(value))
+    labels <- as.character(value)
+    if (!is.null(value) && length(value) && all(nzchar(labels)) &&
+        (is.null(theta) || length(labels) == length(theta)) &&
+        !identical(labels, as.character(seq_along(labels)))) {
+      order <- joint_inla_fit_theta_order(build)
+      if (!is.null(order) && length(order) == length(labels)) {
+        return(list(names = order, verified = TRUE, source = "fit_internal_order", internal_names = labels))
+      }
+    }
   }
-  NULL
+  order <- joint_inla_fit_theta_order(build)
+  if (!is.null(order) && !is.null(theta) && length(order) == length(theta)) {
+    return(list(names = order, verified = TRUE, source = "stage3a_canonical_model_order", internal_names = NULL))
+  }
+  list(names = NULL, verified = FALSE, source = NA_character_, internal_names = NULL)
 }
 
 joint_inla_fit_make_theta_artifact <- function(fit, build, cfg, paths, runtime_version, source_fit_sha256) {
@@ -41,11 +62,16 @@ joint_inla_fit_make_theta_artifact <- function(fit, build, cfg, paths, runtime_v
   }
   signature <- joint_inla_fit_model_signature(build)
   if (is.null(signature)) stop("Stage 3A model signature is unavailable; theta artifact cannot be made safely reusable.")
-  theta_names <- joint_inla_fit_theta_names(fit)
+  theta_info <- joint_inla_fit_theta_names(fit, build)
+  if (!isTRUE(theta_info$verified)) {
+    stop("Successful Stage 3B fit does not expose, and Stage 3A does not independently reconstruct, a verified theta ordering; theta artifact cannot be persisted safely.")
+  }
   list(
     theta = theta,
-    theta_names = theta_names,
-    theta_names_verified = !is.null(theta_names),
+    theta_names = theta_info$names,
+    theta_names_verified = TRUE,
+    theta_names_source = theta_info$source,
+    theta_order = theta_info$names,
     source_run_id = if (!is.null(cfg$run_id)) as.character(cfg$run_id) else basename(normalizePath(dirname(paths$fit), mustWork = FALSE)),
     source_fit_path = paths$fit,
     source_fit_sha256 = source_fit_sha256,
@@ -61,7 +87,7 @@ joint_inla_fit_make_theta_artifact <- function(fit, build, cfg, paths, runtime_v
 }
 
 joint_inla_fit_validate_theta_artifact <- function(artifact, build, theta_path, build_path = NULL) {
-  required <- c("theta", "theta_names", "source_fit_path", "source_fit_sha256", "stage3a_sha256", "model_formula_signature", "family", "hyperparameter_count", "inla_version", "model_signature")
+  required <- c("theta", "theta_names", "theta_names_verified", "theta_names_source", "theta_order", "source_fit_path", "source_fit_sha256", "stage3a_sha256", "model_formula_signature", "family", "hyperparameter_count", "inla_version", "model_signature")
   if (!is.list(artifact) || length(setdiff(required, names(artifact)))) {
     stop("Theta initialization artifact is missing required compatibility metadata: ", paste(setdiff(required, names(artifact)), collapse = ", "))
   }
@@ -74,9 +100,24 @@ joint_inla_fit_validate_theta_artifact <- function(artifact, build, theta_path, 
   if (!identical(as.integer(artifact$hyperparameter_count), as.integer(signature$hyperparameter_count))) stop("Theta initialization hyperparameter count is incompatible with Stage 3A.")
   if (!identical(artifact$model_signature$spde_structure, signature$spde_structure)) stop("Theta initialization SPDE structure is incompatible with Stage 3A.")
   if (!identical(artifact$model_signature$shared_field, signature$shared_field)) stop("Theta initialization shared-field structure is incompatible with Stage 3A.")
-  stage3a_sha <- joint_inla_fit_hash_file(build_path)
-  if (!is.null(build_path) && !is.na(stage3a_sha) && !identical(tolower(as.character(artifact$stage3a_sha256)), tolower(stage3a_sha))) {
-    stop("Theta initialization Stage 3A checksum does not match the artifact provenance.")
+  for (field in c("theta_order", "effect_structure", "prior_structure")) {
+    if (is.null(signature[[field]]) || !identical(artifact$model_signature[[field]], signature[[field]])) {
+      stop("Theta initialization ", field, " is incompatible with Stage 3A.")
+    }
+  }
+  if (!isTRUE(artifact$theta_names_verified) || !nzchar(as.character(artifact$theta_names_source))) {
+    stop("Theta initialization theta ordering is not verified; refusing to use the theta vector.")
+  }
+  expected_order <- as.character(signature$theta_order)
+  if (!identical(as.character(artifact$theta_order), expected_order) ||
+      !identical(as.character(artifact$theta_names), expected_order) ||
+      length(expected_order) != length(artifact$theta)) {
+    stop("Theta initialization names/order are incompatible with Stage 3A.")
+  }
+  expected_inla <- build$provenance$INLA
+  if (!is.null(expected_inla) && length(expected_inla) && !is.na(expected_inla[[1L]]) &&
+      !identical(as.character(artifact$inla_version), as.character(expected_inla[[1L]]))) {
+    stop("Theta initialization INLA version is incompatible with Stage 3A.")
   }
   if (!is.null(artifact$source_fit_path) && file.exists(artifact$source_fit_path) && !is.na(artifact$source_fit_sha256)) {
     fit_sha <- joint_inla_fit_hash_file(artifact$source_fit_path)
