@@ -14,28 +14,63 @@ build_tier1 <- function(observations, integration, time_index) {
   dplyr::bind_rows(p, q)
 }
 
-thin_tier1 <- function(tier1, cfg, template = NULL) {
+preprocessing_tier1_thinning_config <- function(cfg) {
+  value <- if (!is.null(cfg$tier1) && !is.null(cfg$tier1$positive_cellweek_thinning)) cfg$tier1$positive_cellweek_thinning else cfg$tier1_thinning
+  if (is.null(value)) value <- list(enabled = TRUE, seed = 1976L)
+  value$enabled <- isTRUE(value$enabled)
+  value$seed <- as.integer(if (is.null(value$seed)) 1976L else value$seed)
+  value
+}
+
+preprocessing_hash_file <- function(path) {
+  if (is.null(path) || !length(path) || is.na(path) || !file.exists(path) || !requireNamespace("digest", quietly = TRUE)) return(NA_character_)
+  tryCatch(digest::digest(file = path, algo = "sha256"), error = function(e) NA_character_)
+}
+
+thin_tier1 <- function(tier1, cfg, template = NULL, template_path = NULL) {
+  thinning_cfg <- preprocessing_tier1_thinning_config(cfg)
   tier1$.tier1_row_id <- seq_len(nrow(tier1))
   positives <- tier1[tier1$Yi == 1, , drop = FALSE]
-  if (!isTRUE(cfg$tier1_thinning$enabled)) {
-    positives$cell_id <- NA_integer_
-    positives$selection_rank <- 1L
-    return(list(retained = tier1, excluded = positives[0, , drop = FALSE], audit = data.frame(input_positive_count = nrow(positives), retained_positive_count = nrow(positives), excluded_positive_count = 0, seed = cfg$tier1_thinning$seed)))
+  template_checksum <- preprocessing_hash_file(template_path)
+  cell_id <- rep(NA_integer_, nrow(positives))
+  if (!is.null(template)) {
+    points <- terra::vect(positives, geom = c("x", "y"), crs = cfg$study$projected_crs)
+    if (!terra::same.crs(points, template)) points <- terra::project(points, terra::crs(template))
+    cell_id <- terra::cellFromXY(template, terra::crds(points))
   }
-  if (is.null(template)) stop("Tier 1 thinning requires a template raster.")
-  points <- terra::vect(positives, geom = c("x", "y"), crs = cfg$study$projected_crs)
-  if (!terra::same.crs(points, template)) points <- terra::project(points, terra::crs(template))
-  positives$cell_id <- terra::cellFromXY(template, terra::crds(points))
+  positives$cell_id <- cell_id
   positives$selection_rank <- ave(seq_len(nrow(positives)), interaction(positives$epiyear, positives$epiweek, positives$cell_id, drop = TRUE), FUN = seq_along)
-  set.seed(cfg$tier1_thinning$seed)
-  retained_positive <- positives |>
-    dplyr::group_by(epiyear, epiweek, cell_id) |>
-    dplyr::slice_sample(n = 1) |>
-    dplyr::ungroup()
-  excluded <- dplyr::anti_join(positives, retained_positive[c(".tier1_row_id")], by = ".tier1_row_id")
+  eligible <- positives[!is.na(positives$cell_id), , drop = FALSE]
+  group_key <- if (nrow(eligible)) paste(eligible$epiyear, eligible$epiweek, eligible$cell_id, sep = "|") else character()
+  counts <- if (length(group_key)) table(group_key) else integer()
+  duplicate_groups <- if (length(counts)) sum(counts > 1L) else 0L
+  duplicate_rows <- if (length(counts)) sum(pmax(as.integer(counts) - 1L, 0L)) else 0L
+  if (isTRUE(thinning_cfg$enabled)) {
+    if (is.null(template)) stop("Tier 1 thinning requires a template raster when enabled.")
+    set.seed(thinning_cfg$seed)
+    retained_positive <- eligible |>
+      dplyr::group_by(epiyear, epiweek, cell_id) |>
+      dplyr::slice_sample(n = 1) |>
+      dplyr::ungroup()
+    excluded <- dplyr::anti_join(positives, retained_positive[c(".tier1_row_id")], by = ".tier1_row_id")
+  } else {
+    retained_positive <- positives
+    excluded <- positives[0, , drop = FALSE]
+  }
   retained <- dplyr::bind_rows(retained_positive, tier1[tier1$Yi == 0, , drop = FALSE]) |>
     dplyr::arrange(.tier1_row_id)
-  audit <- data.frame(input_positive_count = nrow(positives), retained_positive_count = nrow(retained_positive), excluded_positive_count = nrow(excluded), seed = cfg$tier1_thinning$seed)
+  audit <- data.frame(
+    enabled = isTRUE(thinning_cfg$enabled), seed = thinning_cfg$seed,
+    template_path = if (is.null(template_path)) NA_character_ else normalizePath(template_path, mustWork = FALSE),
+    template_sha256 = template_checksum,
+    input_positive_count = nrow(positives), eligible_positive_count = nrow(eligible),
+    retained_positive_count = nrow(retained_positive), excluded_positive_count = nrow(excluded),
+    positive_outside_template_count = sum(is.na(positives$cell_id)),
+    duplicate_positive_cellweek_groups = duplicate_groups,
+    duplicate_positive_cellweek_rows = duplicate_rows,
+    final_tier1_response_active_count = nrow(retained),
+    stringsAsFactors = FALSE
+  )
   if (audit$input_positive_count != audit$retained_positive_count + audit$excluded_positive_count) stop("Tier 1 thinning invariant failed.")
   list(retained = retained, excluded = excluded, audit = audit)
 }
@@ -154,6 +189,8 @@ assemble_model_inputs <- function(tier1, tier2, prediction_grid, support, time_i
       stage = "geostatistical_preprocessing",
       admin_annotation = audits$admin,
       detection_conservation = audits$conservation,
+      temporal_domain = audits$temporal,
+      thinning = audits$thinning,
       admin_column = cfg$inputs$admin_column %||% "inferred"
     ),
     excluded_detections = excluded_detections,
@@ -161,6 +198,7 @@ assemble_model_inputs <- function(tier1, tier2, prediction_grid, support, time_i
     observation_audit = audits$observation,
     covariate_audit = audits$covariate,
     thinning_audit = audits$thinning,
+    temporal_provenance = audits$temporal,
     configuration = cfg,
     provenance = list(timestamp = as.character(Sys.time()), git_commit = NA_character_, R = R.version.string, seed = cfg$project$seed)
   )

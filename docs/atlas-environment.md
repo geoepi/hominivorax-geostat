@@ -25,7 +25,7 @@ The validated runtime record is:
 | terra | 1.7.78 |
 | sf | 1.0.21 |
 | Matrix | 1.7.0 |
-| User library | `/home/john.humphreys/R/x86_64-pc-linux-gnu-library/4.4` |
+| User library | site-specific Atlas environment variable |
 
 Wrappers should print the hostname, loaded modules, `which R`, `R --version`,
 `.libPaths()`, and the versions of `INLA`, `Matrix`, `terra`, and `sf` before
@@ -97,12 +97,9 @@ observed compile/runtime versions in the job metadata when available.
 
 ## Environment boundaries and wrapper requirements
 
-The canonical reference artifacts remain separate from the runtime record:
-
-* fit: `/project/disease_ecology/nws-geostat-output/joint_inla_fit/joint_model_fit.rds`;
-* Phase 2: `/project/disease_ecology/nws-geostat-output/joint_inla_fit/prediction_projection_20725437/`;
-* Phase 3: `/project/disease_ecology/nws-geostat-output/joint_inla_fit/raster_surfaces_20725437/`;
-* reporting output: `/project/disease_ecology/nws-geostat-output/postfit_reporting/20725437/`.
+The canonical reference artifacts remain separate from the runtime record and
+are addressed only through private job configuration. Their paths and
+checksums must be recorded in run metadata, not committed to this repository.
 
 Atlas wrappers must establish their environment explicitly rather than rely on
 an inherited login shell. They must not install packages or change module

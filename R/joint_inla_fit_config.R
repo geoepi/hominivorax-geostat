@@ -16,6 +16,7 @@ joint_inla_fit_defaults <- function() {
       fit = "joint_model_fit.rds",
       audit = "joint_model_fit_audit.csv",
       metadata = "joint_model_fit_metadata.rds",
+      theta_init = "joint_model_theta_init.rds",
       preflight = "joint_inla_fit_preflight.csv",
       overwrite = FALSE
     ),
@@ -27,7 +28,7 @@ joint_inla_fit_defaults <- function() {
       control_compute = list(dic = TRUE, cpo = FALSE, waic = TRUE),
       control_predictor = list(compute = TRUE),
       control_family = NULL,
-      initialization = list(mode = "historical")
+      initialization = list(mode = "default", use_previous_theta = FALSE, theta_file = NULL)
     ),
     threads = list(num_threads = 12, blas_threads = NULL),
     version_compatibility = list(policy = "warn")
@@ -55,6 +56,9 @@ read_joint_inla_fit_config <- function(path, repo_root = getwd()) {
   cfg <- merge_joint_inla_fit_config(joint_inla_fit_defaults(), supplied)
   cfg$project$output_directory <- resolve_joint_inla_fit_path(cfg$project$output_directory, repo_root)
   cfg$inputs$stage3a_build <- resolve_joint_inla_fit_path(cfg$inputs$stage3a_build, repo_root)
+  if (!is.null(cfg$fit$initialization$theta_file)) {
+    cfg$fit$initialization$theta_file <- resolve_joint_inla_fit_path(cfg$fit$initialization$theta_file, repo_root)
+  }
   cfg$config_path <- path
   cfg$repo_root <- repo_root
   cfg
@@ -82,7 +86,7 @@ validate_joint_inla_fit_config <- function(cfg, require_input = TRUE) {
   if (isTRUE(require_input) && !file.exists(cfg$inputs$stage3a_build)) {
     stop("Stage 3A joint_inla_build.rds does not exist: ", cfg$inputs$stage3a_build)
   }
-  for (name in c("fit", "audit", "metadata", "preflight")) {
+  for (name in c("fit", "audit", "metadata", "theta_init", "preflight")) {
     if (length(cfg$outputs[[name]]) != 1L || !nzchar(as.character(cfg$outputs[[name]]))) {
       stop("outputs.", name, " must be a non-empty path.")
     }
@@ -99,8 +103,19 @@ validate_joint_inla_fit_config <- function(cfg, require_input = TRUE) {
     stop("fit.quantiles must contain finite probabilities between 0 and 1.")
   }
   mode <- tolower(as.character(cfg$fit$initialization$mode))
-  if (length(mode) != 1L || !mode %in% c("historical", "default")) {
-    stop("fit.initialization.mode must be 'historical' or 'default'.")
+  if (length(mode) != 1L || !mode %in% c("historical", "default", "previous_theta")) {
+    stop("fit.initialization.mode must be 'historical', 'default', or 'previous_theta'.")
+  }
+  use_previous_theta <- cfg$fit$initialization$use_previous_theta
+  if (length(use_previous_theta) != 1L || is.na(use_previous_theta) || !is.logical(use_previous_theta)) {
+    stop("fit.initialization.use_previous_theta must be TRUE or FALSE.")
+  }
+  theta_file <- cfg$fit$initialization$theta_file
+  if (!is.null(theta_file) && (length(theta_file) != 1L || !nzchar(as.character(theta_file)))) {
+    stop("fit.initialization.theta_file must be null or a non-empty path.")
+  }
+  if (isTRUE(use_previous_theta) && is.null(theta_file) && !identical(mode, "historical")) {
+    stop("fit.initialization.theta_file is required when use_previous_theta is TRUE.")
   }
   scalar_positive_integer(cfg$threads$num_threads, "threads.num_threads")
   scalar_positive_integer(cfg$threads$blas_threads, "threads.blas_threads", allow_null = TRUE)
@@ -133,14 +148,17 @@ joint_inla_fit_output_paths <- function(cfg, output_override = NULL) {
   }
   audit_name <- cfg$outputs$audit
   metadata_name <- cfg$outputs$metadata
+  theta_name <- cfg$outputs$theta_init
   preflight_name <- cfg$outputs$preflight
   audit_path <- if (grepl("^[A-Za-z]:[/\\\\]|^/", audit_name)) normalizePath(audit_name, mustWork = FALSE) else file.path(output_directory, audit_name)
   metadata_path <- if (grepl("^[A-Za-z]:[/\\\\]|^/", metadata_name)) normalizePath(metadata_name, mustWork = FALSE) else file.path(output_directory, metadata_name)
+  theta_path <- if (grepl("^[A-Za-z]:[/\\\\]|^/", theta_name)) normalizePath(theta_name, mustWork = FALSE) else file.path(output_directory, theta_name)
   preflight_path <- if (grepl("^[A-Za-z]:[/\\\\]|^/", preflight_name)) normalizePath(preflight_name, mustWork = FALSE) else file.path(output_directory, preflight_name)
   list(
     fit = normalizePath(fit_path, mustWork = FALSE),
     audit = normalizePath(audit_path, mustWork = FALSE),
     metadata = normalizePath(metadata_path, mustWork = FALSE),
+    theta_init = normalizePath(theta_path, mustWork = FALSE),
     preflight = normalizePath(preflight_path, mustWork = FALSE)
   )
 }

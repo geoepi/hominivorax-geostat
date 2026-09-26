@@ -11,8 +11,8 @@
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=64G
 #SBATCH --time=04:00:00
-#SBATCH --output=/project/disease_ecology/nws-geostat-output/postfit_reporting/slurm-%x-%j.out
-#SBATCH --error=/project/disease_ecology/nws-geostat-output/postfit_reporting/slurm-%x-%j.err
+#SBATCH --output=postfit-reporting-%x-%j.out
+#SBATCH --error=postfit-reporting-%x-%j.err
 
 set -euo pipefail
 
@@ -22,14 +22,14 @@ module load udunits proj geos/3.12.1 gdal/3.8.5 \
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="${POSTFIT_REPORTING_PROJECT_ROOT:-$(cd -- "${SCRIPT_DIR}/.." && pwd)}"
-RUN_ID="${POSTFIT_REPORTING_RUN_ID:-20725437}"
-OUTPUT_ROOT="${POSTFIT_REPORTING_OUTPUT_ROOT:-/project/disease_ecology/nws-geostat-output/postfit_reporting}"
-FIT_PATH="${POSTFIT_REPORTING_FIT:-/project/disease_ecology/nws-geostat-output/joint_inla_fit/joint_model_fit.rds}"
-BUILD_PATH="${POSTFIT_REPORTING_BUILD:-/project/disease_ecology/nws-geostat-output/joint_inla/joint_inla_build.rds}"
-STAGE2_PATH="${POSTFIT_REPORTING_STAGE2:-/project/disease_ecology/nws-geostat-output/joint_model/joint_model_inputs.rds}"
-PHASE2_ROOT="${POSTFIT_REPORTING_PHASE2:-/project/disease_ecology/nws-geostat-output/joint_inla_fit/prediction_projection_${RUN_ID}}"
-PHASE3_ROOT="${POSTFIT_REPORTING_PHASE3:-/project/disease_ecology/nws-geostat-output/joint_inla_fit/raster_surfaces_${RUN_ID}}"
-OBSERVATION_INPUT="${POSTFIT_REPORTING_OBSERVATION_INPUT:-/project/disease_ecology/NWScrewworm/data/processed_data/case_detections/combined_clean_obs_2027-07-31.csv}"
+RUN_ID="${POSTFIT_REPORTING_RUN_ID:?Set POSTFIT_REPORTING_RUN_ID to the immutable run identifier}"
+OUTPUT_ROOT="${POSTFIT_REPORTING_OUTPUT_ROOT:?Set POSTFIT_REPORTING_OUTPUT_ROOT to the private output directory}"
+FIT_PATH="${POSTFIT_REPORTING_FIT:?Set POSTFIT_REPORTING_FIT to the private Stage 3B fit}"
+BUILD_PATH="${POSTFIT_REPORTING_BUILD:?Set POSTFIT_REPORTING_BUILD to the private Stage 3A build}"
+STAGE2_PATH="${POSTFIT_REPORTING_STAGE2:?Set POSTFIT_REPORTING_STAGE2 to the private Stage 2 artifact}"
+PHASE2_ROOT="${POSTFIT_REPORTING_PHASE2:?Set POSTFIT_REPORTING_PHASE2 to the private Phase 2 directory}"
+PHASE3_ROOT="${POSTFIT_REPORTING_PHASE3:?Set POSTFIT_REPORTING_PHASE3 to the private Phase 3 directory}"
+OBSERVATION_INPUT="${POSTFIT_REPORTING_OBSERVATION_INPUT:?Set POSTFIT_REPORTING_OBSERVATION_INPUT to the private observation CSV}"
 HOST_COLUMN="${POSTFIT_REPORTING_HOST_COLUMN:-host}"
 CATTLE_UNITS="${POSTFIT_REPORTING_CATTLE_UNITS:-}"
 MAPPING_VERSION="${POSTFIT_REPORTING_MAPPING_VERSION:-historical-host-normalization-v2}"

@@ -30,9 +30,9 @@ arg <- function(values, name, default = NULL) if (is.null(values[[name]])) defau
 
 args <- parse_args(commandArgs(trailingOnly = TRUE))
 run_id <- arg(args, "run-id", "20725437")
-output_root <- arg(args, "output-root", "/project/disease_ecology/nws-geostat-output/postfit_reporting")
-fit_path <- arg(args, "fit", "/project/disease_ecology/nws-geostat-output/joint_inla_fit/joint_model_fit.rds")
-build_path <- arg(args, "build", "/project/disease_ecology/nws-geostat-output/joint_inla/joint_inla_build.rds")
+output_root <- arg(args, "output-root", Sys.getenv("POSTFIT_REPORTING_OUTPUT_ROOT", unset = NA_character_))
+fit_path <- arg(args, "fit", Sys.getenv("POSTFIT_REPORTING_FIT", unset = NA_character_))
+build_path <- arg(args, "build", Sys.getenv("POSTFIT_REPORTING_BUILD", unset = NA_character_))
 stage2_path <- arg(args, "stage2")
 phase3_root <- arg(args, "phase3-root", file.path(dirname(fit_path), paste0("raster_surfaces_", run_id)))
 phase2_root <- arg(args, "phase2", file.path(dirname(fit_path), paste0("prediction_projection_", run_id)))
@@ -52,8 +52,9 @@ observations_path <- arg(args, "observations")
 cattle_units <- arg(args, "cattle-units")
 overwrite <- isTRUE(args[["overwrite"]])
 
-if (is.null(stage2_path)) {
-  stage2_path <- "/project/disease_ecology/nws-geostat-output/joint_model/joint_model_inputs.rds"
+if (is.null(stage2_path)) stage2_path <- Sys.getenv("POSTFIT_REPORTING_STAGE2", unset = NA_character_)
+if (any(is.na(c(output_root, fit_path, build_path, stage2_path))) || any(!nzchar(c(output_root, fit_path, build_path, stage2_path)))) {
+  stop("Supply explicit --output-root, --fit, --build, and --stage2 paths for the private reporting run.")
 }
 
 required_paths <- c(build = build_path, fit = fit_path, stage2 = stage2_path)

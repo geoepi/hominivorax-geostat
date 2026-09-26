@@ -25,7 +25,7 @@ the GEOS ABI warning recorded there is non-blocking when the validated Phase
 3. **Phase 1 validation.** New production mode reconciles dynamic Stage 2
    holdout counts and reports finite Tier 2 metrics without applying the
    historical reference vector. Reference mode is retained only for the
-   20725437 numerical regression lineage.
+   accepted historical production-run numerical regression lineage.
 4. **Phase 2 projection.** The reconstruction identity must pass before dense
    prediction-grid projection is attempted. Stage 2 provenance is reconciled
    to Stage 3A, and the Phase 2 metadata must carry the requested run ID.

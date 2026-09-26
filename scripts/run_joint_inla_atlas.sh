@@ -5,14 +5,14 @@
 #SBATCH --cpus-per-task=12
 #SBATCH --mem=280G
 #SBATCH --time=36:00:00
-#SBATCH --output=/project/disease_ecology/nws-geostat-output/joint_inla_fit/slurm-%x-%j.out
-#SBATCH --error=/project/disease_ecology/nws-geostat-output/joint_inla_fit/slurm-%x-%j.err
+#SBATCH --output=slurm-%x-%j.out
+#SBATCH --error=slurm-%x-%j.err
 
 set -euo pipefail
 
-PROJECT_ROOT=/project/disease_ecology/hominivorax-geostat
-CONFIG_PATH="${STAGE3B_CONFIG_PATH:-/project/disease_ecology/nws-geostat-output/config/joint_inla_fit.atlas.default.yml}"
-OUTPUT_ROOT="${STAGE3B_OUTPUT_ROOT:-/project/disease_ecology/nws-geostat-output/joint_inla_fit}"
+PROJECT_ROOT="${ATLAS_PROJECT_ROOT:?Set ATLAS_PROJECT_ROOT to the private Atlas checkout}"
+CONFIG_PATH="${STAGE3B_CONFIG_PATH:?Set STAGE3B_CONFIG_PATH to the private Stage 3B configuration}"
+OUTPUT_ROOT="${STAGE3B_OUTPUT_ROOT:?Set STAGE3B_OUTPUT_ROOT to the private output directory}"
 RSCRIPT_BIN="${RSCRIPT_BIN:-Rscript}"
 
 module purge

@@ -10,6 +10,7 @@ outputs:
   fit: joint_model_fit.rds
   audit: joint_model_fit_audit.csv
   metadata: joint_model_fit_metadata.rds
+  theta_init: joint_model_theta_init.rds
   preflight: joint_inla_fit_preflight.csv
   # Set true, or pass --overwrite, only when replacing an existing run is intentional.
   overwrite: false
@@ -33,8 +34,10 @@ fit:
   control_predictor:
     compute: true
   initialization:
-    # historical reads the theta vector recorded in Stage 3A; default omits control.mode.
-    mode: historical
+    # Reuse is opt-in and requires a compatible artifact created by Stage 3B.
+    mode: default
+    use_previous_theta: false
+    theta_file: null
   # Leave null to preserve the installed INLA nbinomial likelihood hyperprior.
   control_family: null
 

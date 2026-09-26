@@ -11,6 +11,7 @@ run_preprocessing <- function(config_path, repo_root = normalizePath(file.path(d
   admin_geometry <- sf::st_transform(sf::st_make_valid(admin_geometry), cfg$study$projected_crs)
   analysis_domain <- build_analysis_domain(boundary, cfg)
   observations <- read_observations(cfg$inputs$observations)
+  cfg <- preprocessing_prepare_input_temporal_domain(observations, cfg)
   if (identical(cfg$inputs$observation_mode, "standardized")) {
     cleaned <- preprocess_standardized_observations(observations, boundary, cfg)
   } else {
@@ -25,12 +26,25 @@ run_preprocessing <- function(config_path, repo_root = normalizePath(file.path(d
     data.frame(stage = "outside_analysis_domain", count = analysis_filter$excluded_count),
     data.frame(stage = "retained", count = analysis_filter$retained)
   )
-  time_index <- make_week_index(cfg$study$start_date, cfg$study$end_date)
+  temporal <- preprocessing_resolve_cleaned_temporal_domain(cleaned$data, cfg)
+  cfg <- temporal$config
+  cleaned$data <- temporal$data
+  if (nrow(temporal$excluded)) {
+    cleaned$excluded <- dplyr::bind_rows(cleaned$excluded, temporal$excluded)
+    cleaned$audit <- dplyr::bind_rows(cleaned$audit, data.frame(
+      stage = "after_auto_last_complete_observation_week", count = nrow(temporal$excluded)
+    ))
+  }
+  cleaned$audit <- dplyr::bind_rows(
+    cleaned$audit[cleaned$audit$stage != "retained", , drop = FALSE],
+    data.frame(stage = "retained", count = nrow(cleaned$data))
+  )
+  time_index <- temporal$time_index
   support <- build_spatial_support(boundary, cleaned$data, cfg, analysis_domain = analysis_domain)
   tier1_raw <- build_tier1(cleaned$data, support$integration_points, time_index)
   tier2 <- build_tier2(cleaned$data, support, time_index)
   conservation <- validate_detection_conservation(tier1_raw, tier2, nrow(cleaned$data), thinning_enabled = FALSE)
-  thinning <- thin_tier1(tier1_raw, cfg, terra::rast(cfg$inputs$template_raster))
+  thinning <- thin_tier1(tier1_raw, cfg, terra::rast(cfg$inputs$template_raster), cfg$inputs$template_raster)
   conservation$tier1_retained_positive <- sum(thinning$retained$Yi == 1L, na.rm = TRUE)
   conservation$excluded_analysis_domain <- analysis_filter$excluded_count
   prediction <- build_prediction_grid(support, time_index, cfg$inputs$template_raster, cfg$study$projected_crs)
@@ -63,7 +77,7 @@ run_preprocessing <- function(config_path, repo_root = normalizePath(file.path(d
   tier1 <- admin_t1$data
   tier2 <- admin_t2$data
   prediction <- admin_prediction$data
-  model_inputs <- assemble_model_inputs(tier1, tier2, prediction, support, time_index, transformations, list(observation = cleaned$audit, covariate = covariate_audit, thinning = thinning$audit, admin = dplyr::bind_rows(admin_t1$audit, admin_t2$audit, admin_prediction$audit), conservation = conservation), cfg, cleaned$excluded, thinning$excluded)
+  model_inputs <- assemble_model_inputs(tier1, tier2, prediction, support, time_index, transformations, list(observation = cleaned$audit, covariate = covariate_audit, thinning = thinning$audit, temporal = temporal$provenance, admin = dplyr::bind_rows(admin_t1$audit, admin_t2$audit, admin_prediction$audit), conservation = conservation), cfg, cleaned$excluded, thinning$excluded)
   if (isTRUE(write_outputs)) {
     saveRDS(model_inputs, file.path(cfg$project$output_directory, cfg$outputs$model_inputs))
     write.csv(cleaned$audit, file.path(cfg$project$output_directory, cfg$outputs$observation_audit), row.names = FALSE)

@@ -10,19 +10,19 @@
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=64G
 #SBATCH --time=04:00:00
-#SBATCH --output=/project/disease_ecology/nws-geostat-output/joint_inla_fit/phase3-rasterization-%j.out
-#SBATCH --error=/project/disease_ecology/nws-geostat-output/joint_inla_fit/phase3-rasterization-%j.err
+#SBATCH --output=phase3-rasterization-%j.out
+#SBATCH --error=phase3-rasterization-%j.err
 
 set -euo pipefail
 
 module purge
 module load udunits proj geos/3.12.1 gdal/3.8.5 intel-oneapi-mkl/2023.2.0 r/4.4.3
 
-PROJECT_ROOT=/project/disease_ecology/hominivorax-geostat
-RUN_ID="${PHASE3_RUN_ID:-20725437}"
-PHASE2_OUTPUT="${PHASE3_PHASE2_OUTPUT:-/project/disease_ecology/nws-geostat-output/joint_inla_fit/prediction_projection_${RUN_ID}}"
-STAGE2_ARTIFACT="${PHASE3_STAGE2_ARTIFACT:-/project/disease_ecology/nws-geostat-output/joint_model/joint_model_inputs.rds}"
-OUTPUT_DIR="${PHASE3_OUTPUT_DIR:-/project/disease_ecology/nws-geostat-output/joint_inla_fit/raster_surfaces_${RUN_ID}}"
+PROJECT_ROOT="${ATLAS_PROJECT_ROOT:?Set ATLAS_PROJECT_ROOT to the private Atlas checkout}"
+RUN_ID="${PHASE3_RUN_ID:?Set PHASE3_RUN_ID to the immutable run identifier}"
+PHASE2_OUTPUT="${PHASE3_PHASE2_OUTPUT:?Set PHASE3_PHASE2_OUTPUT to the private Phase 2 directory}"
+STAGE2_ARTIFACT="${PHASE3_STAGE2_ARTIFACT:?Set PHASE3_STAGE2_ARTIFACT to the private Stage 2 artifact}"
+OUTPUT_DIR="${PHASE3_OUTPUT_DIR:?Set PHASE3_OUTPUT_DIR to the private Phase 3 directory}"
 
 cd "${PROJECT_ROOT}"
 

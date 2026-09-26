@@ -1,18 +1,18 @@
 # Parameterized post-fit reporting configuration.
 # This file names the validated reference artifacts only; it does not fit or
 # modify a model and it never uses the running production fit implicitly.
-run_id: "20725437"
-output_root: "/project/disease_ecology/nws-geostat-output/postfit_reporting"
-fit: "/project/disease_ecology/nws-geostat-output/joint_inla_fit/joint_model_fit.rds"
-build: "/project/disease_ecology/nws-geostat-output/joint_inla/joint_inla_build.rds"
-stage2: "/project/disease_ecology/nws-geostat-output/joint_model/joint_model_inputs.rds"
-phase2: "/project/disease_ecology/nws-geostat-output/joint_inla_fit/prediction_projection_20725437"
-phase3: "/project/disease_ecology/nws-geostat-output/joint_inla_fit/raster_surfaces_20725437"
+run_id: "production-run-id"
+output_root: null # Supply a private local/Atlas output directory.
+fit: null # Supply the explicit Stage 3B fit path.
+build: null # Supply the explicit Stage 3A build path.
+stage2: null # Supply the explicit Stage 2 artifact path.
+phase2: null # Supply the explicit Phase 2 output directory.
+phase3: null # Supply the explicit Phase 3 output directory.
 boundary: null
 
 # Host composition uses the authoritative descriptive observation source. This
 # CSV is separate from fit provenance and is not implicitly the RPI source.
-observation_input: "/project/disease_ecology/NWScrewworm/data/processed_data/case_detections/combined_clean_obs_2027-07-31.csv"
+observation_input: null # Supply the private authoritative observation CSV.
 host_column: host
 mapping_version: "historical-host-normalization-v2"
 cattle_units: "individuals/km²"

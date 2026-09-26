@@ -25,7 +25,8 @@ parse_args <- function(args) {
 }
 
 args <- parse_args(commandArgs(trailingOnly = TRUE))
-phase2_dir <- args[["phase2-output"]] %||% "/project/disease_ecology/nws-geostat-output/joint_inla_fit/prediction_projection_20725437"
+phase2_dir <- args[["phase2-output"]] %||% Sys.getenv("PHASE3_PHASE2_OUTPUT", unset = NA_character_)
+if (is.na(phase2_dir) || !nzchar(phase2_dir)) stop("Supply --phase2-output or PHASE3_PHASE2_OUTPUT for the private Phase 2 directory.")
 run_id <- args[["run-id"]] %||% "20725437"
 output_dir <- args[["output"]] %||% file.path(dirname(phase2_dir), paste0("raster_surfaces_", run_id))
 expected_weeks <- if (is.null(args[["expected-weeks"]])) NULL else as.integer(args[["expected-weeks"]])

@@ -32,6 +32,13 @@ if (!requireNamespace("INLA", quietly = TRUE)) {
                         INLA = as.character(utils::packageVersion("INLA")),
                         source_artifact = "outputs/joint_model/joint_model_inputs.rds",
                         source_artifact_sha256 = "stage2-sha"),
+      model_signature = list(
+        formula = "Y ~ -1 + intercept1 + intercept2",
+        family = c("binomial", "nbinomial"),
+        spde_structure = list(tier1 = list(alpha = 2), tier2 = list(alpha = 2)),
+        shared_field = list(source = "tier1_field", target = "tier2_copy_field", group_model = "iid"),
+        hyperparameter_count = 10L
+      ),
       config = list(inputs = list(joint_model_inputs = "outputs/joint_model/joint_model_inputs.rds"))
     )
     saveRDS(build, path)
@@ -55,6 +62,7 @@ if (!requireNamespace("INLA", quietly = TRUE)) {
   stopifnot(isTRUE(all.equal(loaded$formula, build$formula)))
   stopifnot(identical(loaded$stacks$joint, build$stacks$joint))
 
+  cfg$fit$initialization$mode <- "historical"
   historical <- joint_inla_fit_initialization(loaded, cfg)
   stopifnot(identical(historical$mode, "historical"), identical(historical$control_mode$restart, FALSE))
   stopifnot(identical(historical$control_mode$theta, loaded$fit_reference$control_mode$theta))
@@ -64,7 +72,7 @@ if (!requireNamespace("INLA", quietly = TRUE)) {
   default_call <- joint_inla_fit_construct_call(loaded, cfg, default)
   stopifnot(!"control.mode" %in% names(default_call),
             !any(grepl("theta", names(default_call), fixed = TRUE)))
-  cfg$fit$initialization$mode <- "historical"
+  cfg$fit$initialization$mode <- "default"
 
   executed_build <- loaded
   executed_build$provenance$executed_fit <- TRUE
@@ -138,6 +146,7 @@ if (!requireNamespace("INLA", quietly = TRUE)) {
   success_config <- file.path(tempdir(), "joint_inla_fit_success.yml")
   yaml::write_yaml(success_cfg, success_config)
   fake_fit <- list(
+    mode = list(theta = setNames(seq_len(10), paste0("theta_", seq_len(10)))),
     summary.hyperpar = data.frame(mean = 1),
     summary.fixed = data.frame(mean = c(1, 2)),
     summary.random = list(one = data.frame(mean = 1)),
@@ -166,7 +175,28 @@ if (!requireNamespace("INLA", quietly = TRUE)) {
   }, error = function(error) grepl("Refusing to overwrite", conditionMessage(error), fixed = TRUE))
   stopifnot(overwrite_blocked,
             file.exists(file.path(success_output, "joint_model_fit.rds")),
-            file.exists(file.path(success_output, "joint_model_fit_metadata.rds")))
+            file.exists(file.path(success_output, "joint_model_fit_metadata.rds")),
+            file.exists(file.path(success_output, "joint_model_theta_init.rds")))
+  theta_cfg <- success_cfg
+  theta_cfg$fit$initialization$mode <- "previous_theta"
+  theta_cfg$fit$initialization$use_previous_theta <- TRUE
+  theta_cfg$fit$initialization$theta_file <- file.path(success_output, "joint_model_theta_init.rds")
+  theta_init <- joint_inla_fit_initialization(build, theta_cfg)
+  stopifnot(
+    identical(theta_init$mode, "previous_theta"),
+    identical(theta_init$control_mode$restart, TRUE),
+    identical(theta_init$theta_length, 10L)
+  )
+  incompatible_theta <- readRDS(theta_cfg$fit$initialization$theta_file)
+  incompatible_theta$model_signature$shared_field$target <- "wrong_field"
+  incompatible_path <- file.path(tempdir(), "incompatible_theta.rds")
+  saveRDS(incompatible_theta, incompatible_path)
+  theta_cfg$fit$initialization$theta_file <- incompatible_path
+  incompatible <- tryCatch({
+    joint_inla_fit_initialization(build, theta_cfg)
+    FALSE
+  }, error = function(error) grepl("shared-field structure", conditionMessage(error), fixed = TRUE))
+  stopifnot(incompatible)
 
   cat("Stage 3B contract tests passed\n")
 }

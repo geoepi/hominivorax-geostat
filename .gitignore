@@ -55,6 +55,12 @@ secrets.yaml
 config/preprocessing.yml
 config/preprocessing.atlas.yml
 config/preprocessing.demo.yml
+config/local.yml
+config/*.local.yml
+config/joint_model.yml
+config/joint_inla.yml
+config/joint_inla_fit.yml
+config/postfit_reporting.yml
 data/private/
 outputs/
 *.RData

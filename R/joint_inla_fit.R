@@ -4,6 +4,90 @@ joint_inla_fit_hash_file <- function(path) {
   tryCatch(digest::digest(file = path, algo = "sha256"), error = function(e) NA_character_)
 }
 
+joint_inla_fit_formula_signature <- function(formula) {
+  if (!inherits(formula, "formula")) return(NA_character_)
+  paste(deparse(formula, width.cutoff = 500L), collapse = " ")
+}
+
+joint_inla_fit_model_signature <- function(build) {
+  if (!is.null(build$model_signature)) return(build$model_signature)
+  if (is.null(build$spde_metadata) || is.null(build$formula)) return(NULL)
+  list(
+    formula = joint_inla_fit_formula_signature(build$formula),
+    family = as.character(build$family),
+    spde_structure = build$spde_metadata,
+    shared_field = list(source = "tier1_field", target = "tier2_copy_field", group_model = "iid"),
+    hyperparameter_count = if (!is.null(build$fit_reference$control_mode$theta)) length(build$fit_reference$control_mode$theta) else NA_integer_
+  )
+}
+
+joint_inla_fit_theta_names <- function(fit) {
+  candidates <- list(
+    if (!is.null(fit$mode)) fit$mode$theta.names else NULL,
+    if (!is.null(fit$mode)) names(fit$mode$theta) else NULL,
+    if (!is.null(fit$misc)) fit$misc$theta.names else NULL,
+    if (!is.null(fit$misc)) fit$misc$theta.labels else NULL
+  )
+  for (value in candidates) {
+    if (!is.null(value) && length(value) && all(nzchar(as.character(value)))) return(as.character(value))
+  }
+  NULL
+}
+
+joint_inla_fit_make_theta_artifact <- function(fit, build, cfg, paths, runtime_version, source_fit_sha256) {
+  theta <- if (!is.null(fit$mode)) fit$mode$theta else NULL
+  if (is.null(theta) || !is.numeric(theta) || !length(theta) || any(!is.finite(theta))) {
+    stop("Successful Stage 3B fit does not expose a finite fit$mode$theta vector; theta artifact cannot be persisted.")
+  }
+  signature <- joint_inla_fit_model_signature(build)
+  if (is.null(signature)) stop("Stage 3A model signature is unavailable; theta artifact cannot be made safely reusable.")
+  theta_names <- joint_inla_fit_theta_names(fit)
+  list(
+    theta = theta,
+    theta_names = theta_names,
+    theta_names_verified = !is.null(theta_names),
+    source_run_id = if (!is.null(cfg$run_id)) as.character(cfg$run_id) else basename(normalizePath(dirname(paths$fit), mustWork = FALSE)),
+    source_fit_path = paths$fit,
+    source_fit_sha256 = source_fit_sha256,
+    stage3a_sha256 = joint_inla_fit_hash_file(cfg$inputs$stage3a_build),
+    model_formula_signature = signature$formula,
+    family = as.character(build$family),
+    hyperparameter_count = length(theta),
+    inla_version = as.character(runtime_version),
+    r_version = R.version.string,
+    model_signature = signature,
+    created_at = joint_inla_fit_iso_timestamp()
+  )
+}
+
+joint_inla_fit_validate_theta_artifact <- function(artifact, build, theta_path, build_path = NULL) {
+  required <- c("theta", "theta_names", "source_fit_path", "source_fit_sha256", "stage3a_sha256", "model_formula_signature", "family", "hyperparameter_count", "inla_version", "model_signature")
+  if (!is.list(artifact) || length(setdiff(required, names(artifact)))) {
+    stop("Theta initialization artifact is missing required compatibility metadata: ", paste(setdiff(required, names(artifact)), collapse = ", "))
+  }
+  if (!is.numeric(artifact$theta) || !length(artifact$theta) || any(!is.finite(artifact$theta))) stop("Theta initialization artifact contains a non-finite theta vector.")
+  signature <- joint_inla_fit_model_signature(build)
+  if (is.null(signature)) stop("Stage 3A model signature is unavailable; refusing theta initialization.")
+  if (!identical(as.character(artifact$family), as.character(build$family))) stop("Theta initialization family is incompatible with Stage 3A family.")
+  if (!identical(as.character(artifact$model_formula_signature), as.character(signature$formula))) stop("Theta initialization formula signature is incompatible with Stage 3A.")
+  if (!identical(as.integer(artifact$hyperparameter_count), as.integer(length(artifact$theta)))) stop("Theta initialization hyperparameter count does not match theta length.")
+  if (!identical(as.integer(artifact$hyperparameter_count), as.integer(signature$hyperparameter_count))) stop("Theta initialization hyperparameter count is incompatible with Stage 3A.")
+  if (!identical(artifact$model_signature$spde_structure, signature$spde_structure)) stop("Theta initialization SPDE structure is incompatible with Stage 3A.")
+  if (!identical(artifact$model_signature$shared_field, signature$shared_field)) stop("Theta initialization shared-field structure is incompatible with Stage 3A.")
+  stage3a_sha <- joint_inla_fit_hash_file(build_path)
+  if (!is.null(build_path) && !is.na(stage3a_sha) && !identical(tolower(as.character(artifact$stage3a_sha256)), tolower(stage3a_sha))) {
+    stop("Theta initialization Stage 3A checksum does not match the artifact provenance.")
+  }
+  if (!is.null(artifact$source_fit_path) && file.exists(artifact$source_fit_path) && !is.na(artifact$source_fit_sha256)) {
+    fit_sha <- joint_inla_fit_hash_file(artifact$source_fit_path)
+    if (!is.na(fit_sha) && !identical(tolower(as.character(artifact$source_fit_sha256)), tolower(fit_sha))) stop("Theta initialization source-fit checksum does not match the saved fit.")
+  } else {
+    stop("Theta initialization source fit is unavailable; refusing to use the theta vector.")
+  }
+  if (!is.null(artifact$theta_names) && length(artifact$theta_names) && length(artifact$theta_names) != length(artifact$theta)) stop("Theta initialization labels do not match theta length.")
+  invisible(TRUE)
+}
+
 joint_inla_fit_require_inla <- function() {
   if (!requireNamespace("INLA", quietly = TRUE)) stop("Stage 3B requires the INLA package.")
   invisible(TRUE)
@@ -92,14 +176,29 @@ joint_inla_fit_effective_nbinomial_prior <- function() {
 
 joint_inla_fit_initialization <- function(build, cfg) {
   mode <- tolower(as.character(cfg$fit$initialization$mode))
-  if (identical(mode, "default")) return(list(mode = mode, control_mode = NULL, theta_length = NA_integer_))
+  use_previous <- isTRUE(cfg$fit$initialization$use_previous_theta) || identical(mode, "previous_theta")
+  if (!use_previous && identical(mode, "default")) return(list(mode = mode, control_mode = NULL, theta_length = NA_integer_, theta_path = NULL, compatibility = NULL))
+  theta_file <- cfg$fit$initialization$theta_file
+  if (use_previous && !is.null(theta_file)) {
+    if (!file.exists(theta_file)) stop("Configured theta initialization artifact does not exist: ", theta_file)
+    artifact <- readRDS(theta_file)
+    joint_inla_fit_validate_theta_artifact(artifact, build, theta_file, cfg$inputs$stage3a_build)
+    return(list(
+      mode = "previous_theta", control_mode = list(restart = TRUE, theta = artifact$theta),
+      theta_length = length(artifact$theta), theta_path = theta_file,
+      compatibility = list(formula = artifact$model_formula_signature, family = artifact$family,
+                           hyperparameter_count = artifact$hyperparameter_count,
+                           stage3a_sha256 = artifact$stage3a_sha256,
+                           theta_names_verified = isTRUE(artifact$theta_names_verified))
+    ))
+  }
   historical <- build$fit_reference$control_mode
-  if (!is.list(historical) || is.null(historical$theta)) {
-    stop("Historical initialization was requested, but Stage 3A fit_reference$control_mode$theta is unavailable.")
+  if (!identical(mode, "historical") || !is.list(historical) || is.null(historical$theta)) {
+    stop("Theta initialization was requested, but no compatible theta artifact was supplied.")
   }
   theta <- as.numeric(historical$theta)
   if (!length(theta) || any(!is.finite(theta))) stop("Historical initialization theta must be a finite numeric vector.")
-  list(mode = mode, control_mode = list(restart = FALSE, theta = theta), theta_length = length(theta))
+  list(mode = "historical", control_mode = list(restart = FALSE, theta = theta), theta_length = length(theta), theta_path = NULL, compatibility = list(legacy = TRUE))
 }
 
 joint_inla_fit_thread_argument <- function(cfg) {
@@ -159,6 +258,8 @@ joint_inla_fit_call_metadata <- function(call, cfg, initialization) {
     exposure_source = "data$e",
     link_source = "control.predictor$link <- data$link",
     initialization_mode = initialization$mode,
+    theta_initialization_file = initialization$theta_path,
+    theta_initialization_compatibility = initialization$compatibility,
     num_threads = as.integer(cfg$threads$num_threads),
     blas_threads = if (is.null(cfg$threads$blas_threads)) NA_integer_ else as.integer(cfg$threads$blas_threads),
     control_family_overridden = !is.null(cfg$fit$control_family)
@@ -349,7 +450,8 @@ joint_inla_fit_commit_file <- function(staged, target, overwrite = FALSE) {
   invisible(TRUE)
 }
 
-joint_inla_fit_write_outputs <- function(fit_artifact, metadata, audit, paths, overwrite = FALSE) {
+joint_inla_fit_write_outputs <- function(fit_artifact, metadata, audit, paths, overwrite = FALSE,
+                                        build = NULL, cfg = NULL, runtime_version = NULL) {
   for (path in paths) dir.create(dirname(path), recursive = TRUE, showWarnings = FALSE)
   stage_dir <- tempfile("joint-inla-fit-stage-", tmpdir = dirname(paths$fit))
   dir.create(stage_dir, recursive = TRUE, showWarnings = FALSE)
@@ -357,12 +459,28 @@ joint_inla_fit_write_outputs <- function(fit_artifact, metadata, audit, paths, o
   staged_fit <- file.path(stage_dir, "fit.rds")
   staged_metadata <- file.path(stage_dir, "metadata.rds")
   staged_audit <- file.path(stage_dir, "audit.csv")
+  staged_theta <- file.path(stage_dir, "theta_init.rds")
   saveRDS(fit_artifact, staged_fit)
+  theta_artifact <- joint_inla_fit_make_theta_artifact(
+    fit_artifact$fit, build, cfg, paths, runtime_version, joint_inla_fit_hash_file(staged_fit)
+  )
+  saveRDS(theta_artifact, staged_theta)
+  theta_sha <- joint_inla_fit_hash_file(staged_theta)
+  metadata$theta_initialization <- list(
+    path = paths$theta_init,
+    source_fit_path = theta_artifact$source_fit_path,
+    source_fit_sha256 = theta_artifact$source_fit_sha256,
+    stage3a_sha256 = theta_artifact$stage3a_sha256,
+    vector_length = length(theta_artifact$theta),
+    theta_names_verified = theta_artifact$theta_names_verified,
+    sha256 = theta_sha
+  )
   saveRDS(metadata, staged_metadata)
   utils::write.csv(audit, staged_audit, row.names = FALSE, na = "NA")
   joint_inla_fit_commit_file(staged_metadata, paths$metadata, overwrite)
   joint_inla_fit_commit_file(staged_audit, paths$audit, overwrite)
   joint_inla_fit_commit_file(staged_fit, paths$fit, overwrite)
+  joint_inla_fit_commit_file(staged_theta, paths$theta_init, overwrite)
   invisible(TRUE)
 }
 
@@ -458,7 +576,7 @@ run_joint_inla_fit <- function(config_path, repo_root = getwd(), output_override
                           effective_nbinomial_prior = effective_prior, audit = audit)))
   }
 
-  joint_inla_fit_output_preflight(paths[c("fit", "audit", "metadata")], overwrite = cfg$outputs$overwrite)
+  joint_inla_fit_output_preflight(paths[c("fit", "audit", "metadata", "theta_init")], overwrite = cfg$outputs$overwrite)
   if (is.null(inla_function)) inla_function <- INLA::inla
   fit <- NULL
   fit_error <- NULL
@@ -512,6 +630,9 @@ run_joint_inla_fit <- function(config_path, repo_root = getwd(), output_override
     control_compute = cfg$fit$control_compute,
     control_predictor = cfg$fit$control_predictor,
     initialization = initialization$mode,
+    use_previous_theta = isTRUE(cfg$fit$initialization$use_previous_theta),
+    theta_file = initialization$theta_path,
+    theta_output = paths$theta_init,
     threads = cfg$threads,
     version_policy = cfg$version_compatibility$policy
   )
@@ -523,7 +644,10 @@ run_joint_inla_fit <- function(config_path, repo_root = getwd(), output_override
   )
   metadata <- list(provenance = provenance, runtime_config = runtime_config, audit = audit,
                   output_paths = paths)
-  joint_inla_fit_write_outputs(fit_artifact, metadata, audit, paths, overwrite = cfg$outputs$overwrite)
+  joint_inla_fit_write_outputs(
+    fit_artifact, metadata, audit, paths, overwrite = cfg$outputs$overwrite,
+    build = build, cfg = cfg, runtime_version = runtime_version
+  )
   message("Joint-INLA Stage 3B fit complete:\n",
           "  Family: ", paste(build$family, collapse = ", "), "\n",
           "  INLA version: ", runtime_version, "\n",

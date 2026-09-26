@@ -261,9 +261,9 @@ filename.
 
 The runner requires explicit fit, Stage 2, Stage 3A, Phase 2, Phase 3,
 observation-source, output-root, and run-ID inputs. A future run such as
-`arbitrary_new_run` is accepted without treating `20725437` as special.
-Reference mode may continue to use `20725437` in examples and regression
-fixtures only.
+`arbitrary_new_run` is accepted without treating the historical reference run
+as special. Reference mode may continue to use the historical identifier in
+examples and regression fixtures only.
 
 The reference RPI status remains `BLOCKED` pending historical calibration
 observation provenance. No fitting, validation, projection, or rasterization

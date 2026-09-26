@@ -1,6 +1,14 @@
 project:
   type: website
   output-dir: docs
+  render:
+    - index.qmd
+    - home.qmd
+    - simulation.qmd
+    - spatial_domain.qmd
+    - response.qmd
+    - model.qmd
+    - preprocessing.qmd
   
 website: 
   title: "NWS Invasion Dynamics"

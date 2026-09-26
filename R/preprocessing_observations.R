@@ -50,7 +50,7 @@ preprocess_standardized_observations <- function(observations, boundary, cfg) {
   valid_time <- is.finite(x$epiyear) & is.finite(x$epiweek) & x$epiyear > 0 & x$epiweek >= 1 & x$epiweek <= 53
   add_excluded(x[!valid_time, , drop = FALSE], "invalid_year_week")
   x <- x[valid_time, , drop = FALSE]
-  expected <- make_week_index(cfg$study$start_date, cfg$study$end_date)
+  expected <- make_week_index(preprocessing_start_date(cfg), cfg$study$end_date)
   expected_key <- paste(expected$epiyear, expected$epiweek, sep = "|")
   in_period <- paste(x$epiyear, x$epiweek, sep = "|") %in% expected_key
   add_excluded(x[!in_period, , drop = FALSE], "outside_study_period")
@@ -139,7 +139,7 @@ preprocess_observations <- function(observations, boundary, cfg, host_lookup) {
   x$host_group[is.na(x$host_group)] <- "unknown"
   x$multiple_host_flag[unmapped] <- grepl("(bovino|bovine).*(equino|canino|suino|ovino)", x$host_cleaned[unmapped])
   unmapped_host_values <- sort(unique(x$host_cleaned[unmapped]))
-  time <- make_week_index(cfg$study$start_date, cfg$study$end_date)
+  time <- make_week_index(preprocessing_start_date(cfg), cfg$study$end_date)
   x <- dplyr::left_join(x, time, by = c("epiyear", "epiweek"))
   excluded_df <- if (length(excluded)) dplyr::bind_rows(excluded) else x[0, , drop = FALSE]
   audit <- data.frame(

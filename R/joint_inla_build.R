@@ -109,6 +109,13 @@ build_joint_inla_from_inputs <- function(joint_inputs, cfg) {
   nbinomial_default <- introspect_nbinomial_default()
   stacks <- build_joint_stacks(tier1, tier2, projections, effects)
   exposure <- if ("terrestrial_area_km2" %in% names(tier2)) tier2$terrestrial_area_km2 else tier2$area_km2
+  model_signature <- list(
+    formula = paste(deparse(formula, width.cutoff = 500L), collapse = " "),
+    family = c("binomial", "nbinomial"),
+    spde_structure = list(tier1 = spdes$tier1$parameters, tier2 = spdes$tier2$parameters),
+    shared_field = list(source = "tier1_field", target = "tier2_copy_field", group_model = "iid"),
+    hyperparameter_count = length(cfg$fit_reference$control_mode$theta)
+  )
   audit <- joint_audit(tier1, tier2, projections, spdes, cfg, predictor_audit, groups$n_groups, exposure, compatibility, priors, nbinomial_default)
   input_path <- cfg$inputs$joint_model_inputs
   list(
@@ -117,6 +124,7 @@ build_joint_inla_from_inputs <- function(joint_inputs, cfg) {
     A = projections, fields = fields, effects = effects, stacks = stacks,
     formula = formula, family = c("binomial", "nbinomial"), priors = priors,
     fit_reference = make_joint_fit_reference(cfg, nbinomial_default),
+    model_signature = model_signature,
     effect_mapping = mapping, prediction_compatibility = compatibility,
     build_audit = audit, config = cfg,
     provenance = list(stage = "joint_inla_assembly", source_artifact = input_path,

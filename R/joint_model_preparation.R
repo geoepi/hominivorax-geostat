@@ -137,6 +137,8 @@ prepare_joint_model_inputs <- function(model_inputs, cfg) {
     feature_metadata = features$metadata,
     spatial_support = model_inputs$spatial_support,
     preprocessing_metadata = model_inputs$preprocessing_metadata %||% list(),
+    thinning_audit = model_inputs$thinning_audit %||% list(),
+    temporal_provenance = model_inputs$temporal_provenance %||% list(),
     joint_model_config = cfg,
     preparation_audit = audit,
     provenance = list(stage = "joint_model_preparation", source_model_inputs = cfg$inputs$model_inputs, R = R.version.string)
