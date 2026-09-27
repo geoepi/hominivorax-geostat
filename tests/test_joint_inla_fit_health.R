@@ -42,4 +42,9 @@ failed_theta_compatibility_result <- joint_inla_fit_health_initialization(
 )
 stopifnot(identical(failed_theta_compatibility_result$status, "FAIL"))
 
+failed_restart_result <- joint_inla_fit_health_initialization(
+  "previous_theta", "previous_theta", modifyList(previous_theta_evidence, list(restart = FALSE))
+)
+stopifnot(identical(failed_restart_result$status, "FAIL"))
+
 cat("Stage 3B fit-health initialization contract tests passed\n")

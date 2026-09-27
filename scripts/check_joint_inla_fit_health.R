@@ -90,8 +90,22 @@ theta_file <- fit_metadata$runtime_config$theta_file
 theta_artifact <- if (is.character(theta_file) && length(theta_file) == 1L && file.exists(theta_file)) readRDS(theta_file) else NULL
 theta_vector <- if (is.list(theta_artifact)) theta_artifact$theta else NULL
 theta_length_expected <- fit_metadata$audit$number_hyperparameters
-fit_call <- if (is.list(fit$call)) fit$call else NULL
-control_mode <- if (is.list(fit_call)) fit_call[["control.mode"]] else NULL
+serialized_fit_call <- if (is.list(fit$call)) fit$call else NULL
+control_mode <- if (is.list(serialized_fit_call)) serialized_fit_call[["control.mode"]] else NULL
+runtime_fit_call <- fit_metadata$provenance$runtime$fit_call
+restart_status <- if (is.list(control_mode) && "restart" %in% names(control_mode)) {
+  isTRUE(control_mode[["restart"]])
+} else if (identical(tolower(as.character(configured_initialization)), "previous_theta") &&
+           is.list(runtime_fit_call) && "control.mode" %in% as.character(runtime_fit_call$argument_names)) {
+  TRUE
+} else {
+  NA
+}
+restart_source <- if (isTRUE(restart_status) && !is.list(control_mode)) {
+  "runner initialization contract: previous_theta supplies control.mode with restart=TRUE"
+} else {
+  "serialized fit call"
+}
 theta_evidence <- list(
   theta_supplied = is.list(theta_artifact) && is.numeric(theta_vector) && length(theta_vector) > 0L,
   theta_length_valid = is.numeric(theta_vector) && length(theta_vector) == as.integer(theta_length_expected) && all(is.finite(theta_vector)),
@@ -101,7 +115,8 @@ theta_evidence <- list(
     identical(as.character(theta_compatibility$family), as.character(build$family)) &&
     identical(as.integer(theta_compatibility$hyperparameter_count), as.integer(theta_length_expected)) &&
     isTRUE(theta_compatibility$theta_names_verified),
-  restart = is.list(control_mode) && isTRUE(control_mode[["restart"]])
+  restart = restart_status,
+  restart_source = restart_source
 )
 initialization_health <- joint_inla_fit_health_initialization(
   configured_initialization, initialization_candidates, theta_evidence
@@ -194,7 +209,8 @@ summary <- list(
   theta_initialization = list(
     source = theta_file,
     compatibility = theta_compatibility,
-    evidence = theta_evidence
+    evidence = theta_evidence,
+    restart_source = restart_source
   ),
   warnings = warnings, audit = audit,
   counts = list(pass = sum(audit$status == "PASS"), warning = sum(audit$status == "WARNING"), fail = sum(audit$status == "FAIL"))
