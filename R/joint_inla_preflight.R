@@ -125,8 +125,81 @@ joint_inla_preflight_theta_inventory <- function(theta_order = NULL) {
   )
 }
 
+joint_inla_preflight_quarter_group_expectation <- function(build) {
+  sources <- list()
+  add_levels <- function(name, value) {
+    if (is.null(value) || !length(value)) return(invisible(NULL))
+    values <- suppressWarnings(as.numeric(value))
+    if (!length(values) || any(!is.finite(values)) || any(values != round(values)) || any(values < 1)) {
+      sources[[name]] <<- NA_integer_
+    } else {
+      sources[[name]] <<- sort(unique(as.integer(round(values))))
+    }
+    invisible(NULL)
+  }
+  add_count <- function(name, value) {
+    if (is.null(value) || length(value) != 1L) return(invisible(NULL))
+    count <- suppressWarnings(as.numeric(value))
+    if (!is.finite(count) || count != round(count) || count < 1) sources[[name]] <<- NA_integer_
+    else sources[[name]] <<- seq_len(as.integer(count))
+    invisible(NULL)
+  }
+
+  build_audit <- if (is.data.frame(build$build_audit)) build$build_audit else NULL
+  if (!is.null(build_audit) && all(c("scope", "metric", "value") %in% names(build_audit))) {
+    temporal <- build_audit[build_audit$scope == "temporal" & build_audit$metric == "quarter_groups", , drop = FALSE]
+    if (nrow(temporal) == 1L) add_count("stage3a_build_audit.temporal.quarter_groups", temporal$value[[1L]])
+    prediction_count <- build_audit[build_audit$scope == "prediction" & build_audit$metric == "prediction_temporal_groups", , drop = FALSE]
+    if (nrow(prediction_count) == 1L) add_count("stage3a_build_audit.prediction.prediction_temporal_groups", prediction_count$value[[1L]])
+  }
+
+  prediction <- build$prediction_compatibility
+  if (is.list(prediction)) {
+    add_levels("stage3a_prediction_compatibility.groups", prediction$groups)
+    add_count("stage3a_prediction_compatibility.temporal_groups", prediction$temporal_groups)
+  }
+
+  fields <- build$fields
+  field_sources <- list(
+    tier1_field = c("tier1", "tier1_field.group"),
+    tier2_field = c("tier2", "tier2_field.group"),
+    tier2_copy_field = c("copy", "tier2_copy_field.group")
+  )
+  for (name in names(field_sources)) {
+    location <- field_sources[[name]]
+    field <- if (is.list(fields)) fields[[location[[1L]]]] else NULL
+    value <- if (is.list(field)) field[[location[[2L]]]] else NULL
+    add_levels(paste0("stage3a_fields.", name, ".group"), value)
+  }
+
+  invalid_sources <- names(sources)[vapply(sources, function(value) length(value) == 1L && is.na(value[[1L]]), logical(1L))]
+  available <- sources[!names(sources) %in% invalid_sources]
+  if (!length(available)) {
+    return(list(success = FALSE, n_groups = NA_integer_, expected_levels = integer(),
+                sources = sources, invalid_sources = invalid_sources,
+                details = "Stage 3A quarter-group metadata is missing or invalid."))
+  }
+
+  reference <- available[[1L]]
+  agreement <- all(vapply(available, identical, logical(1L), y = reference)) && !length(invalid_sources)
+  n_groups <- if (length(reference)) max(reference) else NA_integer_
+  contiguous <- length(reference) && identical(reference, seq_len(n_groups))
+  list(
+    success = isTRUE(agreement) && isTRUE(contiguous),
+    n_groups = as.integer(n_groups), expected_levels = as.integer(reference),
+    sources = sources, invalid_sources = invalid_sources,
+    agreement = agreement, contiguous = contiguous,
+    details = if (isTRUE(agreement) && isTRUE(contiguous)) {
+      paste0("Authoritative Stage 3A quarter-group metadata agrees across ", paste(names(available), collapse = ", "), ".")
+    } else {
+      paste0("Stage 3A quarter-group metadata must agree and be contiguous 1:n_groups; sources: ",
+             paste(vapply(sources, function(value) paste(value, collapse = ","), character(1L)), collapse = "; "))
+    }
+  )
+}
+
 joint_inla_preflight_build <- function(build, build_path = NA_character_, expected_nspde = 13449L,
-                                      expected_quarter_groups = 8L, expected_cattle_bins = 22L) {
+                                      expected_cattle_bins = 22L) {
   checks <- list()
   artifact_sha256 <- joint_inla_fit_hash_file(build_path)
   add_check <- function(section, check, status, observed, expected, details = "", metrics = list()) {
@@ -524,14 +597,26 @@ joint_inla_preflight_build <- function(build, build_path = NA_character_, expect
   }
 
   nspde <- as.integer(expected_nspde)
+  quarter_groups <- joint_inla_preflight_quarter_group_expectation(build)
+  if (isTRUE(quarter_groups$success)) {
+    pass("random_effects", "quarter_group_metadata", quarter_groups$n_groups, quarter_groups$n_groups,
+         quarter_groups$details)
+  } else {
+    fail("random_effects", "quarter_group_metadata",
+         paste(vapply(quarter_groups$sources, function(value) paste(value, collapse = ","), character(1L)), collapse = "; "),
+         if (length(quarter_groups$expected_levels)) paste(quarter_groups$expected_levels, collapse = ",") else "authoritative contiguous Stage 3A quarter groups",
+         quarter_groups$details)
+  }
+  expected_quarter_groups <- if (is.finite(quarter_groups$n_groups)) quarter_groups$n_groups else NULL
+  expected_quarter_levels <- if (length(quarter_groups$expected_levels)) quarter_groups$expected_levels else NULL
   check_index("tier1_field", tier1_active_rows, expected_max = nspde)
-  check_index("tier1_field.group", tier1_active_rows, expected_max = expected_quarter_groups, exact_levels = seq_len(expected_quarter_groups))
+  check_index("tier1_field.group", tier1_active_rows, expected_max = expected_quarter_groups, exact_levels = expected_quarter_levels)
   check_index("week_steps", tier1_rows, expected_max = NULL, contiguous = TRUE)
   check_index("admin_f", tier1_active_rows, expected_max = NULL)
   check_index("tier2_field", tier2_active_rows, expected_max = nspde)
-  check_index("tier2_field.group", tier2_active_rows, expected_max = expected_quarter_groups, exact_levels = seq_len(expected_quarter_groups))
+  check_index("tier2_field.group", tier2_active_rows, expected_max = expected_quarter_groups, exact_levels = expected_quarter_levels)
   check_index("tier2_copy_field", tier2_active_rows, expected_max = nspde)
-  check_index("tier2_copy_field.group", tier2_active_rows, expected_max = expected_quarter_groups, exact_levels = seq_len(expected_quarter_groups))
+  check_index("tier2_copy_field.group", tier2_active_rows, expected_max = expected_quarter_groups, exact_levels = expected_quarter_levels)
   check_index("tier2_week", tier2_rows, expected_max = NULL, contiguous = TRUE)
   check_index("cattle_q", tier2_active_rows, expected_max = expected_cattle_bins)
   check_index("cattle_mid_log1p", tier2_active_rows, integer_valued = FALSE, expected_min = NULL)
@@ -543,8 +628,14 @@ joint_inla_preflight_build <- function(build, build_path = NA_character_, expect
       joint_inla_preflight_projected_values(data[["tier2_field.group"]], A, tier2_active_rows)$values,
       joint_inla_preflight_projected_values(data[["tier2_copy_field.group"]], A, tier2_active_rows)$values
     )))
-    if (identical(as.integer(observed_groups), seq_len(expected_quarter_groups))) pass("random_effects", "quarter_group_count", length(observed_groups), expected_quarter_groups, "Quarter groups are exactly 1:8.")
-    else fail("random_effects", "quarter_group_count", paste(observed_groups, collapse = ","), paste(seq_len(expected_quarter_groups), collapse = ","), "Quarter groups must be exactly 1:8.")
+    if (!is.null(expected_quarter_levels) && identical(as.integer(observed_groups), as.integer(expected_quarter_levels))) {
+      pass("random_effects", "quarter_group_count", length(observed_groups), expected_quarter_groups,
+           paste0("Quarter groups are exactly 1:", expected_quarter_groups, " and agree across Tier 1, Tier 2, and the copy field."))
+    } else {
+      fail("random_effects", "quarter_group_count", paste(observed_groups, collapse = ","),
+           if (is.null(expected_quarter_levels)) "authoritative contiguous Stage 3A quarter groups" else paste(expected_quarter_levels, collapse = ","),
+           "Quarter groups must be contiguous 1:n_groups and agree across Tier 1, Tier 2, and the copy field.")
+    }
   }
 
   if (!is.null(A) && !is.null(n_rows) && !is.na(n_rows)) {

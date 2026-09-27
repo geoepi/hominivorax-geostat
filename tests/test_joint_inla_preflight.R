@@ -5,9 +5,9 @@ load_joint_inla_fit(repo_root)
 if (!requireNamespace("INLA", quietly = TRUE)) {
   cat("Stage 3B production preflight tests skipped: INLA is unavailable\n")
 } else {
-  make_production_shaped_build <- function(path, invalid_cattle_bin = FALSE, effect_overrides = list(), inactive_cattle_bins = integer()) {
-    n_tier1 <- 8L
-    n_tier2 <- 22L
+  make_production_shaped_build <- function(path, invalid_cattle_bin = FALSE, effect_overrides = list(), inactive_cattle_bins = integer(), quarter_groups = 8L) {
+    n_tier1 <- as.integer(quarter_groups)
+    n_tier2 <- max(22L, as.integer(quarter_groups))
     n <- n_tier1 + n_tier2
     tier1 <- seq_len(n) <= n_tier1
     tier2 <- !tier1
@@ -38,13 +38,13 @@ if (!requireNamespace("INLA", quietly = TRUE)) {
       goats = value(tier2, seq_len(n_tier2) / n_tier2 + 7),
       sheep = value(tier2, seq_len(n_tier2) / n_tier2 + 8),
       tier1_field = integer_value(tier1, seq_len(n_tier1)),
-      tier1_field.group = integer_value(tier1, seq_len(n_tier1)),
+      tier1_field.group = integer_value(tier1, seq_len(quarter_groups)),
       week_steps = integer_value(tier1, seq_len(n_tier1)),
       admin_f = integer_value(tier1, seq_len(n_tier1)),
       tier2_field = integer_value(tier2, seq_len(n_tier2)),
-      tier2_field.group = integer_value(tier2, rep(seq_len(8L), length.out = n_tier2)),
+      tier2_field.group = integer_value(tier2, rep(seq_len(quarter_groups), length.out = n_tier2)),
       tier2_copy_field = integer_value(tier2, seq_len(n_tier2)),
-      tier2_copy_field.group = integer_value(tier2, rep(seq_len(8L), length.out = n_tier2)),
+      tier2_copy_field.group = integer_value(tier2, rep(seq_len(quarter_groups), length.out = n_tier2)),
       tier2_week = integer_value(tier2, seq_len(n_tier2)),
       cattle_q = integer_value(tier2, if (invalid_cattle_bin) c(23L, seq_len(21L)) else seq_len(n_tier2)),
       cattle_mid_log1p = value(tier2, seq_len(n_tier2) / n_tier2),
@@ -55,7 +55,7 @@ if (!requireNamespace("INLA", quietly = TRUE)) {
     }
 
     Y <- matrix(NA_real_, nrow = n, ncol = 2L, dimnames = list(NULL, c("binomial", "nbinomial")))
-    Y[tier1, 1L] <- c(0, 1, 0, 1, 0, 1, 0, 1)
+    Y[tier1, 1L] <- rep(c(0, 1), length.out = n_tier1)
     Y[tier2, 2L] <- seq_len(n_tier2)
     if (length(inactive_cattle_bins)) Y[which(tier2)[inactive_cattle_bins], 2L] <- NA_real_
     e <- c(rep(NA_real_, n_tier1), seq_len(n_tier2) + 10)
@@ -99,8 +99,22 @@ if (!requireNamespace("INLA", quietly = TRUE)) {
       provenance = list(stage = "joint_inla_assembly", executed_fit = FALSE,
                         INLA = as.character(utils::packageVersion("INLA")),
                         source_artifact = "outputs/joint_model/joint_model_inputs.rds"),
-      config = list(inputs = list(joint_model_inputs = "outputs/joint_model/joint_model_inputs.rds"))
+      config = list(inputs = list(joint_model_inputs = "outputs/joint_model/joint_model_inputs.rds")),
+      fields = list(
+        tier1 = list(tier1_field.group = seq_len(quarter_groups)),
+        tier2 = list(tier2_field.group = seq_len(quarter_groups)),
+        copy = list(tier2_copy_field.group = seq_len(quarter_groups))
+      ),
+      build_audit = data.frame(
+        stage = rep("Stage 3A assembly", 2L),
+        scope = c("temporal", "prediction"),
+        metric = c("quarter_groups", "prediction_temporal_groups"),
+        value = as.character(c(quarter_groups, quarter_groups)),
+        stringsAsFactors = FALSE
+      )
     )
+    build$prediction_compatibility$groups <- seq_len(quarter_groups)
+    build$prediction_compatibility$temporal_groups <- as.integer(quarter_groups)
     saveRDS(build, path)
     build
   }
@@ -116,7 +130,42 @@ if (!requireNamespace("INLA", quietly = TRUE)) {
             !any(result$audit$check == "cattle_rw2_active_occupancy" & result$audit$status == "warning"),
             any(result$audit$check == "object_hyper_copy"),
             any(result$audit$check == "prediction_required_variables_finite"),
-            any(result$audit$status == "warning"))
+            any(result$audit$status == "warning"),
+            any(result$audit$check == "quarter_group_metadata" & result$audit$status == "pass"),
+            identical(result$audit$observed[result$audit$check == "quarter_group_count"], "8"))
+
+  full_horizon_path <- file.path(tempdir(), "joint_inla_full_horizon_11_group_build.rds")
+  make_production_shaped_build(full_horizon_path, quarter_groups = 11L)
+  full_horizon_result <- joint_inla_preflight_build(joint_inla_fit_read_build(full_horizon_path), full_horizon_path)
+  stopifnot(isTRUE(full_horizon_result$success), full_horizon_result$summary$failures == 0L,
+            any(full_horizon_result$audit$check == "quarter_group_metadata" & full_horizon_result$audit$status == "pass"),
+            identical(full_horizon_result$audit$observed[full_horizon_result$audit$check == "quarter_group_count"], "11"),
+            identical(full_horizon_result$audit$expected[full_horizon_result$audit$check == "tier1_field.group_levels"], paste(seq_len(11L), collapse = ",")),
+            identical(full_horizon_result$audit$expected[full_horizon_result$audit$check == "tier2_field.group_levels"], paste(seq_len(11L), collapse = ",")),
+            identical(full_horizon_result$audit$expected[full_horizon_result$audit$check == "tier2_copy_field.group_levels"], paste(seq_len(11L), collapse = ",")))
+
+  noncontiguous_path <- file.path(tempdir(), "joint_inla_noncontiguous_group_build.rds")
+  make_production_shaped_build(noncontiguous_path, quarter_groups = 11L,
+                               effect_overrides = list(
+                                 tier1_field.group = c(seq_len(10L), 12L, rep(NA_integer_, 22L)),
+                                 tier2_field.group = c(rep(NA_integer_, 11L), rep(c(seq_len(10L), 12L), length.out = 22L)),
+                                 tier2_copy_field.group = c(rep(NA_integer_, 11L), rep(seq_len(11L), length.out = 22L))
+                               ))
+  noncontiguous_result <- joint_inla_preflight_build(joint_inla_fit_read_build(noncontiguous_path), noncontiguous_path)
+  stopifnot(isFALSE(noncontiguous_result$success),
+            any(noncontiguous_result$audit$check == "tier1_field.group_levels" & noncontiguous_result$audit$status == "fail"),
+            any(noncontiguous_result$audit$check == "tier2_field.group_levels" & noncontiguous_result$audit$status == "fail"),
+            any(noncontiguous_result$audit$check == "quarter_group_count" & noncontiguous_result$audit$status == "fail"))
+
+  inconsistent_metadata_path <- file.path(tempdir(), "joint_inla_inconsistent_group_metadata_build.rds")
+  make_production_shaped_build(inconsistent_metadata_path, quarter_groups = 11L)
+  inconsistent_metadata_build <- readRDS(inconsistent_metadata_path)
+  inconsistent_metadata_build$prediction_compatibility$groups <- seq_len(10L)
+  inconsistent_metadata_build$prediction_compatibility$temporal_groups <- 10L
+  saveRDS(inconsistent_metadata_build, inconsistent_metadata_path)
+  inconsistent_metadata_result <- joint_inla_preflight_build(joint_inla_fit_read_build(inconsistent_metadata_path), inconsistent_metadata_path)
+  stopifnot(isFALSE(inconsistent_metadata_result$success),
+            any(inconsistent_metadata_result$audit$check == "quarter_group_metadata" & inconsistent_metadata_result$audit$status == "fail"))
 
   # Index storage must be exact integer storage, not merely integer-valued double.
   integer_values <- c(seq_len(8L), rep(NA_integer_, 22L))
