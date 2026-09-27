@@ -15,6 +15,7 @@ flag <- function(name) paste0("--", name) %in% args
 script_arg <- commandArgs(trailingOnly = FALSE)[grep("^--file=", commandArgs(trailingOnly = FALSE))][1L]
 repo_root <- normalizePath(option("repo-root", file.path(dirname(sub("^--file=", "", script_arg)), "..")), mustWork = TRUE)
 source(file.path(repo_root, "R", "joint_inla_extract.R"), local = .GlobalEnv)
+source(file.path(repo_root, "R", "joint_inla_fit_health.R"), local = .GlobalEnv)
 
 required <- c("fit", "build", "stage2", "output-dir", "run-id")
 missing <- required[vapply(required, function(x) is.null(option(x)), logical(1L))]
@@ -23,6 +24,7 @@ if (length(missing)) stop("Fit-health requires explicit arguments: ", paste(past
 fit_path <- normalizePath(option("fit"), mustWork = TRUE)
 build_path <- normalizePath(option("build"), mustWork = TRUE)
 stage2_path <- normalizePath(option("stage2"), mustWork = TRUE)
+fit_metadata_path <- normalizePath(option("metadata", file.path(dirname(fit_path), "joint_model_fit_metadata.rds")), mustWork = FALSE)
 output_dir <- normalizePath(option("output-dir"), mustWork = FALSE)
 run_id <- option("run-id")
 if (dir.exists(output_dir) && length(list.files(output_dir, all.files = TRUE, recursive = TRUE, no.. = TRUE)) && !flag("overwrite")) {
@@ -54,6 +56,7 @@ build <- readRDS(build_path)
 stage2 <- readRDS(stage2_path)
 fit_artifact <- readRDS(fit_path)
 fit <- joint_inla_extract_fit(fit_artifact)
+fit_metadata <- if (file.exists(fit_metadata_path)) readRDS(fit_metadata_path) else NULL
 
 family_ok <- identical(as.character(build$family), c("binomial", "nbinomial"))
 add("likelihood_families", if (family_ok) "PASS" else "FAIL", paste(as.character(build$family), collapse = "/"), "binomial/nbinomial", "The saved Stage 3A model contract retains the two validated likelihood families.")
@@ -78,11 +81,40 @@ initialization_candidates <- character()
 for (container in list(fit_artifact, fit_artifact$audit, fit_artifact$provenance, fit_artifact$metadata)) {
   if (is.list(container) && !is.null(container$initialization_mode)) initialization_candidates <- c(initialization_candidates, as.character(container$initialization_mode))
 }
-if (length(initialization_candidates)) {
-  initialization_ok <- identical(tolower(initialization_candidates[[1L]]), "default")
-  add("initialization_mode", if (initialization_ok) "PASS" else "FAIL", initialization_candidates[[1L]], "default", "The fit records the validated default initialization strategy.")
-} else {
-  add("initialization_mode", "WARNING", "not recorded in fit artifact", "default", "The runner configuration remains the authoritative initialization record.")
+if (is.list(fit_metadata$provenance$runtime) && !is.null(fit_metadata$provenance$runtime$initialization_mode)) {
+  initialization_candidates <- c(initialization_candidates, as.character(fit_metadata$provenance$runtime$initialization_mode))
+}
+configured_initialization <- fit_metadata$runtime_config$initialization
+theta_compatibility <- fit_metadata$provenance$runtime$fit_call$theta_initialization_compatibility
+theta_file <- fit_metadata$runtime_config$theta_file
+theta_artifact <- if (is.character(theta_file) && length(theta_file) == 1L && file.exists(theta_file)) readRDS(theta_file) else NULL
+theta_vector <- if (is.list(theta_artifact)) theta_artifact$theta else NULL
+theta_length_expected <- fit_metadata$audit$number_hyperparameters
+fit_call <- if (is.list(fit$call)) fit$call else NULL
+control_mode <- if (is.list(fit_call)) fit_call[["control.mode"]] else NULL
+theta_evidence <- list(
+  theta_supplied = is.list(theta_artifact) && is.numeric(theta_vector) && length(theta_vector) > 0L,
+  theta_length_valid = is.numeric(theta_vector) && length(theta_vector) == as.integer(theta_length_expected) && all(is.finite(theta_vector)),
+  theta_order_verified = isTRUE(theta_artifact$theta_names_verified) && isTRUE(theta_compatibility$theta_names_verified),
+  compatibility_passed = is.list(theta_compatibility) &&
+    all(c("formula", "family", "hyperparameter_count", "stage3a_sha256", "theta_names_verified") %in% names(theta_compatibility)) &&
+    identical(as.character(theta_compatibility$family), as.character(build$family)) &&
+    identical(as.integer(theta_compatibility$hyperparameter_count), as.integer(theta_length_expected)) &&
+    isTRUE(theta_compatibility$theta_names_verified),
+  restart = is.list(control_mode) && isTRUE(control_mode[["restart"]])
+)
+initialization_health <- joint_inla_fit_health_initialization(
+  configured_initialization, initialization_candidates, theta_evidence
+)
+add("initialization_provenance", initialization_health$mode_status,
+    paste0("configured=", initialization_health$configured_mode, "; recorded=", initialization_health$recorded_mode),
+    "configured and recorded supported modes agree",
+    initialization_health$mode_details)
+if (identical(initialization_health$recorded_mode, "previous_theta")) {
+  add("theta_initialization_provenance", initialization_health$theta_status,
+      paste(names(theta_evidence), unlist(theta_evidence), sep = "=", collapse = ";"),
+      "supplied, valid length, verified order, compatible, restart=TRUE",
+      initialization_health$theta_details)
 }
 
 finite_summary <- function(x, label) {
@@ -157,7 +189,13 @@ summary <- list(
   stage2_rows = c(tier1 = nrow(stage2$tier1), tier2 = nrow(stage2$tier2)),
   stack_rows = stack_rows, predictor_dimensions = predictor_dimensions,
   criteria = criteria, marginal_log_likelihood = mlik_value,
-  initialization_mode = if (length(initialization_candidates)) initialization_candidates[[1L]] else NA_character_,
+  initialization_mode = initialization_health$recorded_mode,
+  configured_initialization_mode = initialization_health$configured_mode,
+  theta_initialization = list(
+    source = theta_file,
+    compatibility = theta_compatibility,
+    evidence = theta_evidence
+  ),
   warnings = warnings, audit = audit,
   counts = list(pass = sum(audit$status == "PASS"), warning = sum(audit$status == "WARNING"), fail = sum(audit$status == "FAIL"))
 )
