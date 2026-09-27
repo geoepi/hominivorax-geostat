@@ -173,6 +173,13 @@ structural_apply_temperature_mask <- function(values, temperature, threshold, op
   out
 }
 
+structural_paired_quantiles <- function(values, probabilities = c(.05, .10, .25, .50, .75, .90, .95)) {
+  values <- as.numeric(values)
+  if (!length(values) || !any(is.finite(values))) stop("Same-week paired values contain no finite predictions.")
+  if (any(!is.finite(probabilities)) || any(probabilities < 0 | probabilities > 1)) stop("Quantile probabilities must be finite and between 0 and 1.")
+  stats::quantile(values[is.finite(values)], probs = probabilities, names = FALSE, type = 7)
+}
+
 structural_same_week_extract <- function(observations, stack, week_keys, target_crs = NULL) {
   structural_require("terra")
   if (!inherits(stack, "SpatRaster")) stack <- terra::rast(stack)

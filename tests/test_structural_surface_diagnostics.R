@@ -43,9 +43,15 @@ testthat::test_that("SPDE-excluded reconstruction is exact and reports nonfinite
 })
 
 testthat::test_that("temperature mask retains threshold and preserves outside-support NA", {
-  result <- structural_apply_temperature_mask(c(1, 2, NA, 4), c(10, 12, 12, NA), 12)
+  result <- structural_apply_temperature_mask(c(1, 2, NA, 4), c(14.4, 14.5, 14.5, NA), 14.5)
   testthat::expect_equal(result, c(0, 2, NA, NA))
   testthat::expect_error(structural_apply_temperature_mask(1, 1, NULL), "finite temperature threshold")
+})
+
+testthat::test_that("same-week paired RPI threshold uses finite paired predictions", {
+  result <- structural_paired_quantiles(c(0, 1, 2, NA, 4), probabilities = c(.1, .5, .9))
+  testthat::expect_equal(as.numeric(result), as.numeric(stats::quantile(c(0, 1, 2, 4), c(.1, .5, .9), names = FALSE, type = 7)))
+  testthat::expect_error(structural_paired_quantiles(c(NA_real_, NaN)), "no finite")
 })
 
 testthat::test_that("same-week extraction pairs observations to their modeled week", {
