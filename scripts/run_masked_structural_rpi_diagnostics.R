@@ -161,6 +161,7 @@ structural_rpi_from_threshold <- function(stack, threshold) {
     runs <- rle(suitable)
     max(runs$lengths[runs$values])
   })
+  max_run <- terra::mask(max_run, stack[[1L]])
   rpi <- (max_run * 7) / 21
   classes <- postfit_reporting_rpi_classify(rpi)
   list(rpi = rpi, classes = classes, threshold = threshold)
