@@ -123,7 +123,7 @@ same_week <- structural_same_week_extract(observations$data, masked_stack, week_
 same_week$masked_to_zero <- same_week$matched & is.finite(same_week$extracted_value) & same_week$extracted_value == 0
 same_week$finite_nonzero <- is.finite(same_week$extracted_value) & same_week$extracted_value > 0
 same_week_metrics <- data.frame(
-  total_observations = nrow(same_week), successfully_matched = sum(same_week$matched),
+  total_observations = nrow(same_week), successfully_matched = sum(is.finite(same_week$extracted_value)),
   outside_supported_raster = sum(same_week$matched & !is.finite(same_week$extracted_value)),
   in_incomplete_final_week = sum(!same_week$matched & same_week$week_key == tail(week_keys, 1L)),
   outside_horizon_week = sum(!same_week$matched & same_week$week_key != tail(week_keys, 1L)),
