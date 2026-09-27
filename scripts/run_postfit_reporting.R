@@ -182,7 +182,13 @@ rpi_audit <- postfit_reporting_rpi_audit(
   observed_source = rpi_observation_path,
   time_span_weeks = if (is.null(map_manifest)) NULL else nrow(map_manifest)
 )
-rpi_observations <- if (!is.null(rpi_observation_path) && file.exists(rpi_observation_path)) postfit_reporting_read_rpi_observations(rpi_observation_path) else NULL
+rpi_target_crs <- if (!is.null(map_manifest) && length(map_manifest$tier2_intensity_path)) {
+  postfit_reporting_require("terra")
+  terra::crs(terra::rast(map_manifest$tier2_intensity_path[[1L]]), proj = TRUE)
+} else NULL
+rpi_observations <- if (!is.null(rpi_observation_path) && file.exists(rpi_observation_path)) {
+  postfit_reporting_read_rpi_observations(rpi_observation_path, target_crs = rpi_target_crs)
+} else NULL
 potential <- NULL
 if (identical(cell_area$status, "PASS") && !is.null(map_manifest)) {
   tier2_paths <- map_manifest$tier2_intensity_path

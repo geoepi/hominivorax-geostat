@@ -208,6 +208,20 @@ testthat::test_that("cell area, potential abundance, and RPI semantic gate are e
   testthat::expect_equal(postfit_reporting_rpi_audit("tier2_intensity", observation_path, 4L)$status, "BLOCKED")
 })
 
+testthat::test_that("RPI reader projects authoritative lon/lat observations to raster CRS", {
+  testthat::skip_if_not_installed("sf")
+  root <- file.path(tempdir(), paste0("postfit-rpi-lonlat-", Sys.getpid()))
+  dir.create(root, recursive = TRUE)
+  path <- file.path(root, "observations.csv")
+  utils::write.csv(data.frame(date = "2026-07-25", host = "CANINO", lon = -75, lat = 20), path, row.names = FALSE)
+  target_crs <- "+proj=aea +lat_0=20 +lon_0=-75 +lat_1=10 +lat_2=30 +x_0=0 +y_0=0 +datum=WGS84 +units=km +no_defs"
+  object <- postfit_reporting_read_rpi_observations(path, target_crs = target_crs)
+  testthat::expect_equal(names(object$data), c("x", "y"))
+  testthat::expect_equal(as.numeric(object$data[1, ]), c(0, 0), tolerance = 1e-8)
+  testthat::expect_equal(object$provenance$coordinate_transform$source_crs, "EPSG:4326")
+  testthat::expect_equal(object$provenance$coordinate_transform$target_crs, target_crs)
+})
+
 testthat::test_that("run-specific output roots cannot collide", {
   base <- file.path(tempdir(), paste0("postfit-output-", Sys.getpid()))
   paths_a <- postfit_reporting_output_paths(base, "reference_20725437")

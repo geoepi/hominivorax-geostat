@@ -930,7 +930,7 @@ postfit_reporting_potential_abundance <- function(tier2_paths, cell_area_info, o
   )
 }
 
-postfit_reporting_read_rpi_observations <- function(path) {
+postfit_reporting_read_rpi_observations <- function(path, target_crs = NULL) {
   if (is.null(path) || length(path) != 1L || is.na(path) || !file.exists(path)) stop("RPI cleaned-observation input does not exist: ", path)
   ext <- tolower(tools::file_ext(path))
   object <- if (identical(ext, "rds")) readRDS(path) else if (identical(ext, "csv")) utils::read.csv(path, stringsAsFactors = FALSE, check.names = FALSE) else stop("RPI observation input must be a cleaned CSV or RDS representation.")
@@ -939,7 +939,29 @@ postfit_reporting_read_rpi_observations <- function(path) {
     data <- object$data %||% object$observations
     provenance <- c(provenance, object$provenance %||% list())
   } else data <- object
-  if (!is.data.frame(data) || length(setdiff(c("x", "y"), names(data)))) stop("RPI cleaned observations must be a data frame with x and y columns.")
+  if (!is.data.frame(data)) stop("RPI cleaned observations must be a data frame.")
+  if (!all(c("x", "y") %in% names(data))) {
+    if (!all(c("lon", "lat") %in% names(data))) {
+      stop("RPI cleaned observations must contain x/y or lon/lat coordinate columns.")
+    }
+    if (is.null(target_crs) || length(target_crs) != 1L || is.na(target_crs) || !nzchar(as.character(target_crs))) {
+      stop("RPI lon/lat observations require the target projected CRS from the source raster.")
+    }
+    postfit_reporting_require("sf")
+    lon <- as.numeric(data$lon); lat <- as.numeric(data$lat)
+    if (any(!is.finite(lon) | !is.finite(lat) | lon < -180 | lon > 180 | lat < -90 | lat > 90)) {
+      stop("RPI lon/lat observations contain invalid coordinates.")
+    }
+    points <- sf::st_as_sf(data.frame(lon = lon, lat = lat), coords = c("lon", "lat"), crs = 4326, remove = FALSE)
+    projected <- sf::st_transform(points, target_crs)
+    xy <- sf::st_coordinates(projected)
+    data$x <- xy[, 1L]
+    data$y <- xy[, 2L]
+    provenance$coordinate_transform <- list(
+      source_columns = c("lon", "lat"), source_crs = "EPSG:4326",
+      target_crs = as.character(target_crs), method = "sf::st_transform"
+    )
+  }
   coordinates <- data[, c("x", "y"), drop = FALSE]
   coordinates$x <- as.numeric(coordinates$x); coordinates$y <- as.numeric(coordinates$y)
   if (!nrow(coordinates) || any(!is.finite(as.matrix(coordinates)))) stop("RPI cleaned observations must contain at least one finite location.")
