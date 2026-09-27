@@ -198,6 +198,56 @@ joint_inla_extract_temporal_effects <- function(build, fit_artifact, stage2) {
   out
 }
 
+joint_inla_extract_temporal_support_label <- function(values) {
+  values <- sort(unique(as.integer(values)))
+  if (!length(values)) return("none")
+  if (identical(values, seq.int(min(values), max(values)))) {
+    paste0(min(values), ":", max(values), " (", length(values), " timesteps)")
+  } else {
+    paste(values, collapse = ",")
+  }
+}
+
+joint_inla_extract_expected_temporal_support <- function(stage2) {
+  mapping <- stage2$temporal_mapping
+  if (is.null(mapping) || !is.data.frame(mapping)) stop("Stage 2 temporal_mapping is required for temporal support validation.")
+  required <- c("timestep", "epiyear", "epiweek")
+  if (!all(required %in% names(mapping))) stop("Stage 2 temporal_mapping lacks timestep/year-week fields.")
+  timestep <- suppressWarnings(as.integer(mapping$timestep))
+  if (anyNA(timestep) || anyDuplicated(timestep)) stop("Stage 2 temporal_mapping timestep support is missing, non-integer, or duplicated.")
+  expected <- sort(timestep)
+  if (!length(expected) || any(expected < 1L) || !identical(expected, seq_len(max(expected)))) {
+    stop("Stage 2 temporal_mapping timestep support must be positive contiguous integers.")
+  }
+  list(mapping = mapping, timesteps = expected)
+}
+
+joint_inla_extract_validate_temporal_effects <- function(temporal, stage2) {
+  contract <- joint_inla_extract_expected_temporal_support(stage2)
+  mapping <- contract$mapping
+  expected <- contract$timesteps
+  components <- lapply(c("week_steps", "tier2_week"), function(component) {
+    selected <- temporal[temporal$component == component, , drop = FALSE]
+    observed <- suppressWarnings(as.integer(selected$timestep))
+    mapped <- mapping[match(observed, mapping$timestep), , drop = FALSE]
+    mapping_ok <- nrow(selected) == length(observed) &&
+      !anyNA(observed) && !anyDuplicated(observed) &&
+      !anyNA(mapped$epiyear) && !anyNA(mapped$epiweek) &&
+      identical(as.integer(selected$epiyear), as.integer(mapped$epiyear)) &&
+      identical(as.integer(selected$epiweek), as.integer(mapped$epiweek))
+    support_ok <- mapping_ok && identical(sort(observed), expected)
+    list(
+      component = component,
+      pass = support_ok,
+      observed = sort(unique(observed)),
+      mapping_ok = mapping_ok,
+      details = if (support_ok) "Observed timestep and year/week support exactly matches Stage 2 temporal_mapping." else "Observed timestep support or year/week mapping does not exactly match Stage 2 temporal_mapping."
+    )
+  })
+  names(components) <- c("week_steps", "tier2_week")
+  list(pass = all(vapply(components, function(x) isTRUE(x$pass), logical(1L))), expected = expected, components = components)
+}
+
 joint_inla_extract_admin_effects <- function(fit_artifact, stage2) {
   if (is.null(stage2$admin_mapping)) stop("Stage 2 admin_mapping is required for admin effect extraction.")
   full <- stage2$admin_mapping
@@ -264,6 +314,75 @@ joint_inla_extract_spde_fields <- function(build, fit_artifact) {
   out
 }
 
+joint_inla_extract_expected_spde_layout <- function(build) {
+  specs <- list(
+    tier1_field = list(scope = "tier1", index = "tier1_field"),
+    tier2_field = list(scope = "tier2", index = "tier2_field"),
+    tier2_copy_field = list(scope = "copy", index = "tier2_copy_field")
+  )
+  fields <- lapply(specs, function(spec) build$fields[[spec$scope]])
+  missing_fields <- names(fields)[vapply(fields, is.null, logical(1L))]
+  if (length(missing_fields)) stop("Build fields are missing: ", paste(missing_fields, collapse = ", "))
+  n_mesh <- c(
+    tier1 = build$spde$tier1$n.spde,
+    tier2 = build$spde$tier2$n.spde
+  )
+  if (anyNA(n_mesh) || any(n_mesh <= 0L) || length(unique(as.integer(n_mesh))) != 1L) {
+    stop("Build SPDE mesh vertex counts are missing or inconsistent.")
+  }
+  group_levels <- lapply(seq_along(specs), function(i) {
+    spec <- specs[[i]]
+    group_name <- paste0(spec$index, ".group")
+    values <- suppressWarnings(as.integer(fields[[i]][[group_name]]))
+    if (is.null(values) || anyNA(values) || !length(values)) stop("Build field group support is missing for ", names(specs)[[i]], ".")
+    sort(unique(values))
+  })
+  names(group_levels) <- names(specs)
+  if (length(unique(vapply(group_levels, paste, character(1L), collapse = ","))) != 1L) {
+    stop("Build grouped SPDE fields do not share the same group support.")
+  }
+  groups <- group_levels[[1L]]
+  if (!identical(groups, seq_len(max(groups)))) stop("Build grouped SPDE group levels must be positive contiguous integers.")
+  list(n_mesh = as.integer(n_mesh[[1L]]), group_levels = groups, n_groups = length(groups), expected_rows = as.integer(n_mesh[[1L]]) * length(groups))
+}
+
+joint_inla_extract_validate_spde_fields <- function(build, spde) {
+  layout <- joint_inla_extract_expected_spde_layout(build)
+  components <- lapply(c("tier1_field", "tier2_field", "tier2_copy_field"), function(component) {
+    field <- spde[[component]]
+    required <- c("mesh_node", "group_index")
+    if (is.null(field) || !all(required %in% names(field))) {
+      return(list(component = component, pass = FALSE, observed_rows = NA_integer_, details = "Extracted SPDE field is missing mesh/group support columns."))
+    }
+    mesh_node <- suppressWarnings(as.integer(field$mesh_node))
+    group_index <- suppressWarnings(as.integer(field$group_index))
+    observed_key <- paste(mesh_node, group_index, sep = "|")
+    expected_key <- paste(rep(seq_len(layout$n_mesh), times = layout$n_groups), rep(layout$group_levels, each = layout$n_mesh), sep = "|")
+    complete <- nrow(field) == layout$expected_rows &&
+      !anyNA(mesh_node) && !anyNA(group_index) && !anyDuplicated(observed_key) &&
+      identical(sort(observed_key), sort(expected_key))
+    list(
+      component = component,
+      pass = complete,
+      observed_rows = nrow(field),
+      mesh_levels = sort(unique(mesh_node)),
+      group_levels = sort(unique(group_index)),
+      details = if (complete) "Mesh-node/group cross-product is complete with authoritative support." else "Mesh-node/group support is incomplete, duplicated, or inconsistent with the authoritative build."
+    )
+  })
+  names(components) <- c("tier1_field", "tier2_field", "tier2_copy_field")
+  canonical_key <- function(field) {
+    field <- field[order(as.integer(field$mesh_node), as.integer(field$group_index)), c("mesh_node", "group_index"), drop = FALSE]
+    paste(as.integer(field$mesh_node), as.integer(field$group_index), sep = "|")
+  }
+  copy_ok <- all(vapply(components[c("tier1_field", "tier2_copy_field")], function(x) isTRUE(x$pass), logical(1L))) &&
+    identical(canonical_key(spde$tier1_field), canonical_key(spde$tier2_copy_field))
+  field_pass <- all(vapply(components, function(x) isTRUE(x$pass), logical(1L)))
+  list(pass = field_pass && copy_ok, field_pass = field_pass,
+       layout = layout, components = components, copy_pass = copy_ok,
+       copy_details = if (copy_ok) "Tier 2 copy field has exact Tier 1 mesh-node/group support after canonical ordering." else "Tier 2 copy field does not have exact Tier 1 mesh-node/group support.")
+}
+
 joint_inla_extract_criteria <- function(build, fit_artifact, tolerance = 1e-6) {
   fit <- joint_inla_extract_fit(fit_artifact)
   family_index <- as.integer(fit$dic$family)
@@ -316,7 +435,7 @@ joint_inla_extract_audit <- function(build, fit_artifact, stage2 = NULL, toleran
     add("fit", "predictor_layout", "FAIL", conditionMessage(layout), "APredictor plus Predictor blocks reconcile", "Fitted-value indexing is not safe.")
     return(list(audit = do.call(rbind, checks), details = "Extraction stopped at predictor-layout validation."))
   }
-  add("fit", "predictor_layout", "PASS", paste(layout$n_observed, layout$n_latent, layout$n_total, sep = "/"), "2,624,383/2,815,201/5,439,584 for production", "Observed fitted values are the first APredictor block; latent Predictor rows are retained separately.")
+  add("fit", "predictor_layout", "PASS", paste(layout$n_observed, layout$n_latent, layout$n_total, sep = "/"), "observed/latent/total dimensions reconcile", "Observed fitted values are the first APredictor block; latent Predictor rows are retained separately.")
   row_map <- tryCatch(joint_inla_extract_row_map(build, stage2), error = function(e) e)
   fitted <- tryCatch(joint_inla_extract_fitted_values(build, fit, stage2), error = function(e) e)
   if (inherits(row_map, "error") || inherits(fitted, "error")) {
@@ -344,17 +463,25 @@ joint_inla_extract_audit <- function(build, fit_artifact, stage2 = NULL, toleran
   add("fit", "random_component_count", if (length(fit$summary.random) == 7L) "PASS" else "FAIL", length(fit$summary.random), 7, "Random-effect component count.")
   if (!is.null(stage2)) {
     temporal <- tryCatch(joint_inla_extract_temporal_effects(build, fit, stage2), error = function(e) e)
-    add("temporal", "week_effect_support", if (!inherits(temporal, "error") && all(c("week_steps", "tier2_week") %in% unique(temporal$component)) && all(temporal$timestep %in% 1:105)) "PASS" else "FAIL", if (inherits(temporal, "error")) conditionMessage(temporal) else length(unique(temporal$timestep)), "105 timesteps for both week components", "Temporal effects are mapped to Stage 2 year/week metadata.")
+    temporal_contract <- if (inherits(temporal, "error")) temporal else tryCatch(joint_inla_extract_validate_temporal_effects(temporal, stage2), error = function(e) e)
+    temporal_expected <- if (inherits(temporal_contract, "error")) "authoritative Stage 2 temporal_mapping" else joint_inla_extract_temporal_support_label(temporal_contract$expected)
+    for (component in c("week_steps", "tier2_week")) {
+      component_result <- if (inherits(temporal_contract, "error")) NULL else temporal_contract$components[[component]]
+      add("temporal", paste0(component, "_support"), if (!is.null(component_result) && isTRUE(component_result$pass)) "PASS" else "FAIL",
+          if (inherits(temporal_contract, "error")) conditionMessage(temporal_contract) else joint_inla_extract_temporal_support_label(component_result$observed),
+          temporal_expected, if (inherits(temporal_contract, "error")) "Temporal extraction could not be validated." else component_result$details)
+    }
     admin <- tryCatch(joint_inla_extract_admin_effects(fit, stage2), error = function(e) e)
     add("admin", "full_and_fitted_levels", if (!inherits(admin, "error") && nrow(admin) == 340L && sum(admin$fitted_level) == 319L) "PASS" else "FAIL", if (inherits(admin, "error")) conditionMessage(admin) else paste(nrow(admin), sum(admin$fitted_level), sep = "/"), "340/319 full/fitted admin levels", "Unused full-support admin levels remain explicit.")
     cattle <- tryCatch(joint_inla_extract_cattle_effects(fit, stage2), error = function(e) e)
     zero_bins <- if (inherits(cattle, "error")) character() else as.character(cattle$model_index[cattle$active_count == 0L])
     add("cattle", "full_rw2_support", if (!inherits(cattle, "error") && identical(cattle$model_index, 1:22)) "PASS" else "FAIL", if (inherits(cattle, "error")) conditionMessage(cattle) else paste(nrow(cattle), paste(zero_bins, collapse = ","), sep = "; zero_active_bins="), "22 bins retained; zero-active bins are allowed", "Cattle support is mapped to cattle_q and original/log1p midpoints.")
     spde <- tryCatch(joint_inla_extract_spde_fields(build, fit), error = function(e) e)
-    spde_ok <- !inherits(spde, "error") && all(vapply(spde, nrow, integer(1L)) == 13449L * 8L)
-    copy_ok <- spde_ok && identical(spde$tier1_field[c("mesh_node", "group_index")], spde$tier2_copy_field[c("mesh_node", "group_index")])
-    add("spde", "field_dimensions", if (spde_ok) "PASS" else "FAIL", if (inherits(spde, "error")) conditionMessage(spde) else paste(vapply(spde, nrow, integer(1L)), collapse = "/"), "13,449 vertices x 8 groups for each field/copy", "SPDE rows retain mesh node, group, replicate, and latent row indices.")
-    add("spde", "copy_field_mapping", if (copy_ok) "PASS" else "FAIL", if (spde_ok) "tier2_copy_field matches tier1 mesh/group support" else "unavailable", "copy uses the tier1 mesh/group support", "The copy field is mapped separately from its random-effect model IDs.")
+    spde_contract <- if (inherits(spde, "error")) spde else tryCatch(joint_inla_extract_validate_spde_fields(build, spde), error = function(e) e)
+    spde_expected <- if (inherits(spde_contract, "error")) "authoritative mesh vertices x grouped field support" else paste0(spde_contract$layout$n_mesh, " vertices x ", spde_contract$layout$n_groups, " groups (", spde_contract$layout$expected_rows, " rows)")
+    spde_observed <- if (inherits(spde_contract, "error")) conditionMessage(spde_contract) else paste(vapply(spde_contract$components, function(x) x$observed_rows, integer(1L)), collapse = "/")
+    add("spde", "field_dimensions", if (!inherits(spde_contract, "error") && isTRUE(spde_contract$field_pass)) "PASS" else "FAIL", spde_observed, spde_expected, if (inherits(spde_contract, "error")) "Grouped SPDE extraction could not be validated." else "SPDE fields match the authoritative mesh-node/group cross-product.")
+    add("spde", "copy_field_mapping", if (!inherits(spde_contract, "error") && isTRUE(spde_contract$copy_pass)) "PASS" else "FAIL", if (inherits(spde_contract, "error")) "unavailable" else if (spde_contract$copy_pass) "tier2_copy_field matches tier1 mesh/group support" else "mismatch", "copy uses the tier1 mesh/group support", if (inherits(spde_contract, "error")) "Copy-field mapping could not be evaluated." else spde_contract$copy_details)
   }
   criteria <- tryCatch(joint_inla_extract_criteria(build, fit, tolerance), error = function(e) e)
   criteria_ok <- !inherits(criteria, "error") && all(criteria$reconciliation$pass)

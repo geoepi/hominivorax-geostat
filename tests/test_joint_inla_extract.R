@@ -17,9 +17,9 @@ build <- list(
   family = c("binomial", "nbinomial"),
   stacks = list(joint = stack),
   fields = list(
-    tier1 = list(tier1_field = 1:4, tier1_field.group = c(1L, 1L, 2L, 2L), tier1_field.repl = rep("1", 4)),
-    tier2 = list(tier2_field = 1:4, tier2_field.group = c(1L, 1L, 2L, 2L), tier2_field.repl = rep("1", 4)),
-    copy = list(tier2_copy_field = 1:4, tier2_copy_field.group = c(1L, 1L, 2L, 2L), tier2_copy_field.repl = rep("1", 4))
+    tier1 = list(tier1_field = c(1L, 2L, 1L, 2L), tier1_field.group = c(1L, 1L, 2L, 2L), tier1_field.repl = rep("1", 4)),
+    tier2 = list(tier2_field = c(1L, 2L, 1L, 2L), tier2_field.group = c(1L, 1L, 2L, 2L), tier2_field.repl = rep("1", 4)),
+    copy = list(tier2_copy_field = c(1L, 2L, 1L, 2L), tier2_copy_field.group = c(1L, 1L, 2L, 2L), tier2_copy_field.repl = rep("1", 4))
   ),
   spde = list(tier1 = list(n.spde = 2L), tier2 = list(n.spde = 2L))
 )
@@ -70,12 +70,77 @@ stopifnot(nrow(joint_inla_extract_fixed_effects(fit)) == 2L, nrow(joint_inla_ext
           nrow(joint_inla_extract_random_effects(fit)) == 20L)
 temporal <- joint_inla_extract_temporal_effects(build, fit, stage2)
 stopifnot(all(temporal$timestep %in% 1:2), all(c("week_steps", "tier2_week") %in% unique(temporal$component)))
+temporal_contract <- joint_inla_extract_validate_temporal_effects(temporal, stage2)
+stopifnot(isTRUE(temporal_contract$pass), identical(temporal_contract$expected, 1:2))
 admin <- joint_inla_extract_admin_effects(fit, stage2)
 stopifnot(nrow(admin) == 3L, sum(admin$fitted_level) == 2L)
 cattle <- joint_inla_extract_cattle_effects(fit, stage2)
 stopifnot(identical(cattle$model_index, 1:2), cattle$active_count[1] == 1L, cattle$active_count[2] == 1L)
 spde <- joint_inla_extract_spde_fields(build, fit)
 stopifnot(all(vapply(spde, nrow, integer(1L)) == 4L), identical(spde$tier1_field$mesh_node, spde$tier2_copy_field$mesh_node))
+spde_contract <- joint_inla_extract_validate_spde_fields(build, spde)
+stopifnot(isTRUE(spde_contract$pass), identical(spde_contract$layout$expected_rows, 4L))
+
+make_temporal_case <- function(n_timesteps, observed = seq_len(n_timesteps)) {
+  mapping <- data.frame(
+    timestep = seq_len(n_timesteps),
+    epiyear = rep(2024L, n_timesteps),
+    epiweek = seq_len(n_timesteps),
+    stringsAsFactors = FALSE
+  )
+  rows <- lapply(c("week_steps", "tier2_week"), function(component) {
+    matched <- mapping[match(observed, mapping$timestep), , drop = FALSE]
+    data.frame(component = component, timestep = observed, epiyear = matched$epiyear,
+               epiweek = matched$epiweek, stringsAsFactors = FALSE)
+  })
+  list(stage2 = list(temporal_mapping = mapping), temporal = do.call(rbind, rows))
+}
+
+for (n_timesteps in c(105L, 133L, 2L)) {
+  temporal_case <- make_temporal_case(n_timesteps)
+  stopifnot(isTRUE(joint_inla_extract_validate_temporal_effects(temporal_case$temporal, temporal_case$stage2)$pass))
+}
+missing_temporal <- make_temporal_case(133L, observed = setdiff(seq_len(133L), 57L))
+extra_temporal <- make_temporal_case(133L, observed = 1:134)
+stopifnot(!isTRUE(joint_inla_extract_validate_temporal_effects(missing_temporal$temporal, missing_temporal$stage2)$pass),
+          !isTRUE(joint_inla_extract_validate_temporal_effects(extra_temporal$temporal, extra_temporal$stage2)$pass))
+
+make_spde_case <- function(n_mesh, n_groups) {
+  mesh_node <- rep(seq_len(n_mesh), times = n_groups)
+  group_index <- rep(seq_len(n_groups), each = n_mesh)
+  field <- function(index) {
+    values <- list()
+    values[[index]] <- mesh_node
+    values[[paste0(index, ".group")]] <- group_index
+    values[[paste0(index, ".repl")]] <- rep("1", length(mesh_node))
+    values
+  }
+  build <- list(
+    spde = list(tier1 = list(n.spde = n_mesh), tier2 = list(n.spde = n_mesh)),
+    fields = list(tier1 = field("tier1_field"), tier2 = field("tier2_field"), copy = field("tier2_copy_field"))
+  )
+  spde <- lapply(c("tier1_field", "tier2_field", "tier2_copy_field"), function(component) {
+    data.frame(mesh_node = mesh_node, group_index = group_index, stringsAsFactors = FALSE)
+  })
+  names(spde) <- c("tier1_field", "tier2_field", "tier2_copy_field")
+  list(build = build, spde = spde)
+}
+
+for (n_groups in c(8L, 11L, 2L)) {
+  spde_case <- make_spde_case(2L, n_groups)
+  spde_contract <- joint_inla_extract_validate_spde_fields(spde_case$build, spde_case$spde)
+  stopifnot(isTRUE(spde_contract$pass), identical(spde_contract$layout$n_groups, n_groups),
+            identical(spde_contract$layout$expected_rows, 2L * n_groups))
+}
+missing_group <- make_spde_case(2L, 11L)
+missing_group$spde$tier1_field <- subset(missing_group$spde$tier1_field, group_index != 11L)
+incomplete_cross_product <- make_spde_case(2L, 11L)
+incomplete_cross_product$spde$tier1_field <- incomplete_cross_product$spde$tier1_field[-1L, , drop = FALSE]
+copy_mismatch <- make_spde_case(2L, 11L)
+copy_mismatch$spde$tier2_copy_field$group_index[[1L]] <- 2L
+stopifnot(!isTRUE(joint_inla_extract_validate_spde_fields(missing_group$build, missing_group$spde)$pass),
+          !isTRUE(joint_inla_extract_validate_spde_fields(incomplete_cross_product$build, incomplete_cross_product$spde)$pass),
+          !isTRUE(joint_inla_extract_validate_spde_fields(copy_mismatch$build, copy_mismatch$spde)$copy_pass))
 criteria <- joint_inla_extract_criteria(build, fit)
 stopifnot(all(criteria$reconciliation$pass), abs(criteria$reconciliation$difference) < 1e-12)
 mlik <- joint_inla_extract_marginal_log_likelihood(fit)
