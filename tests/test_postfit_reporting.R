@@ -217,8 +217,8 @@ testthat::test_that("RPI reader projects authoritative lon/lat observations to r
   target_crs <- "+proj=aea +lat_0=20 +lon_0=-75 +lat_1=10 +lat_2=30 +x_0=0 +y_0=0 +datum=WGS84 +units=km +no_defs"
   object <- postfit_reporting_read_rpi_observations(path, target_crs = target_crs,
                                                     coordinate_source = "lonlat", source_crs = "EPSG:4326")
-  testthat::expect_equal(names(object$data), c("x", "y"))
-  testthat::expect_equal(as.numeric(object$data[1, ]), c(0, 0), tolerance = 1e-8)
+  testthat::expect_true(all(c("date", "host", "lon", "lat", "x", "y") %in% names(object$data)))
+  testthat::expect_equal(as.numeric(object$data[1, c("x", "y")]), c(0, 0), tolerance = 1e-8)
   testthat::expect_equal(object$provenance$coordinate_transform$source_crs, "EPSG:4326")
   testthat::expect_equal(object$provenance$coordinate_transform$target_crs, target_crs)
 })
@@ -253,6 +253,71 @@ testthat::test_that("reporting accepts an arbitrary future run identifier", {
   future <- postfit_reporting_output_paths(tempdir(), "arbitrary_new_run")
   testthat::expect_match(future$root, "arbitrary_new_run")
   testthat::expect_false(grepl("20725437", future$root, fixed = TRUE))
-  testthat::expect_true(all(c("fixed_effects_tier1", "species_composition", "cattle_effect", "selected_week_maps", "model_summary", "potential_abundance", "random_effect_summaries", "rpi", "rpi_class_summary", "rpi_class_map", "rpi_readiness") %in% postfit_reporting_product_names()))
+  testthat::expect_true(all(c("fixed_effects_tier1", "species_composition", "cattle_effect", "selected_week_maps", "model_summary", "potential_abundance", "tier2_eta_structural", "tier2_intensity_structural", "structural_potential_abundance", "structural_potential_abundance_temp_masked", "random_effect_summaries", "rpi_dynamic_threshold", "rpi", "rpi_class_summary", "rpi_class_map", "rpi_readiness") %in% postfit_reporting_product_names()))
+})
+
+testthat::test_that("dynamic RPI calibration is same-week, masked-stack, and reproducible", {
+  testthat::skip_if_not_installed("terra")
+  testthat::skip_if_not_installed("sf")
+  root <- file.path(tempdir(), paste0("postfit-dynamic-rpi-", Sys.getpid()))
+  dir.create(root, recursive = TRUE)
+  template <- terra::rast(nrows = 1, ncols = 3, xmin = 0, xmax = 3, ymin = 0, ymax = 1, crs = "EPSG:4326")
+  terra::values(template) <- c(0, 1, NA)
+  stack <- c(template, template + 2, template + 4)
+  observations <- data.frame(
+    date = c("2024-01-03", "2024-01-10", "2024-01-17", "2024-01-17", "2027-01-01"),
+    lon = c(.5, .5, .5, 2.5, .5), lat = rep(.5, 5), host = "CANINO",
+    x = c(.5, .5, .5, 2.5, .5), y = rep(.5, 5), stringsAsFactors = FALSE
+  )
+  calibration <- postfit_reporting_dynamic_rpi_calibration(stack, observations, c("2024-W01", "2024-W02", "2024-W03"), .10)
+  testthat::expect_equal(calibration$threshold, .4)
+  testthat::expect_equal(calibration$metrics$total_observations, 5L)
+  testthat::expect_equal(calibration$metrics$outside_modeled_horizon, 1L)
+  testthat::expect_equal(calibration$metrics$unsupported_or_ocean, 1L)
+  testthat::expect_equal(calibration$metrics$n_values_used_for_quantile, 3L)
+  testthat::expect_true(identical(calibration$source_product, "structural_potential_abundance_temp_masked"))
+  rpi <- postfit_reporting_calc_rpi_at_threshold(stack, calibration$threshold)
+  testthat::expect_true(all(is.finite(terra::values(rpi$stability_class, mat = FALSE))[1:2]))
+})
+
+testthat::test_that("canonical RPI audit requires masked structural semantics and manifest records roles", {
+  observed_source <- tempfile(); file.create(observed_source)
+  testthat::expect_true(postfit_reporting_rpi_audit("masked_structural_potential_abundance", observed_source, 133L)$enabled)
+  testthat::expect_false(grepl("0\\.6834011847|0\\.6627025|0\\.6771058099", paste(readLines(file.path(repo_root, "scripts", "run_postfit_reporting.R")), collapse = "\\n")))
+  root <- file.path(tempdir(), paste0("postfit-manifest-semantics-", Sys.getpid()))
+  paths <- postfit_reporting_output_paths(root, "run")
+  dir.create(file.path(paths$spatial, "structural_potential_abundance_temp_masked"), recursive = TRUE)
+  dir.create(file.path(paths$spatial, "potential_abundance"), recursive = TRUE)
+  file.create(file.path(paths$spatial, "structural_potential_abundance_temp_masked", "one.tif"))
+  file.create(file.path(paths$spatial, "potential_abundance", "one.tif"))
+  dir.create(paths$metadata, recursive = TRUE)
+  manifest <- postfit_reporting_write_manifest(paths, "run")
+  masked <- manifest[manifest$logical_product_name == "structural_potential_abundance_temp_masked", , drop = FALSE]
+  fitted <- manifest[manifest$logical_product_name == "potential_abundance", , drop = FALSE]
+  testthat::expect_equal(masked$product_role, "derived physiologically masked ecological potential abundance")
+  testthat::expect_false(masked$spde_terms_included)
+  testthat::expect_equal(masked$temperature_variable, "mintemp")
+  testthat::expect_true(fitted$spde_terms_included)
+})
+
+testthat::test_that("accepted structural and masked products promote with support and week contracts", {
+  testthat::skip_if_not_installed("terra")
+  root <- file.path(tempdir(), paste0("postfit-structural-promotion-", Sys.getpid()))
+  structural_root <- file.path(root, "accepted-structural")
+  masked_root <- file.path(root, "accepted-masked")
+  dir.create(file.path(structural_root, "structural_intensity"), recursive = TRUE)
+  dir.create(file.path(structural_root, "structural_potential_abundance"), recursive = TRUE)
+  dir.create(file.path(masked_root, "structural_potential_abundance_temp_masked"), recursive = TRUE)
+  raster <- terra::rast(nrows = 1, ncols = 2, xmin = 0, xmax = 2, ymin = 0, ymax = 1, crs = "EPSG:4326")
+  terra::values(raster) <- c(1, 2)
+  terra::writeRaster(raster, file.path(structural_root, "structural_intensity", "tier2_intensity_structural_y2024_w01.tif"), overwrite = TRUE)
+  terra::writeRaster(raster * 3, file.path(structural_root, "structural_potential_abundance", "structural_potential_abundance_y2024_w01.tif"), overwrite = TRUE)
+  terra::writeRaster(raster * 0, file.path(masked_root, "structural_potential_abundance_temp_masked", "structural_potential_abundance_temp_masked_2024_W01.tif"), overwrite = TRUE)
+  promoted <- postfit_reporting_prepare_structural_products(structural_root, masked_root, file.path(root, "canonical"), expected_weeks = 1L, expected_cells = 2L, expected_end_week = "2024-W01")
+  testthat::expect_equal(promoted$weeks, 1L)
+  testthat::expect_equal(promoted$support_cells, 2L)
+  testthat::expect_equal(promoted$nonfinite_supported, 0L)
+  testthat::expect_equal(promoted$manifest$week, "2024-W01")
+  testthat::expect_false(promoted$semantics$structural_potential_abundance_temp_masked$spde_terms_included)
 })
 cat("Post-fit reporting tests passed\\n")

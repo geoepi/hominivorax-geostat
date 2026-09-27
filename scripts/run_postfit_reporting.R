@@ -52,6 +52,8 @@ observations_path <- arg(args, "observations")
 rpi_observation_path <- arg(args, "rpi-observations", observations_path)
 rpi_coordinate_source <- arg(args, "rpi-coordinate-source", "lonlat")
 rpi_coordinate_crs <- arg(args, "rpi-coordinate-crs", "EPSG:4326")
+structural_root <- arg(args, "structural-root")
+masked_structural_root <- arg(args, "masked-structural-root")
 reference_fit_path <- arg(args, "reference-fit")
 reference_build_path <- arg(args, "reference-build")
 reference_run_id <- arg(args, "reference-run", "20725437")
@@ -62,6 +64,8 @@ if (is.null(stage2_path)) stage2_path <- Sys.getenv("POSTFIT_REPORTING_STAGE2", 
 if (any(is.na(c(output_root, fit_path, build_path, stage2_path))) || any(!nzchar(c(output_root, fit_path, build_path, stage2_path)))) {
   stop("Supply explicit --output-root, --fit, --build, and --stage2 paths for the private reporting run.")
 }
+if (xor(is.null(structural_root), is.null(masked_structural_root))) stop("Supply both --structural-root and --masked-structural-root for canonical downstream reporting.")
+if (is.null(structural_root)) stop("Canonical downstream reporting requires accepted structural and masked structural product roots.")
 
 required_paths <- c(build = build_path, fit = fit_path, stage2 = stage2_path)
 missing_paths <- required_paths[!file.exists(required_paths)]
@@ -74,6 +78,25 @@ if (length(missing_paths)) {
 postfit_reporting_assert_output_isolated(output_root, run_id, overwrite = overwrite)
 paths <- postfit_reporting_output_paths(output_root, run_id)
 for (directory in paths[c("objects", "tables", "figures", "spatial", "metadata", "qa")]) dir.create(directory, recursive = TRUE, showWarnings = FALSE)
+
+structural_products <- postfit_reporting_prepare_structural_products(
+  structural_root = structural_root, masked_root = masked_structural_root, output_spatial = paths$spatial,
+  expected_weeks = 133L, expected_cells = 15899L, threshold_celsius = 14.5, overwrite = overwrite
+)
+utils::write.csv(structural_products$manifest, file.path(paths$metadata, "structural_product_manifest.csv"), row.names = FALSE, na = "")
+utils::write.csv(data.frame(
+  product = c("tier2_eta_structural", "tier2_intensity_structural", "structural_potential_abundance", "structural_potential_abundance_temp_masked"),
+  role = c("structural ecological prediction", "structural ecological prediction", "derived structural ecological potential abundance", "derived physiologically masked ecological potential abundance"),
+  spde_terms_included = FALSE,
+  temperature_variable = c(NA_character_, NA_character_, NA_character_, "mintemp"),
+  temperature_units = c(NA_character_, NA_character_, NA_character_, "degrees Celsius"),
+  temperature_threshold_celsius = c(NA_real_, NA_real_, NA_real_, 14.5),
+  mask_operator = c(NA_character_, NA_character_, NA_character_, ">="),
+  threshold_role = c(NA_character_, NA_character_, NA_character_, "lower developmental thermal threshold"),
+  threshold_source = c(NA_character_, NA_character_, NA_character_, "Gutierrez & Ponti 2014"),
+  source = c("log(tier2_intensity_structural)", "accepted structural reconstruction", "accepted structural reconstruction", "accepted 14.5 C masked structural diagnostic"),
+  stringsAsFactors = FALSE
+), file.path(paths$metadata, "structural_product_semantics.csv"), row.names = FALSE, na = "")
 
 build <- readRDS(build_path)
 fit_artifact <- readRDS(fit_path)
@@ -175,19 +198,28 @@ if (!is.null(phase3_root) && dir.exists(phase3_root)) {
   utils::write.csv(selected, file.path(paths$metadata, "selected_map_weeks.csv"), row.names = FALSE, na = "")
 }
 
+structural_indices <- unique(c(1L, ceiling(structural_products$weeks / 2), structural_products$weeks - 1L, structural_products$weeks))
+structural_selected <- structural_products$manifest[structural_indices, , drop = FALSE]
+utils::write.csv(structural_selected, file.path(paths$metadata, "selected_structural_masked_weeks.csv"), row.names = FALSE, na = "")
+structural_figure_paths <- postfit_reporting_write_structural_masked_figure(
+  structural_selected$structural_potential_abundance_path,
+  structural_selected$structural_potential_abundance_temp_masked_path,
+  structural_selected$week,
+  file.path(paths$figures, "selected_structural_vs_masked_potential.png"),
+  file.path(paths$figures, "selected_structural_vs_masked_potential.pdf")
+)
+generated_figures$selected_structural_vs_masked_potential <- as.list(structural_figure_paths)
+
 cell_area <- postfit_reporting_trace_cell_area(cell_area_template, if (is.null(cell_area_value)) NULL else as.numeric(cell_area_value), cell_area_units)
 saveRDS(cell_area, file.path(paths$objects, "cell_area_audit.rds")); generated_objects$cell_area_audit <- file.path(paths$objects, "cell_area_audit.rds")
 utils::write.csv(postfit_reporting_metadata_table(cell_area), file.path(paths$metadata, "cell_area_audit.csv"), row.names = FALSE, na = "")
 
 rpi_audit <- postfit_reporting_rpi_audit(
-  count_stack_semantics = if (identical(cell_area$status, "PASS") && !is.null(map_manifest)) "standardized_potential_abundance" else "tier2_intensity",
+  count_stack_semantics = "masked_structural_potential_abundance",
   observed_source = rpi_observation_path,
-  time_span_weeks = if (is.null(map_manifest)) NULL else nrow(map_manifest)
+  time_span_weeks = structural_products$weeks
 )
-rpi_target_crs <- if (!is.null(map_manifest) && length(map_manifest$tier2_intensity_path)) {
-  postfit_reporting_require("terra")
-  terra::crs(terra::rast(map_manifest$tier2_intensity_path[[1L]]), proj = TRUE)
-} else NULL
+rpi_target_crs <- terra::crs(structural_products$masked_stack[[1L]], proj = TRUE)
 rpi_observations <- if (!is.null(rpi_observation_path) && file.exists(rpi_observation_path)) {
   postfit_reporting_read_rpi_observations(rpi_observation_path, target_crs = rpi_target_crs,
                                           coordinate_source = rpi_coordinate_source,
@@ -200,9 +232,48 @@ if (identical(cell_area$status, "PASS") && !is.null(map_manifest)) {
   generated_objects$potential_abundance <- file.path(paths$objects, "potential_abundance.rds")
   saveRDS(potential, generated_objects$potential_abundance)
 }
-if (!isTRUE(args[["no-rpi"]]) && isTRUE(rpi_audit$enabled) && !is.null(potential) && !is.null(rpi_observations)) {
-  count_stack <- terra::rast(potential$paths)
-  rpi <- postfit_reporting_calc_rpi(count_stack, rpi_observations$data, gen_days = rpi_audit$parameters$gen_days, days_per_layer = rpi_audit$parameters$days_per_layer, cut_quant = rpi_audit$parameters$cut_quant)
+if (!isTRUE(args[["no-rpi"]]) && isTRUE(rpi_audit$enabled) && !is.null(rpi_observations)) {
+  count_stack <- structural_products$masked_stack
+  calibration <- postfit_reporting_dynamic_rpi_calibration(count_stack, rpi_observations$data, structural_products$manifest$week, cut_quant = rpi_audit$parameters$cut_quant)
+  paired_calibration_path <- file.path(paths$tables, "rpi_same_week_calibration.csv")
+  utils::write.csv(calibration$paired, paired_calibration_path, row.names = FALSE, na = "")
+  generated_tables$rpi_same_week_calibration <- paired_calibration_path
+  coordinate_audit <- data.frame(
+    source_columns = paste(rpi_observations$provenance$coordinate_transform$source_columns, collapse = "/"),
+    source_crs = rpi_observations$provenance$coordinate_transform$source_crs,
+    target_crs = rpi_observations$provenance$coordinate_transform$target_crs,
+    transformation_method = rpi_observations$provenance$coordinate_transform$method,
+    stringsAsFactors = FALSE
+  )
+  coordinate_audit <- cbind(coordinate_audit, calibration$metrics)
+  utils::write.csv(coordinate_audit, file.path(paths$metadata, "rpi_coordinate_audit.csv"), row.names = FALSE, na = "")
+  threshold_artifact <- list(
+    threshold_value = calibration$threshold, cut_quant = calibration$cut_quant,
+    source_product = calibration$source_product, source_observation_file = rpi_observations$provenance$path,
+    source_observation_sha = rpi_observations$provenance$sha256,
+    coordinate_columns = rpi_observations$provenance$coordinate_transform$source_columns,
+    coordinate_crs = rpi_observations$provenance$coordinate_transform$source_crs,
+    target_crs = rpi_observations$provenance$coordinate_transform$target_crs,
+    same_week_matching = calibration$same_week_matching,
+    n_observations_total = calibration$metrics$total_observations,
+    n_observations_matched = calibration$metrics$successfully_same_week_matched,
+    n_values_used_for_quantile = calibration$metrics$n_values_used_for_quantile,
+    generated_at = postfit_reporting_iso_timestamp(), historical_threshold_used = FALSE
+  )
+  threshold_object_path <- file.path(paths$objects, "rpi_dynamic_threshold.rds")
+  threshold_table_path <- file.path(paths$tables, "rpi_dynamic_threshold.csv")
+  saveRDS(threshold_artifact, threshold_object_path)
+  utils::write.csv(postfit_reporting_metadata_table(threshold_artifact), threshold_table_path, row.names = FALSE, na = "")
+  generated_objects$rpi_dynamic_threshold <- threshold_object_path
+  generated_tables$rpi_dynamic_threshold <- threshold_table_path
+  emitted_pairs <- utils::read.csv(paired_calibration_path, stringsAsFactors = FALSE, check.names = FALSE)
+  independent_threshold <- as.numeric(stats::quantile(emitted_pairs$extracted_value[emitted_pairs$eligible_for_quantile], probs = calibration$cut_quant, names = FALSE, type = 7))
+  threshold_difference <- abs(calibration$threshold - independent_threshold)
+  if (!isTRUE(threshold_difference <= 1e-12)) stop("Dynamic RPI threshold reproducibility check failed: reported and independently recomputed values differ.")
+  utils::write.csv(data.frame(reported_threshold = calibration$threshold, independently_recomputed_threshold = independent_threshold, absolute_difference = threshold_difference, stringsAsFactors = FALSE), file.path(paths$qa, "rpi_dynamic_threshold_reproducibility.csv"), row.names = FALSE, na = "")
+  rpi <- postfit_reporting_calc_rpi_at_threshold(count_stack, calibration$threshold, gen_days = rpi_audit$parameters$gen_days, days_per_layer = rpi_audit$parameters$days_per_layer)
+  rpi$parameters$cut_quant <- calibration$cut_quant
+  rpi$threshold_calibration <- threshold_artifact
   rpi_continuous_path <- file.path(paths$spatial, "rpi_continuous.tif")
   rpi_class_path <- file.path(paths$spatial, "rpi_class.tif")
   terra::writeRaster(rpi$rpi, rpi_continuous_path, overwrite = TRUE)
@@ -212,7 +283,10 @@ if (!isTRUE(args[["no-rpi"]]) && isTRUE(rpi_audit$enabled) && !is.null(potential
   write_table(class_area, "rpi_class_summary")
   save_figure(postfit_reporting_plot_rpi(rpi$stability_class), "rpi_class", 8, 7)
   rpi_metadata <- list(run_id = run_id, threshold = rpi$calibrated_threshold, parameters = rpi$parameters,
-                       source_observations = rpi_observations$provenance, potential_abundance = potential,
+                       canonical = TRUE, source_product = "structural_potential_abundance_temp_masked",
+                       threshold_calibration = threshold_artifact, source_observations = rpi_observations$provenance,
+                       source_stack = structural_products$manifest$structural_potential_abundance_temp_masked_path,
+                       potential_abundance = structural_products$semantics$structural_potential_abundance_temp_masked,
                        output_paths = c(rpi = rpi_continuous_path, rpi_class_map = rpi_class_path),
                        class_summary = class_area)
   saveRDS(rpi_metadata, file.path(paths$metadata, "rpi_metadata.rds"))
@@ -220,6 +294,9 @@ if (!isTRUE(args[["no-rpi"]]) && isTRUE(rpi_audit$enabled) && !is.null(potential
   rpi_audit$status <- "COMPLETED"
   rpi_audit$output_status <- "COMPLETED"
   rpi_audit$output_paths <- c(rpi = rpi_continuous_path, rpi_class_map = rpi_class_path)
+  rpi_audit$dynamic_threshold <- threshold_artifact
+  rpi_audit$threshold_reproducibility <- list(reported = calibration$threshold, independent = independent_threshold, absolute_difference = threshold_difference, status = "PASS")
+  rpi_audit$checks <- rbind(rpi_audit$checks, data.frame(check = "dynamic_threshold_reproducibility", status = "PASS", details = "Emitted same-week calibration values independently reproduced the run-specific 10th-percentile threshold.", stringsAsFactors = FALSE))
 }
 utils::write.csv(rpi_audit$checks, file.path(paths$metadata, "rpi_readiness_audit.csv"), row.names = FALSE, na = "")
 saveRDS(rpi_audit, file.path(paths$objects, "rpi_readiness_audit.rds")); generated_objects$rpi_readiness_audit <- file.path(paths$objects, "rpi_readiness_audit.rds")
@@ -233,7 +310,8 @@ qa_checks <- data.frame(
     "host_mapping_coverage", "denominator_reconciliation", "denominator_label_accuracy",
     "species_product", "coefficient_tables", "cattle_product", "cattle_unit_provenance", "temporal_product",
     "phase3_raster_access", "map_generation", "potential_abundance_conversion",
-    "rpi_observation_provenance", "rpi_readiness", "manifest_checksum_prerequisites"
+    "structural_product_horizon", "structural_masked_support", "rpi_observation_provenance", "rpi_readiness",
+    "dynamic_rpi_threshold", "rpi_classification_support", "manifest_checksum_prerequisites"
   ),
   status = c(
     if (file.exists(fit_path)) "PASS" else "FAIL",
@@ -251,8 +329,12 @@ qa_checks <- data.frame(
     if (!is.null(map_manifest) && nrow(map_manifest) >= 1L) "PASS" else "FAIL",
     if (file.exists(file.path(paths$figures, "selected_week_maps.png"))) "PASS" else "FAIL",
     if (!is.null(potential) && length(potential$paths) == nrow(map_manifest)) "PASS" else "WARNING",
+    if (identical(structural_products$weeks, 133L) && nrow(structural_products$manifest) == 133L) "PASS" else "FAIL",
+    if (identical(structural_products$support_cells, 15899L) && identical(structural_products$nonfinite_supported, 0L) && identical(structural_products$outside_support_non_na, 0L)) "PASS" else "FAIL",
     if (any(rpi_audit$checks$check == "observed_source" & rpi_audit$checks$status == "PASS")) "PASS" else "WARNING",
     if (rpi_audit$status %in% c("READY", "COMPLETED")) "PASS" else "WARNING",
+    if (!is.null(rpi_audit$dynamic_threshold) && isTRUE(rpi_audit$threshold_reproducibility$status == "PASS")) "PASS" else "FAIL",
+    if (exists("class_area") && sum(class_area$cell_count) == 15899L) "PASS" else "FAIL",
     if (requireNamespace("digest", quietly = TRUE)) "PASS" else "WARNING"
   ),
   detail = c(
@@ -271,8 +353,12 @@ qa_checks <- data.frame(
     "Validated Phase 3 raster manifest was available.",
     "Deterministic selected-week map figure was written.",
     if (is.null(potential)) "Potential abundance was not generated." else paste0("Generated ", length(potential$paths), " nominal-cell potential-abundance rasters."),
-    if (rpi_audit$status %in% c("READY", "COMPLETED")) "Cleaned observations for historical RPI threshold calibration were supplied." else "Cleaned RPI observations were not supplied; RPI remains blocked.",
+    "Accepted structural, unmasked structural potential, and 14.5 C masked structural products were promoted without regeneration.",
+    "Supported masked structural cells are finite and outside-support cells remain NA.",
+    if (rpi_audit$status %in% c("READY", "COMPLETED")) "Authoritative observations were supplied for same-week dynamic threshold calibration." else "Cleaned RPI observations were not supplied; RPI remains blocked.",
     paste0("RPI gate status: ", rpi_audit$status, "."),
+    if (!is.null(rpi_audit$dynamic_threshold)) paste0("Dynamic threshold reproduced within tolerance: ", rpi_audit$threshold_reproducibility$absolute_difference, ".") else "Dynamic threshold artifact was not generated.",
+    if (exists("class_area")) paste0("RPI class counts sum to ", sum(class_area$cell_count), " supported cells.") else "RPI class summary was not generated.",
     "SHA-256 checksum support was available for manifest generation."
   ),
   stringsAsFactors = FALSE
@@ -281,7 +367,7 @@ qa <- list(
   checks = qa_checks,
   totals = as.list(table(factor(qa_checks$status, levels = c("PASS", "WARNING", "FAIL")))),
   overall_status = if (any(qa_checks$status == "FAIL")) "FAIL" else if (any(qa_checks$status == "WARNING")) "WARNING" else "PASS",
-  production_fit_scope = "Job 20742007 was outside this reporting run and was not touched."
+  production_fit_scope = "Job 20762325 was outside this reporting run and was not touched."
 )
 saveRDS(qa, file.path(paths$objects, "reporting_qa_audit.rds")); generated_objects$reporting_qa_audit <- file.path(paths$objects, "reporting_qa_audit.rds")
 utils::write.csv(qa_checks, file.path(paths$qa, "reporting_qa_audit.csv"), row.names = FALSE, na = "")
@@ -292,7 +378,16 @@ metadata <- list(
   fit = list(path = normalizePath(fit_path, mustWork = TRUE), sha256 = postfit_reporting_hash_file(fit_path)),
   stage2 = list(path = normalizePath(stage2_path, mustWork = TRUE), sha256 = postfit_reporting_hash_file(stage2_path)),
   stage3a = list(path = normalizePath(build_path, mustWork = TRUE), sha256 = postfit_reporting_hash_file(build_path)),
-  phase2 = list(path = if (dir.exists(phase2_root)) normalizePath(phase2_root, mustWork = TRUE) else NA_character_, sha256 = if (dir.exists(phase2_root)) postfit_reporting_hash_file(file.path(phase2_root, paste0("prediction_projection_manifest_", run_id, ".csv"))) else NA_character_, manifest = if (dir.exists(phase2_root)) file.path(phase2_root, paste0("prediction_projection_manifest_", run_id, ".csv")) else NA_character_),
+  phase2 = {
+    manifest_candidates <- if (dir.exists(phase2_root)) list.files(phase2_root, pattern = "^prediction_projection_manifest_.*\\.csv$", full.names = TRUE) else character()
+    manifest_path <- if (length(manifest_candidates)) {
+      preferred <- file.path(phase2_root, paste0("prediction_projection_manifest_", run_id, ".csv"))
+      if (file.exists(preferred)) preferred else sort(manifest_candidates)[[1L]]
+    } else NA_character_
+    list(path = if (dir.exists(phase2_root)) normalizePath(phase2_root, mustWork = TRUE) else NA_character_,
+         sha256 = if (file.exists(manifest_path)) postfit_reporting_hash_file(manifest_path) else NA_character_,
+         manifest = manifest_path)
+  },
   phase3 = map_audit,
   git_commit = tryCatch(system2("git", c("-C", repo_root, "-c", "safe.directory=*", "rev-parse", "HEAD"), stdout = TRUE, stderr = FALSE)[[1L]], error = function(e) NA_character_),
   generated_at_utc = postfit_reporting_iso_timestamp(),
@@ -311,6 +406,12 @@ metadata <- list(
   temporal_effect_semantics = "week_steps is Tier 1 latent logit deviation; tier2_week is Tier 2 latent log-intensity deviation; Stage 2 mapping is authoritative.",
   cell_area = cell_area,
   potential_abundance = if (is.null(potential)) list(status = "BLOCKED", reason = "Potential abundance requires a validated cell-area audit and Phase 3 map manifest.", cell_area = cell_area) else potential,
+  structural_products = list(
+    source = structural_products$source, weeks = structural_products$weeks, supported_cells = structural_products$support_cells,
+    nonfinite_supported = structural_products$nonfinite_supported, outside_support_non_na = structural_products$outside_support_non_na,
+    manifest = file.path(paths$metadata, "structural_product_manifest.csv"), semantics = structural_products$semantics,
+    selected_weeks = structural_selected$week, structural_masked_figure = structural_figure_paths
+  ),
   rpi = rpi_audit,
   qa = qa,
   model_summary = model_summary

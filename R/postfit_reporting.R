@@ -44,7 +44,9 @@ postfit_reporting_product_names <- function() {
   c(
     "fixed_effects_tier1", "fixed_effects_tier2", "species_composition",
     "cattle_effect", "temporal_effects", "selected_week_maps", "model_summary",
-    "potential_abundance", "random_effect_summaries", "rpi", "rpi_class_summary",
+    "potential_abundance", "tier2_eta_structural", "tier2_intensity_structural",
+    "structural_potential_abundance", "structural_potential_abundance_temp_masked",
+    "random_effect_summaries", "rpi_dynamic_threshold", "rpi", "rpi_class_summary",
     "rpi_class_map", "rpi_readiness"
   )
 }
@@ -884,6 +886,28 @@ postfit_reporting_plot_selected_maps <- function(map_object) {
   structure(list(plots = plots, nrow = length(plots), ncol = 2L, composition = "grid", object = map_object), class = "postfit_reporting_map_grid")
 }
 
+postfit_reporting_write_structural_masked_figure <- function(structural_paths, masked_paths, weeks, png_path, pdf_path) {
+  postfit_reporting_require("terra")
+  if (length(structural_paths) != length(masked_paths) || length(structural_paths) != length(weeks) || !length(weeks)) stop("Structural/masked figure inputs must have equal non-zero lengths.")
+  draw <- function(device, path, raster_device = FALSE) {
+    if (isTRUE(raster_device)) device(path, width = 12, height = 3 * length(weeks), units = "in", res = 160) else device(path, width = 12, height = 3 * length(weeks))
+    on.exit(grDevices::dev.off(), add = TRUE)
+    graphics::par(mfrow = c(length(weeks), 2L), mar = c(2, 2, 3, 4))
+    for (i in seq_along(weeks)) {
+      structural <- terra::rast(structural_paths[[i]])
+      masked <- terra::rast(masked_paths[[i]])
+      if (!postfit_reporting_geometry_equal(structural, masked)) stop("Structural and masked selected rasters do not share geometry.")
+      limits <- range(c(terra::values(structural, mat = FALSE), terra::values(masked, mat = FALSE)), na.rm = TRUE)
+      terra::plot(structural, zlim = limits, axes = FALSE, main = paste("Structural", weeks[[i]]))
+      terra::plot(masked, zlim = limits, axes = FALSE, main = paste("14.5 C masked", weeks[[i]]))
+    }
+    invisible(path)
+  }
+  draw(grDevices::png, png_path, raster_device = TRUE)
+  draw(grDevices::pdf, pdf_path, raster_device = FALSE)
+  c(png = normalizePath(png_path, mustWork = TRUE), pdf = normalizePath(pdf_path, mustWork = TRUE))
+}
+
 postfit_reporting_trace_cell_area <- function(template_path = NULL, cell_area = NULL, units = NULL, source_document = "local/results_summary.qmdx") {
   if (!is.null(cell_area)) {
     value <- as.numeric(cell_area)
@@ -925,8 +949,102 @@ postfit_reporting_potential_abundance <- function(tier2_paths, cell_area_info, o
     source_quantity = "tier2_intensity_plugin",
     conversion_type = "nominal_average_cell_area",
     cell_area_km2 = unname(cell_area_info$nominal_average_raster_cell_area),
+    spde_terms_included = TRUE,
+    role = "fitted/model-reconstruction product",
     direct_model_output = FALSE,
     cell_area = cell_area_info
+  )
+}
+
+postfit_reporting_parse_week_paths <- function(paths, prefix, style = c("year_week", "year_W")) {
+  style <- match.arg(style)
+  pattern <- if (identical(style, "year_week")) {
+    paste0("^", prefix, "_y([0-9]{4})_w([0-9]{2})\\.tif$")
+  } else {
+    paste0("^", prefix, "_([0-9]{4})_W([0-9]{2})\\.tif$")
+  }
+  parsed <- regexec(pattern, basename(paths), ignore.case = TRUE)
+  matches <- regmatches(basename(paths), parsed)
+  if (any(vapply(matches, length, integer(1L)) != 3L)) stop("Structural product filenames do not expose year/week metadata for prefix: ", prefix)
+  data.frame(path = paths, epiyear = as.integer(vapply(matches, `[[`, character(1L), 2L)), epiweek = as.integer(vapply(matches, `[[`, character(1L), 3L)), stringsAsFactors = FALSE)
+}
+
+postfit_reporting_geometry_equal <- function(x, y) {
+  postfit_reporting_require("terra")
+  if (!inherits(x, "SpatRaster")) x <- terra::rast(x)
+  if (!inherits(y, "SpatRaster")) y <- terra::rast(y)
+  extent_vector <- function(raster) {
+    extent <- terra::ext(raster)
+    c(extent$xmin, extent$xmax, extent$ymin, extent$ymax)
+  }
+  isTRUE(terra::same.crs(x, y)) && identical(terra::nrow(x), terra::nrow(y)) && identical(terra::ncol(x), terra::ncol(y)) &&
+    isTRUE(all.equal(as.numeric(terra::res(x)), as.numeric(terra::res(y)), tolerance = 0, check.attributes = FALSE)) &&
+    isTRUE(all.equal(extent_vector(x), extent_vector(y), tolerance = 0, check.attributes = FALSE)) &&
+    isTRUE(all.equal(as.numeric(terra::origin(x)), as.numeric(terra::origin(y)), tolerance = 0, check.attributes = FALSE))
+}
+
+postfit_reporting_prepare_structural_products <- function(structural_root, masked_root, output_spatial,
+                                                           expected_weeks = 133L, expected_cells = 15899L,
+                                                           threshold_celsius = 14.5, overwrite = FALSE,
+                                                           expected_start_week = "2024-W01", expected_end_week = "2026-W29") {
+  postfit_reporting_require(c("terra", "digest"))
+  required <- c(structural_root, masked_root)
+  if (any(!dir.exists(required))) stop("Accepted structural product root(s) do not exist: ", paste(required[!dir.exists(required)], collapse = "; "))
+  structural_intensity <- sort(list.files(file.path(structural_root, "structural_intensity"), pattern = "^tier2_intensity_structural_y[0-9]{4}_w[0-9]{2}\\.tif$", full.names = TRUE))
+  structural_potential <- sort(list.files(file.path(structural_root, "structural_potential_abundance"), pattern = "^structural_potential_abundance_y[0-9]{4}_w[0-9]{2}\\.tif$", full.names = TRUE))
+  masked_potential <- sort(list.files(file.path(masked_root, "structural_potential_abundance_temp_masked"), pattern = "^structural_potential_abundance_temp_masked_[0-9]{4}_W[0-9]{2}\\.tif$", full.names = TRUE))
+  if (any(length(structural_intensity) != expected_weeks, length(structural_potential) != expected_weeks, length(masked_potential) != expected_weeks)) stop("Accepted structural products must contain exactly ", expected_weeks, " weekly rasters in each required family.")
+  intensity_manifest <- postfit_reporting_parse_week_paths(structural_intensity, "tier2_intensity_structural", "year_week")
+  potential_manifest <- postfit_reporting_parse_week_paths(structural_potential, "structural_potential_abundance", "year_week")
+  masked_manifest <- postfit_reporting_parse_week_paths(masked_potential, "structural_potential_abundance_temp_masked", "year_W")
+  week <- paste(intensity_manifest$epiyear, sprintf("W%02d", intensity_manifest$epiweek), sep = "-")
+  potential_week <- paste(potential_manifest$epiyear, sprintf("W%02d", potential_manifest$epiweek), sep = "-")
+  masked_week <- paste(masked_manifest$epiyear, sprintf("W%02d", masked_manifest$epiweek), sep = "-")
+  if (!identical(week, potential_week) || !identical(week, masked_week) || !identical(week[[1L]], expected_start_week) || !identical(week[[length(week)]], expected_end_week)) stop("Accepted structural products do not share the expected temporal horizon.")
+  intensity_stack <- terra::rast(structural_intensity)
+  potential_stack <- terra::rast(structural_potential)
+  masked_stack <- terra::rast(masked_potential)
+  if (!postfit_reporting_geometry_equal(intensity_stack[[1L]], potential_stack[[1L]]) || !postfit_reporting_geometry_equal(intensity_stack[[1L]], masked_stack[[1L]])) stop("Accepted structural products do not share exact raster geometry and CRS.")
+  support <- !is.na(terra::values(intensity_stack[[1L]], mat = FALSE))
+  if (sum(support) != expected_cells) stop("Accepted structural support contains ", sum(support), " cells; expected ", expected_cells, ".")
+  masked_values <- terra::values(masked_stack, mat = TRUE)
+  nonfinite_supported <- sum(!is.finite(masked_values[support, drop = FALSE]))
+  outside_support_non_na <- sum(!is.na(masked_values[!support, drop = FALSE]))
+  if (nonfinite_supported || outside_support_non_na) stop("Accepted masked structural products do not preserve finite supported values and NA outside support.")
+  target_dirs <- c(
+    tier2_intensity_structural = file.path(output_spatial, "tier2_intensity_structural"),
+    structural_potential_abundance = file.path(output_spatial, "structural_potential_abundance"),
+    structural_potential_abundance_temp_masked = file.path(output_spatial, "structural_potential_abundance_temp_masked")
+  )
+  invisible(lapply(target_dirs, dir.create, recursive = TRUE, showWarnings = FALSE))
+  copy_family <- function(source, target_dir) {
+    target <- file.path(target_dir, basename(source))
+    if (any(file.exists(target)) && !isTRUE(overwrite)) stop("Refusing to overwrite canonical structural product: ", target)
+    ok <- file.copy(source, target, overwrite = TRUE, copy.date = TRUE)
+    if (any(!ok)) stop("Failed to promote accepted structural product(s) into canonical reporting output.")
+    normalizePath(target, mustWork = TRUE)
+  }
+  promoted_intensity <- vapply(structural_intensity, copy_family, character(1L), target_dir = target_dirs[["tier2_intensity_structural"]])
+  promoted_potential <- vapply(structural_potential, copy_family, character(1L), target_dir = target_dirs[["structural_potential_abundance"]])
+  promoted_masked <- vapply(masked_potential, copy_family, character(1L), target_dir = target_dirs[["structural_potential_abundance_temp_masked"]])
+  list(
+    manifest = data.frame(week = week, epiyear = intensity_manifest$epiyear, epiweek = intensity_manifest$epiweek,
+                          time_index = seq_along(week), tier2_intensity_structural_path = promoted_intensity,
+                          structural_potential_abundance_path = promoted_potential,
+                          structural_potential_abundance_temp_masked_path = promoted_masked,
+                          supported_cells = expected_cells, stringsAsFactors = FALSE),
+    intensity_stack = intensity_stack, potential_stack = potential_stack, masked_stack = masked_stack,
+    support_cells = expected_cells, weeks = length(week), nonfinite_supported = nonfinite_supported,
+    outside_support_non_na = outside_support_non_na,
+    source = list(structural_root = normalizePath(structural_root, mustWork = TRUE), masked_root = normalizePath(masked_root, mustWork = TRUE),
+                  structural_metadata = file.path(structural_root, "metadata", "structural_surface_metadata.rds"),
+                  masked_metadata = file.path(masked_root, "metadata", "masked_structural_rpi_diagnostics_metadata.rds")),
+    semantics = list(
+      tier2_eta_structural = list(name = "tier2_eta_structural", spde_terms_included = FALSE, role = "structural ecological prediction", representation = "log(tier2_intensity_structural) from accepted structural reconstruction"),
+      tier2_intensity_structural = list(name = "tier2_intensity_structural", spde_terms_included = FALSE, role = "structural ecological prediction", definition = "exp(tier2_eta_structural)"),
+      structural_potential_abundance = list(name = "structural_potential_abundance", spde_terms_included = FALSE, role = "structural ecological potential abundance", definition = "tier2_intensity_structural × nominal_average_cell_area"),
+      structural_potential_abundance_temp_masked = list(name = "structural_potential_abundance_temp_masked", spde_terms_included = FALSE, role = "derived physiologically masked ecological potential abundance", temperature_variable = "mintemp", temperature_threshold_celsius = threshold_celsius, temperature_units = "degrees Celsius", mask_operator = ">=", threshold_role = "lower developmental thermal threshold", threshold_source = "Gutierrez & Ponti 2014", application = "post-fit physiological mask")
+    )
   )
 }
 
@@ -982,7 +1100,66 @@ postfit_reporting_read_rpi_observations <- function(path, target_crs = NULL,
   coordinates <- data[, c("x", "y"), drop = FALSE]
   coordinates$x <- as.numeric(coordinates$x); coordinates$y <- as.numeric(coordinates$y)
   if (!nrow(coordinates) || any(!is.finite(as.matrix(coordinates)))) stop("RPI cleaned observations must contain at least one finite location.")
-  list(data = coordinates, provenance = provenance)
+  data$x <- coordinates$x
+  data$y <- coordinates$y
+  list(data = data, provenance = provenance)
+}
+
+postfit_reporting_observation_week_keys <- function(observations) {
+  if ("date" %in% names(observations)) {
+    postfit_reporting_require("lubridate")
+    date <- as.Date(as.character(observations$date))
+    if (any(is.na(date))) stop("RPI observations contain an invalid date.")
+    epiyear <- lubridate::isoyear(date)
+    epiweek <- lubridate::isoweek(date)
+  } else if (all(c("epiyear", "epiweek") %in% names(observations))) {
+    epiyear <- as.integer(observations$epiyear)
+    epiweek <- as.integer(observations$epiweek)
+  } else {
+    stop("Dynamic RPI calibration requires date or epiyear/epiweek observation fields.")
+  }
+  paste(as.integer(epiyear), sprintf("W%02d", as.integer(epiweek)), sep = "-")
+}
+
+postfit_reporting_dynamic_rpi_calibration <- function(count_stk, observations, week_keys, cut_quant = 0.10) {
+  postfit_reporting_require(c("terra", "lubridate"))
+  if (!inherits(count_stk, "SpatRaster")) count_stk <- terra::rast(count_stk)
+  if (!is.data.frame(observations) || !all(c("x", "y") %in% names(observations))) stop("Dynamic RPI observations must contain projected x and y columns.")
+  if (length(week_keys) != terra::nlyr(count_stk)) stop("Dynamic RPI week metadata do not match the supplied stack.")
+  observation_week <- postfit_reporting_observation_week_keys(observations)
+  layer <- match(observation_week, as.character(week_keys))
+  matched_week <- !is.na(layer)
+  values <- rep(NA_real_, nrow(observations))
+  if (any(matched_week)) {
+    for (index in sort(unique(layer[matched_week]))) {
+      rows <- which(layer == index)
+      extracted <- terra::extract(count_stk[[index]], observations[rows, c("x", "y"), drop = FALSE])
+      values[rows] <- as.numeric(extracted[, 2L])
+    }
+  }
+  ext <- terra::ext(count_stk)
+  inside_extent <- observations$x >= ext$xmin & observations$x <= ext$xmax & observations$y >= ext$ymin & observations$y <= ext$ymax
+  supported <- rep(FALSE, nrow(observations))
+  if (any(inside_extent)) supported[inside_extent] <- !is.na(terra::extract(count_stk[[1L]], observations[inside_extent, c("x", "y"), drop = FALSE])[, 2L])
+  finite <- is.finite(values)
+  paired <- data.frame(
+    observation_index = seq_len(nrow(observations)), week_key = observation_week, modeled_layer = layer,
+    matched_week = matched_week, inside_extent = inside_extent, inside_supported = supported,
+    extracted_value = values, eligible_for_quantile = finite, stringsAsFactors = FALSE
+  )
+  if (!any(finite)) stop("No finite same-week masked structural predictions are available for dynamic RPI calibration.")
+  threshold <- as.numeric(stats::quantile(values[finite], probs = cut_quant, names = FALSE, type = 7))
+  metrics <- data.frame(
+    total_observations = nrow(observations), inside_raster_extent = sum(inside_extent), inside_supported_mask = sum(supported),
+    outside_raster_extent = sum(!inside_extent), unsupported_or_ocean = sum(inside_extent & !supported),
+    successfully_transformed = sum(is.finite(observations$x) & is.finite(observations$y)),
+    outside_modeled_horizon = sum(!matched_week), successfully_same_week_matched = sum(finite),
+    masked_to_zero = sum(finite & values == 0), finite_nonzero = sum(finite & values > 0),
+    n_values_used_for_quantile = sum(finite), stringsAsFactors = FALSE
+  )
+  list(threshold = threshold, cut_quant = cut_quant, paired = paired, metrics = metrics,
+       coordinate_source = "lonlat", same_week_matching = TRUE,
+       source_product = "structural_potential_abundance_temp_masked")
 }
 
 postfit_reporting_rpi_audit <- function(count_stack_semantics, observed_source = NULL, time_span_weeks = NULL,
@@ -991,18 +1168,18 @@ postfit_reporting_rpi_audit <- function(count_stack_semantics, observed_source =
   checks <- data.frame(
     check = c("count_stack_semantics", "observed_source", "continuous_time_span", "threshold_convention", "class_boundaries"),
     status = c(
-      if (identical(count_stack_semantics, "standardized_potential_abundance")) "PASS" else "FAIL",
+      if (count_stack_semantics %in% c("standardized_potential_abundance", "masked_structural_potential_abundance")) "PASS" else "FAIL",
       if (!is.null(observed_source) && file.exists(observed_source)) "PASS" else "FAIL",
       if (!is.null(time_span_weeks) && as.integer(time_span_weeks) >= 1L) "PASS" else "UNRESOLVED",
       if (identical(as.numeric(cut_quant), 0.10)) "PASS" else "WARNING",
       if (identical(as.numeric(class_boundaries), c(3, 8, 15))) "PASS" else "WARNING"
     ),
     details = c(
-      "RPI must receive the standardized potential-abundance stack, not raw Tier 2 intensity.",
+      if (identical(count_stack_semantics, "masked_structural_potential_abundance")) "RPI receives the 14.5 C masked structural potential-abundance stack." else "RPI must receive the standardized potential-abundance stack, not raw Tier 2 intensity.",
       "Observation locations are required for threshold calibration.",
       "The supplied Phase 3 stack is evaluated as one ordered continuous stack.",
-      "Threshold is the lower cut_quant quantile of values extracted at observation locations and suitability is value > threshold.",
-      "Classes use <3, 3–8, 8–15, and >15 generations; boundary behavior is retained from R/calc_RPI.R."
+      if (identical(count_stack_semantics, "masked_structural_potential_abundance")) "Threshold is the lower cut_quant quantile of same-week observation-paired masked structural values and suitability is value > threshold." else "Threshold is the lower cut_quantile of values extracted at observation locations and suitability is value > threshold.",
+      "Classes use <3, 3–8, 8–15, and >=15 generations; boundary behavior is retained from R/calc_RPI.R."
     ), stringsAsFactors = FALSE
   )
   enabled <- all(checks$status == "PASS")
@@ -1034,12 +1211,21 @@ postfit_reporting_calc_rpi <- function(count_stk, nws_obs, gen_days = 21, days_p
   values <- as.matrix(extracted[, setdiff(names(extracted), "ID"), drop = FALSE])
   if (!length(values) || !any(is.finite(values))) stop("RPI observation locations do not intersect finite potential-abundance values.")
   threshold <- as.numeric(stats::quantile(as.numeric(values), cut_quant, na.rm = TRUE, names = FALSE))
+  output <- postfit_reporting_calc_rpi_at_threshold(count_stk, threshold, gen_days = gen_days, days_per_layer = days_per_layer)
+  output$parameters$cut_quant <- cut_quant
+  output
+}
+
+postfit_reporting_calc_rpi_at_threshold <- function(count_stk, threshold, gen_days = 21, days_per_layer = 7) {
+  postfit_reporting_require("terra")
+  if (!inherits(count_stk, "SpatRaster")) stop("count_stk must be a terra SpatRaster.")
+  if (length(threshold) != 1L || !is.finite(threshold)) stop("RPI threshold must be one finite numeric value.")
   max_run_weeks <- terra::app(count_stk, fun = function(x) postfit_reporting_max_consecutive_suitable(x, threshold))
   rpi <- (max_run_weeks * days_per_layer) / gen_days
   classes <- postfit_reporting_rpi_classify(rpi)
   names(classes) <- "rpi_class"
   list(rpi = rpi, stability_class = classes, calibrated_threshold = threshold,
-       parameters = list(gen_days = gen_days, days_per_layer = days_per_layer, cut_quant = cut_quant),
+       parameters = list(gen_days = gen_days, days_per_layer = days_per_layer),
        semantics = "Copied from R/calc_RPI.R with explicit terra namespace; suitability is value > the 10th percentile and class boundaries are <3, 3 to <8, 8 to <15, and >=15 generations.")
 }
 
@@ -1142,8 +1328,17 @@ postfit_reporting_write_manifest <- function(paths, source_run, generated_at = p
     if (identical(product_name, "rpi_readiness_audit")) product_name <- "rpi_readiness"
     if (identical(product_name, "rpi_continuous")) product_name <- "rpi"
     if (identical(product_name, "rpi_class")) product_name <- "rpi_class_map"
+    if (grepl("^spatial/tier2_intensity_structural/", relative)) product_name <- "tier2_intensity_structural"
+    if (grepl("^spatial/structural_potential_abundance/", relative)) product_name <- "structural_potential_abundance"
+    if (grepl("^spatial/structural_potential_abundance_temp_masked/", relative)) product_name <- "structural_potential_abundance_temp_masked"
+    if (grepl("^spatial/potential_abundance/", relative)) product_name <- "potential_abundance"
+    role <- if (identical(product_name, "potential_abundance")) "fitted/model-reconstruction product" else if (product_name %in% c("tier2_eta_structural", "tier2_intensity_structural")) "structural ecological prediction" else if (identical(product_name, "structural_potential_abundance")) "derived structural ecological potential abundance" else if (identical(product_name, "structural_potential_abundance_temp_masked")) "derived physiologically masked ecological potential abundance" else if (product_name %in% c("rpi_dynamic_threshold", "rpi", "rpi_class_map", "rpi_class_summary")) "derived RPI product" else NA_character_
+    spde_terms <- if (product_name %in% c("potential_abundance")) TRUE else if (product_name %in% c("tier2_eta_structural", "tier2_intensity_structural", "structural_potential_abundance", "structural_potential_abundance_temp_masked")) FALSE else NA
+    temperature_variable <- if (identical(product_name, "structural_potential_abundance_temp_masked")) "mintemp" else NA_character_
+    temperature_threshold <- if (identical(product_name, "structural_potential_abundance_temp_masked")) 14.5 else NA_real_
+    rpi_calibration <- if (identical(product_name, "rpi")) "same-week observation-paired dynamic threshold" else NA_character_
     object <- if (type == "table") file.path("objects", paste0(stem, ".rds")) else if (type == "figure") file.path("objects", paste0("plot_", stem, ".rds")) else if (type == "object") relative else NA_character_
-    data.frame(artifact_type = type, logical_product_name = product_name, path = relative, file_format = postfit_reporting_file_format(path), source_object = gsub("\\\\", "/", object), source_run = source_run, checksum_sha256 = postfit_reporting_hash_file(path), generated_at_utc = generated_at, bytes = as.numeric(info$size), stringsAsFactors = FALSE)
+    data.frame(artifact_type = type, logical_product_name = product_name, product_role = role, spde_terms_included = spde_terms, temperature_variable = temperature_variable, temperature_threshold_celsius = temperature_threshold, rpi_threshold_calibration = rpi_calibration, path = relative, file_format = postfit_reporting_file_format(path), source_object = gsub("\\\\", "/", object), source_run = source_run, checksum_sha256 = postfit_reporting_hash_file(path), generated_at_utc = generated_at, bytes = as.numeric(info$size), stringsAsFactors = FALSE)
   }))
   if (is.null(manifest)) manifest <- data.frame()
   utils::write.csv(manifest, paths$manifest, row.names = FALSE, na = "")
