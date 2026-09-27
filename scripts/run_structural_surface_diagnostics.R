@@ -112,8 +112,8 @@ for (i in seq_along(weekly_files)) {
   if (anyNA(phase2_position)) stop("Phase 2 weekly support does not match Stage 2 cell support for ", key)
   data <- grid[rows, , drop = FALSE]
   nonspde <- structural_tier2_nonspde_components(data, components)
-  spatial <- field_cells$tier2_field[cell_index[rows], grid_group[rows]]
-  copy <- field_cells$tier2_copy_field[cell_index[rows], grid_group[rows]]
+  spatial <- field_cells$tier2_field[cbind(cell_index[rows], grid_group[rows])]
+  copy <- field_cells$tier2_copy_field[cbind(cell_index[rows], grid_group[rows])]
   structural_eta <- nonspde$structural_eta2
   full_eta <- as.numeric(week_data$eta2_mean[phase2_position])
   reconstruction <- structural_reconstruction_metrics(full_eta, structural_eta, spatial, copy)
