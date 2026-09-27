@@ -50,6 +50,8 @@ cell_area_value <- arg(args, "cell-area")
 cell_area_units <- arg(args, "cell-area-units")
 observations_path <- arg(args, "observations")
 rpi_observation_path <- arg(args, "rpi-observations", observations_path)
+rpi_coordinate_source <- arg(args, "rpi-coordinate-source", "lonlat")
+rpi_coordinate_crs <- arg(args, "rpi-coordinate-crs", "EPSG:4326")
 reference_fit_path <- arg(args, "reference-fit")
 reference_build_path <- arg(args, "reference-build")
 reference_run_id <- arg(args, "reference-run", "20725437")
@@ -187,7 +189,9 @@ rpi_target_crs <- if (!is.null(map_manifest) && length(map_manifest$tier2_intens
   terra::crs(terra::rast(map_manifest$tier2_intensity_path[[1L]]), proj = TRUE)
 } else NULL
 rpi_observations <- if (!is.null(rpi_observation_path) && file.exists(rpi_observation_path)) {
-  postfit_reporting_read_rpi_observations(rpi_observation_path, target_crs = rpi_target_crs)
+  postfit_reporting_read_rpi_observations(rpi_observation_path, target_crs = rpi_target_crs,
+                                          coordinate_source = rpi_coordinate_source,
+                                          source_crs = rpi_coordinate_crs)
 } else NULL
 potential <- NULL
 if (identical(cell_area$status, "PASS") && !is.null(map_manifest)) {

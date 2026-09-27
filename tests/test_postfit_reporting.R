@@ -215,11 +215,28 @@ testthat::test_that("RPI reader projects authoritative lon/lat observations to r
   path <- file.path(root, "observations.csv")
   utils::write.csv(data.frame(date = "2026-07-25", host = "CANINO", lon = -75, lat = 20), path, row.names = FALSE)
   target_crs <- "+proj=aea +lat_0=20 +lon_0=-75 +lat_1=10 +lat_2=30 +x_0=0 +y_0=0 +datum=WGS84 +units=km +no_defs"
-  object <- postfit_reporting_read_rpi_observations(path, target_crs = target_crs)
+  object <- postfit_reporting_read_rpi_observations(path, target_crs = target_crs,
+                                                    coordinate_source = "lonlat", source_crs = "EPSG:4326")
   testthat::expect_equal(names(object$data), c("x", "y"))
   testthat::expect_equal(as.numeric(object$data[1, ]), c(0, 0), tolerance = 1e-8)
   testthat::expect_equal(object$provenance$coordinate_transform$source_crs, "EPSG:4326")
   testthat::expect_equal(object$provenance$coordinate_transform$target_crs, target_crs)
+})
+
+testthat::test_that("RPI coordinate source is explicit and ambiguous input fails closed", {
+  testthat::skip_if_not_installed("sf")
+  root <- file.path(tempdir(), paste0("postfit-rpi-coordinate-source-", Sys.getpid()))
+  dir.create(root, recursive = TRUE)
+  target_crs <- "EPSG:4326"
+  lonlat_path <- file.path(root, "lonlat.csv")
+  utils::write.csv(data.frame(lon = -75, lat = 20, x = 1, y = 2), lonlat_path, row.names = FALSE)
+  testthat::expect_error(postfit_reporting_read_rpi_observations(lonlat_path, target_crs = target_crs), "coordinate_source must be explicit")
+  object <- postfit_reporting_read_rpi_observations(lonlat_path, target_crs = target_crs,
+                                                    coordinate_source = "lonlat", source_crs = "EPSG:4326")
+  testthat::expect_equal(object$provenance$coordinate_source, "lonlat")
+  xy_path <- file.path(root, "xy.csv")
+  utils::write.csv(data.frame(x = 1, y = 2), xy_path, row.names = FALSE)
+  testthat::expect_error(postfit_reporting_read_rpi_observations(xy_path, target_crs = target_crs, coordinate_source = "xy"), "source_crs must be explicit")
 })
 
 testthat::test_that("run-specific output roots cannot collide", {
