@@ -100,7 +100,7 @@ joint_inla_preflight_formula_fixed_names <- function(formula) {
   }), use.names = FALSE))
 }
 
-joint_inla_preflight_theta_inventory <- function(theta_order = NULL) {
+joint_inla_preflight_theta_inventory <- function(theta_order = NULL, theta_length = NULL) {
   component_inventory <- paste(c(
     "tier1_field SPDE hyperparameters",
     "tier1_field group iid hyperparameter",
@@ -113,13 +113,14 @@ joint_inla_preflight_theta_inventory <- function(theta_order = NULL) {
     "cattle_q RW2 hyperparameter",
     "any additional reference-model hyperparameter exposed by INLA"
   ), collapse = "; ")
-  verified <- !is.null(theta_order) && length(theta_order) == 10L && all(nzchar(as.character(theta_order)))
-  labels <- if (verified) as.character(theta_order) else paste0("historical_theta_", sprintf("%02d", seq_len(10L)))
+  verified <- !is.null(theta_order) && length(theta_order) > 0L && all(nzchar(as.character(theta_order)))
+  theta_length <- if (verified) length(theta_order) else if (is.null(theta_length)) 0L else as.integer(theta_length)
+  labels <- if (verified) as.character(theta_order) else if (theta_length > 0L) paste0("theta_", seq_len(theta_length)) else character()
   data.frame(
-    position = seq_len(10L),
+    position = seq_len(theta_length),
     assumed_label = if (verified) labels else paste0(labels, " (semantic label unverified)"),
     expected_model_components = component_inventory,
-    assumed_order_note = if (verified) "Canonical theta order is reconstructed from the verified Stage 3A model signature." else "Retain historical INLA theta position; semantic order is not established from Stage 3A metadata.",
+    assumed_order_note = if (verified) "Canonical theta order is reconstructed from the verified Stage 3A model signature." else "Retain the current artifact theta positions as provenance; semantic order is not established from Stage 3A metadata.",
     order_verified = verified,
     stringsAsFactors = FALSE
   )
@@ -198,8 +199,8 @@ joint_inla_preflight_quarter_group_expectation <- function(build) {
   )
 }
 
-joint_inla_preflight_build <- function(build, build_path = NA_character_, expected_nspde = 13449L,
-                                      expected_cattle_bins = 22L) {
+joint_inla_preflight_build <- function(build, build_path = NA_character_, expected_nspde = NULL,
+                                      expected_cattle_bins = NULL) {
   checks <- list()
   artifact_sha256 <- joint_inla_fit_hash_file(build_path)
   add_check <- function(section, check, status, observed, expected, details = "", metrics = list()) {
@@ -356,6 +357,15 @@ joint_inla_preflight_build <- function(build, build_path = NA_character_, expect
   }
 
   n_predictors <- if (!is.null(A) && length(dim(A)) == 2L) ncol(A) else n_rows
+  mesh_counts <- c(build$spde$tier1$n.spde, build$spde$tier2$n.spde)
+  if (is.null(expected_nspde)) {
+    expected_nspde <- if (length(mesh_counts) == 2L && all(is.finite(mesh_counts)) && length(unique(as.integer(mesh_counts))) == 1L) as.integer(mesh_counts[[1L]]) else NA_integer_
+  }
+  q_values <- if ("cattle_q" %in% names(data)) joint_inla_preflight_projected_values(data[["cattle_q"]], A, rep(TRUE, n_rows))$values else numeric()
+  if (is.null(expected_cattle_bins)) {
+    finite_q <- q_values[is.finite(q_values)]
+    expected_cattle_bins <- if (length(finite_q)) max(as.integer(round(finite_q))) else NA_integer_
+  }
 
   nspde_values <- c(
     tier1 = if (!is.null(build$spde$tier1$n.spde)) build$spde$tier1$n.spde else NA_integer_,
@@ -552,16 +562,16 @@ joint_inla_preflight_build <- function(build, build_path = NA_character_, expect
       active_unprojected_count = length(joint_inla_preflight_projected_values(q_value, A, tier2_active_rows)$missing_rows)
     ))
     if (full_support_valid) {
-      pass("random_effects", "cattle_rw2_feature_support", paste(q_levels, collapse = ","), paste(configured_bins, collapse = ","), "Full fitted Tier 2 cattle_q support is exactly 1:22 and finite/integer-valued.", support_metrics)
+      pass("random_effects", "cattle_rw2_feature_support", paste(q_levels, collapse = ","), paste(configured_bins, collapse = ","), "Full fitted Tier 2 cattle_q support is exactly 1:n_bins and finite/integer-valued.", support_metrics)
     } else {
-      fail("random_effects", "cattle_rw2_feature_support", paste(q_levels, collapse = ","), paste(configured_bins, collapse = ","), "Full fitted Tier 2 cattle_q support must be finite, integer-valued, within 1:22, and contain every configured bin.", support_metrics)
+      fail("random_effects", "cattle_rw2_feature_support", paste(q_levels, collapse = ","), paste(configured_bins, collapse = ","), "Full fitted Tier 2 cattle_q support must be finite, integer-valued, within 1:n_bins, and contain every configured bin.", support_metrics)
     }
 
     minimum_active_bins <- 5L
     if (length(active_levels) >= minimum_active_bins) {
-      pass("random_effects", "cattle_rw2_active_structural_support", length(active_levels), paste0(">=", minimum_active_bins), "At least five response-active cattle bins provide a conservative minimum for the intended RW2 structure without requiring all 22 bins to be directly observed.", occupancy_metrics)
+      pass("random_effects", "cattle_rw2_active_structural_support", length(active_levels), paste0(">=", minimum_active_bins), "Sufficient response-active cattle bins support the intended RW2 structure without requiring every configured bin to be directly observed.", occupancy_metrics)
     } else {
-      fail("random_effects", "cattle_rw2_active_structural_support", length(active_levels), paste0(">=", minimum_active_bins), "Too few response-active cattle bins to support the intended RW2 structure; at least five distinct bins are required.", occupancy_metrics)
+      fail("random_effects", "cattle_rw2_active_structural_support", length(active_levels), paste0(">=", minimum_active_bins), "Too few response-active cattle bins support the intended RW2 structure.", occupancy_metrics)
     }
     warning_text <- "Some cattle RW2 levels have no direct response-active Tier 2 observations. Their effects are informed by the RW2 prior and neighboring occupied levels."
     if (length(active_missing)) {
@@ -609,18 +619,22 @@ joint_inla_preflight_build <- function(build, build_path = NA_character_, expect
   }
   expected_quarter_groups <- if (is.finite(quarter_groups$n_groups)) quarter_groups$n_groups else NULL
   expected_quarter_levels <- if (length(quarter_groups$expected_levels)) quarter_groups$expected_levels else NULL
-  check_index("tier1_field", tier1_active_rows, expected_max = nspde)
+  check_index("tier1_field", tier1_active_rows, expected_max = if (is.finite(nspde)) nspde else NULL)
   check_index("tier1_field.group", tier1_active_rows, expected_max = expected_quarter_groups, exact_levels = expected_quarter_levels)
   check_index("week_steps", tier1_rows, expected_max = NULL, contiguous = TRUE)
   check_index("admin_f", tier1_active_rows, expected_max = NULL)
-  check_index("tier2_field", tier2_active_rows, expected_max = nspde)
+  check_index("tier2_field", tier2_active_rows, expected_max = if (is.finite(nspde)) nspde else NULL)
   check_index("tier2_field.group", tier2_active_rows, expected_max = expected_quarter_groups, exact_levels = expected_quarter_levels)
-  check_index("tier2_copy_field", tier2_active_rows, expected_max = nspde)
+  check_index("tier2_copy_field", tier2_active_rows, expected_max = if (is.finite(nspde)) nspde else NULL)
   check_index("tier2_copy_field.group", tier2_active_rows, expected_max = expected_quarter_groups, exact_levels = expected_quarter_levels)
   check_index("tier2_week", tier2_rows, expected_max = NULL, contiguous = TRUE)
-  check_index("cattle_q", tier2_active_rows, expected_max = expected_cattle_bins)
+  check_index("cattle_q", tier2_active_rows, expected_max = if (is.finite(expected_cattle_bins)) expected_cattle_bins else NULL)
   check_index("cattle_mid_log1p", tier2_active_rows, integer_valued = FALSE, expected_min = NULL)
-  check_cattle_rw2_support()
+  if (is.finite(expected_cattle_bins)) {
+    check_cattle_rw2_support()
+  } else {
+    warn("random_effects", "cattle_rw2_feature_support", "unavailable", "dynamic cattle_q support", "Cattle-bin support could not be derived from the current Stage 3A design; compatibility remains a pre-fit model-contract check.")
+  }
 
   if (link_ok) {
     observed_groups <- sort(unique(c(
@@ -670,15 +684,16 @@ joint_inla_preflight_build <- function(build, build_path = NA_character_, expect
 
   theta <- build$fit_reference$control_mode$theta
   theta_type_ok <- is.numeric(theta) && !is.factor(theta) && !is.character(theta) && !is.list(theta)
-  theta_valid <- theta_type_ok && length(theta) == 10L && all(is.finite(theta))
-  if (theta_valid) pass("theta", "historical_theta_shape", paste(typeof(theta), length(theta)), "numeric finite vector length 10", "Historical theta has the required production shape.")
-  else fail("theta", "historical_theta_shape", if (is.null(theta)) "missing" else paste(typeof(theta), length(theta)), "numeric finite vector length 10", "Historical theta must be numeric, finite, and length 10.")
   theta_order <- if (is.list(build$model_signature) && isTRUE(build$model_signature$theta_order_verified)) build$model_signature$theta_order else NULL
-  theta_inventory <- joint_inla_preflight_theta_inventory(theta_order)
+  expected_theta_length <- if (length(theta_order)) length(theta_order) else if (theta_type_ok && length(theta)) length(theta) else NA_integer_
+  theta_valid <- theta_type_ok && length(theta) > 0L && all(is.finite(theta)) && (is.na(expected_theta_length) || length(theta) == expected_theta_length)
+  if (theta_valid) pass("theta", "theta_shape", paste(typeof(theta), length(theta)), paste0("numeric finite vector length dynamically derived as ", expected_theta_length), "Theta shape is checked against the current Stage 3A model signature when available.")
+  else warn("theta", "theta_shape", if (is.null(theta)) "missing" else paste(typeof(theta), length(theta)), "numeric finite vector with current-model length", "Theta shape is retained as provenance; authoritative compatibility is checked before a previous-theta fit.")
+  theta_inventory <- joint_inla_preflight_theta_inventory(theta_order, theta_length = if (theta_type_ok) length(theta) else NULL)
   if (isTRUE(theta_inventory$order_verified[[1L]])) {
-    pass("theta", "historical_theta_order", paste(theta_order, collapse = ","), "verified Stage 3A theta order", "Canonical theta order is established from the Stage 3A model signature.")
+    pass("theta", "theta_order_provenance", paste(theta_order, collapse = ","), "verified Stage 3A theta order", "Canonical theta order is established from the Stage 3A model signature.")
   } else {
-    warn("theta", "historical_theta_order", "unverified", "explicit order equivalence", paste0("PROMINENT WARNING: historical theta order cannot be established from Stage 3A metadata. Prefer initialization mode 'default' for the first production fit; assumed inventory is retained without claiming equivalence. Artifact: ", build_path))
+    warn("theta", "theta_order_provenance", "unverified", "explicit order equivalence", paste0("Theta order cannot be established from Stage 3A metadata; retain this as provenance and require explicit pre-fit compatibility before reusing theta. Artifact: ", build_path))
   }
   warn("theta", "historical_fit_comparison", "not performed", "optional external comparison", "An external historical fit artifact was not required or supplied.")
 

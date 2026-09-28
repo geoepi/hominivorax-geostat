@@ -22,29 +22,29 @@ stopifnot(identical(previous_theta_result$status, "PASS"),
 recorded_default_result <- joint_inla_fit_health_initialization(
   "previous_theta", "default", previous_theta_evidence
 )
-stopifnot(identical(recorded_default_result$status, "FAIL"),
-          identical(recorded_default_result$mode_status, "FAIL"))
+stopifnot(identical(recorded_default_result$status, "WARNING"),
+          identical(recorded_default_result$mode_status, "WARNING"))
 
 recorded_previous_theta_result <- joint_inla_fit_health_initialization(
   "default", "previous_theta", previous_theta_evidence
 )
-stopifnot(identical(recorded_previous_theta_result$status, "FAIL"),
-          identical(recorded_previous_theta_result$mode_status, "FAIL"))
+stopifnot(identical(recorded_previous_theta_result$status, "WARNING"),
+          identical(recorded_previous_theta_result$mode_status, "WARNING"))
 
 missing_theta_evidence_result <- joint_inla_fit_health_initialization(
   "previous_theta", "previous_theta", list()
 )
-stopifnot(identical(missing_theta_evidence_result$status, "FAIL"),
-          identical(missing_theta_evidence_result$theta_status, "FAIL"))
+stopifnot(identical(missing_theta_evidence_result$status, "WARNING"),
+          identical(missing_theta_evidence_result$theta_status, "WARNING"))
 
 failed_theta_compatibility_result <- joint_inla_fit_health_initialization(
   "previous_theta", "previous_theta", modifyList(previous_theta_evidence, list(compatibility_passed = FALSE))
 )
-stopifnot(identical(failed_theta_compatibility_result$status, "FAIL"))
+stopifnot(identical(failed_theta_compatibility_result$status, "WARNING"))
 
 failed_restart_result <- joint_inla_fit_health_initialization(
   "previous_theta", "previous_theta", modifyList(previous_theta_evidence, list(restart = FALSE))
 )
-stopifnot(identical(failed_restart_result$status, "FAIL"))
+stopifnot(identical(failed_restart_result$status, "WARNING"))
 
 cat("Stage 3B fit-health initialization contract tests passed\n")

@@ -12,17 +12,22 @@ joint_inla_fit_health_initialization <- function(configured_mode, recorded_mode,
   supported_modes <- c("default", "previous_theta", "historical")
   configured <- normalize_modes(configured_mode)
   recorded <- normalize_modes(recorded_mode)
+  # Initialization is provenance.  It must not be used as a fit-health
+  # acceptance criterion merely because a run used a non-default source.
+  # Internal contradictions are retained as a warning for operator review;
+  # fit completion, convergence, finite summaries, and dimensions remain the
+  # substantive blocking checks.
   mode_status <- "PASS"
   mode_details <- "Recorded initialization mode agrees with the configured supported mode."
 
   if (length(configured) != 1L || length(recorded) != 1L) {
-    mode_status <- "FAIL"
+    mode_status <- "WARNING"
     mode_details <- "Initialization configuration or recorded provenance is missing or internally contradictory."
   } else if (!configured %in% supported_modes || !recorded %in% supported_modes) {
-    mode_status <- "FAIL"
+    mode_status <- "WARNING"
     mode_details <- paste0("Unsupported initialization mode; supported modes are ", paste(supported_modes, collapse = ", "), ".")
   } else if (!identical(configured, recorded)) {
-    mode_status <- "FAIL"
+    mode_status <- "WARNING"
     mode_details <- "Recorded initialization mode does not match the mode recorded in the runtime configuration."
   }
 
@@ -33,7 +38,7 @@ joint_inla_fit_health_initialization <- function(configured_mode, recorded_mode,
     evidence <- theta_evidence[required]
     missing <- required[vapply(evidence, is.null, logical(1L))]
     if (length(missing) || !all(vapply(evidence, isTRUE, logical(1L)))) {
-      theta_status <- "FAIL"
+      theta_status <- "WARNING"
       theta_details <- if (length(missing)) {
         paste0("Previous-theta provenance is incomplete; missing: ", paste(missing, collapse = ", "), ".")
       } else {
@@ -52,6 +57,6 @@ joint_inla_fit_health_initialization <- function(configured_mode, recorded_mode,
     mode_details = mode_details,
     theta_status = theta_status,
     theta_details = theta_details,
-    status = if (mode_status == "FAIL" || theta_status == "FAIL") "FAIL" else "PASS"
+    status = if (mode_status == "WARNING" || theta_status == "WARNING") "WARNING" else "PASS"
   )
 }

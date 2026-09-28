@@ -3,6 +3,7 @@
 script_arg <- commandArgs(trailingOnly = FALSE)[grep("^--file=", commandArgs(trailingOnly = FALSE))][1L]
 repo_root <- normalizePath(file.path(dirname(sub("^--file=", "", script_arg)), ".."), mustWork = TRUE)
 source(file.path(repo_root, "R", "production_orchestration.R"), local = .GlobalEnv)
+source(file.path(repo_root, "R", "production_validation_gates.R"), local = .GlobalEnv)
 
 args <- commandArgs(trailingOnly = TRUE)
 option <- function(name, default = NULL) {
@@ -95,6 +96,23 @@ status_map <- function(contract) {
   out
 }
 
+record_gate <- function(contract, result) {
+  result <- production_gate_write(result, contract$paths$metadata, result$gate)
+  gate_field <- paste0(result$gate, "_gate_status")
+  contract[[gate_field]] <- result$outcome
+  contract$gate_results[[result$gate]] <- list(
+    outcome = result$outcome, warning_count = result$warning_count,
+    failure_count = result$failure_count, csv = result$csv_path, rds = result$rds_path
+  )
+  contract$warning_count <- sum(vapply(contract$gate_results, function(x) as.integer(x$warning_count %||% 0L), integer(1L)))
+  outcomes <- vapply(contract$gate_results, function(x) as.character(x$outcome), character(1L))
+  contract$overall_status <- if (any(outcomes == "FAIL")) "FAIL" else if (any(outcomes == "PASS_WITH_WARNINGS")) "PASS_WITH_WARNINGS" else "PASS"
+  production_orchestration_write_manifest(contract)
+  production_gate_print(result)
+  if (identical(result$outcome, "FAIL")) stop(toupper(result$gate), " gate failed; review ", result$csv_path, call. = FALSE)
+  contract
+}
+
 stage_prepare <- function(contract) {
   start <- Sys.time()
   production_orchestration_write_status(contract, "prepare", "RUNNING", start_time = start, input_artifact = contract$input$observations)
@@ -104,8 +122,8 @@ stage_prepare <- function(contract) {
     run_command(file.path(repo_root, "scripts", "build_joint_inla.R"), c("--config", contract$generated_configs$joint_inla, "--output", contract$paths$stage3a))
     run_command(file.path(repo_root, "scripts", "run_joint_inla.R"), c("--config", contract$generated_configs$fit, "--output", contract$paths$preflight, "--dry-run"))
     contract$dynamic_dimensions <- production_orchestration_dimension_contract(file.path(contract$paths$stage2, "joint_model_inputs.rds"), file.path(contract$paths$stage3a, "joint_inla_build.rds"))
-    production_orchestration_write_manifest(contract)
-    production_orchestration_write_status(contract, "prepare", "PASS", start_time = start, input_artifact = contract$input$observations, output_artifact = file.path(contract$paths$stage3a, "joint_inla_build.rds"))
+    contract <- record_gate(contract, production_gate_prepare(contract))
+    production_orchestration_write_status(contract, "prepare", if (identical(contract$prepare_gate_status, "PASS_WITH_WARNINGS")) "WARNING" else "PASS", start_time = start, input_artifact = contract$input$observations, output_artifact = file.path(contract$paths$stage3a, "joint_inla_build.rds"))
     invisible(contract)
   }, error = function(error) {
     production_orchestration_write_status(contract, "prepare", "FAIL", start_time = start, input_artifact = contract$input$observations, error = error)
@@ -124,8 +142,8 @@ stage_fit <- function(contract) {
       eq("stage2", file.path(contract$paths$stage2, "joint_model_inputs.rds")),
       eq("output-dir", contract$paths$fit_health), eq("run-id", contract$run_id)
     ))
-    production_orchestration_write_manifest(contract)
-    production_orchestration_write_status(contract, "fit", "PASS", start_time = start, input_artifact = file.path(contract$paths$stage3a, "joint_inla_build.rds"), output_artifact = file.path(contract$paths$stage3b, "joint_model_fit.rds"))
+    contract <- record_gate(contract, production_gate_fit(contract))
+    production_orchestration_write_status(contract, "fit", if (identical(contract$fit_gate_status, "PASS_WITH_WARNINGS")) "WARNING" else "PASS", start_time = start, input_artifact = file.path(contract$paths$stage3a, "joint_inla_build.rds"), output_artifact = file.path(contract$paths$stage3b, "joint_model_fit.rds"))
     invisible(contract)
   }, error = function(error) {
     production_orchestration_write_status(contract, "fit", "FAIL", start_time = start, input_artifact = file.path(contract$paths$stage3a, "joint_inla_build.rds"), error = error)
@@ -205,10 +223,10 @@ stage_postfit <- function(contract, fit_job_id = "not-under-scheduler") {
     if (identical(reporting_status, "FAIL")) stop("Post-fit reporting QA reported FAIL.")
     contract$dynamic_rpi_threshold <- as.numeric(threshold_artifact$threshold_value)
     contract$final_reporting_path <- normalizePath(contract$paths$reporting, mustWork = TRUE)
-    contract$overall_status <- if (identical(reporting_status, "WARNING")) "WARNING" else "PASS"
+    contract <- record_gate(contract, production_gate_postfit(contract, dims))
     contract$final_summary_path <- production_orchestration_write_final_summary(contract)
     production_orchestration_write_manifest(contract)
-    production_orchestration_write_status(contract, "postfit", if (identical(contract$overall_status, "WARNING")) "WARNING" else "PASS", start_time = start, input_artifact = file.path(contract$paths$stage3b, "joint_model_fit.rds"), output_artifact = threshold_path)
+    production_orchestration_write_status(contract, "postfit", if (identical(contract$postfit_gate_status, "PASS_WITH_WARNINGS")) "WARNING" else "PASS", start_time = start, input_artifact = file.path(contract$paths$stage3b, "joint_model_fit.rds"), output_artifact = threshold_path)
     invisible(contract)
   }, error = function(error) {
     production_orchestration_write_status(contract, "postfit", "FAIL", start_time = start, input_artifact = file.path(contract$paths$stage3b, "joint_model_fit.rds"), error = error)

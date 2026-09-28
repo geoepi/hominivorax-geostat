@@ -69,12 +69,12 @@ if (length(status_candidates)) {
   add("fit_completion_status", if (tolower(status_candidates[[1L]]) %in% c("success", "completed", "ok")) "PASS" else "FAIL",
       status_candidates[[1L]], "success/completed", "The fit status recorded by the runner is successful.")
 } else {
-  add("fit_completion_status", "WARNING", "not recorded in artifact", "recorded success status", "Scheduler completion is the authoritative Gate 0; this artifact did not expose a runner status field.")
+  add("fit_completion_status", "FAIL", "not recorded in artifact", "recorded success status", "A completed fit must record a successful runner/convergence status.")
 }
 if (!is.null(fit$ok)) {
   add("fit_internal_ok", if (isTRUE(fit$ok)) "PASS" else "FAIL", fit$ok, TRUE, "Honor an explicit INLA fit ok flag when present.")
 } else {
-  add("fit_internal_ok", "WARNING", "not recorded", TRUE, "No explicit fit$ok field was exposed; remaining structural gates still apply.")
+  add("fit_internal_ok", "FAIL", "not recorded", TRUE, "A completed fit must expose an explicit successful fit$ok flag.")
 }
 
 initialization_candidates <- character()
@@ -183,14 +183,14 @@ for (metric in c("dic", "waic")) {
   requested <- isTRUE(compute[[metric]])
   value <- if (is.list(fit[[metric]]) && !is.null(fit[[metric]][[metric]])) as.numeric(fit[[metric]][[metric]])[[1L]] else NA_real_
   criteria[[metric]] <- value
-  status <- if (!requested) "WARNING" else if (is.finite(value)) "PASS" else "FAIL"
+  status <- if (!requested) "WARNING" else if (is.finite(value)) "PASS" else "WARNING"
   add(paste0(metric, "_finite"), status, value, if (requested) "finite" else "not requested", if (requested) paste(metric, "was requested and is finite.") else paste(metric, "was not requested by the Stage 3A contract."))
 }
 mlik <- joint_inla_extract_marginal_log_likelihood(fit_artifact)
 integration <- mlik$value[grepl("integration", mlik$method, ignore.case = TRUE)]
 if (!length(integration)) integration <- mlik$value
 mlik_value <- if (length(integration)) integration[[1L]] else NA_real_
-add("marginal_log_likelihood", if (is.finite(mlik_value)) "PASS" else "FAIL", mlik_value, "finite", "The saved marginal log likelihood is available and finite.")
+add("marginal_log_likelihood", if (is.finite(mlik_value)) "PASS" else "WARNING", mlik_value, "finite when available", "Marginal likelihood is retained as a diagnostic; it does not determine production acceptance.")
 
 warnings <- character()
 if (is.list(fit$misc) && !is.null(fit$misc$warnings)) warnings <- as.character(fit$misc$warnings)

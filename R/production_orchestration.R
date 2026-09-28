@@ -202,6 +202,8 @@ production_orchestration_contract <- function(config_path, repo_root, run_id = N
     input = list(observations = normalizePath(cfg$input$observations, mustWork = TRUE), sha256 = production_orchestration_hash_file(cfg$input$observations), rows = nrow(observations), columns = names(observations), coordinate_fields = c("lon", "lat"), crs = "EPSG:4326"),
     submission_timestamp_utc = format(Sys.time(), "%Y-%m-%dT%H:%M:%SZ", tz = "UTC"), horizon = horizon, dynamic_dimensions = NULL,
     dynamic_rpi_threshold = NA_real_, final_reporting_path = NA_character_, final_summary_path = NA_character_, overall_status = "SUBMITTED",
+    prepare_gate_status = "NOT_RUN", fit_gate_status = "NOT_RUN", postfit_gate_status = "NOT_RUN",
+    warning_count = 0L, gate_results = list(),
     stage_configs = cfg$stage_configs, settings = list(cfg = cfg, stages = stages), scheduler = production_orchestration_scheduler_config(cfg),
     job_ids = list(prepare = NA_character_, fit = NA_character_, postfit = NA_character_),
     paths = list(stage1 = file.path(root, "stage1"), stage2 = file.path(root, "stage2"), stage3a = file.path(root, "stage3a"), preflight = file.path(root, "preflight"), stage3b = file.path(root, "stage3b"), fit_health = file.path(root, "fit_health"), extraction = file.path(root, "extraction"), validation = file.path(root, "validation"), projection = file.path(root, "projection"), raster = file.path(root, "raster"), structural = file.path(root, "structural"), masked = file.path(root, "masked_structural_rpi"), reporting = file.path(root, "reporting"), metadata = file.path(root, "metadata"), logs = file.path(root, "logs"))
@@ -266,14 +268,18 @@ production_orchestration_write_final_summary <- function(contract, path = file.p
   summary <- list(
     status = "PRODUCTION PIPELINE COMPLETE",
     run_id = contract$run_id,
-    stages = list(prepare = "PASS", fit = "PASS", postfit = contract$overall_status %||% "PASS"),
+    stages = list(prepare = contract$prepare_gate_status %||% "NOT_RUN", fit = contract$fit_gate_status %||% "NOT_RUN", postfit = contract$postfit_gate_status %||% "NOT_RUN"),
     modeled_weeks = contract$dynamic_dimensions$modeled_weeks %||% NA_integer_,
     supported_cells = contract$dynamic_dimensions$supported_cells %||% NA_integer_,
     prediction_rows = contract$dynamic_dimensions$prediction_rows %||% NA_integer_,
     dynamic_rpi_threshold = contract$dynamic_rpi_threshold %||% NA_real_,
     run_manifest = file.path(contract$paths$metadata, "run_manifest.yml"),
     final_reporting_path = contract$final_reporting_path %||% NA_character_,
-    overall_status = contract$overall_status %||% "PASS"
+    overall_status = contract$overall_status %||% "PASS",
+    prepare_gate_status = contract$prepare_gate_status %||% "NOT_RUN",
+    fit_gate_status = contract$fit_gate_status %||% "NOT_RUN",
+    postfit_gate_status = contract$postfit_gate_status %||% "NOT_RUN",
+    warning_count = contract$warning_count %||% 0L
   )
   production_orchestration_write_yaml(summary, path)
   normalizePath(path, mustWork = TRUE)
@@ -310,7 +316,7 @@ production_orchestration_select_resume_stage <- function(statuses, from = NULL, 
   if (!is.null(from)) return(production_orchestration_stage_alias(from))
   for (stage in c("prepare", "fit", "postfit")) {
     if (stage == "postfit" && through != "postfit") break
-    if (is.null(statuses[[stage]]) || !identical(toupper(as.character(statuses[[stage]]$status)), "PASS")) return(stage)
+    if (is.null(statuses[[stage]]) || !toupper(as.character(statuses[[stage]]$status)) %in% c("PASS", "WARNING")) return(stage)
   }
   NULL
 }

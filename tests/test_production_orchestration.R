@@ -3,6 +3,7 @@ suppressPackageStartupMessages(library(testthat))
 repo_candidates <- unique(c(getwd(), normalizePath(file.path(getwd(), ".."), mustWork = FALSE)))
 repo_root <- repo_candidates[file.exists(file.path(repo_candidates, "R", "production_orchestration.R"))][[1L]]
 source(file.path(repo_root, "R", "production_orchestration.R"), local = .GlobalEnv)
+source(file.path(repo_root, "R", "production_validation_gates.R"), local = .GlobalEnv)
 
 make_stage2_fixture <- function(path, quarter_groups = 8L, noncontiguous = FALSE) {
   n_weeks <- quarter_groups * 2L
@@ -84,6 +85,45 @@ test_that("resume selection skips passed stages and supports explicit stage rang
   expect_identical(production_orchestration_select_resume_stage(statuses, through = "postfit"), "fit")
   expect_identical(production_orchestration_select_resume_stage(list(prepare = list(status = "PASS"), fit = list(status = "PASS"), postfit = list(status = "PASS")), through = "postfit"), NULL)
   expect_identical(production_orchestration_select_resume_stage(statuses, from = "postfit", through = "postfit"), "postfit")
+})
+
+test_that("compact gate results use stable schema and failure semantics", {
+  pass <- production_gate_row("fit", "fit_ok", "BLOCKING", "PASS", "fit completed")
+  warning <- production_gate_row("fit", "dic", "WARNING", "WARN", "historical diagnostic changed")
+  provenance <- production_gate_row("fit", "theta_source", "PROVENANCE", "INFO", "previous theta recorded")
+  result <- production_gate_finalize(rbind(pass, warning, provenance))
+  expect_identical(result$outcome, "PASS_WITH_WARNINGS")
+  expect_identical(names(result$audit), c("gate", "check", "severity", "status", "message", "artifact", "expected", "observed"))
+  expect_equal(result$warning_count, 1L)
+  expect_identical(production_gate_finalize(pass)$outcome, "PASS")
+  expect_identical(production_gate_finalize(production_gate_row("fit", "fit_ok", "BLOCKING", "FAIL"))$outcome, "FAIL")
+})
+
+test_that("historical diagnostics and dynamic provenance do not fail production", {
+  rows <- rbind(
+    production_gate_row("postfit", "historical_rpi", "WARNING", "WARN", "threshold differs from old report"),
+    production_gate_row("postfit", "rpi_threshold", "BLOCKING", "PASS", "current threshold reproduces"),
+    production_gate_row("postfit", "artifact_sha", "PROVENANCE", "INFO", "sha recorded")
+  )
+  expect_identical(production_gate_finalize(rows)$outcome, "PASS_WITH_WARNINGS")
+})
+
+test_that("missing artifacts, nonfinite required outputs, and provenance mismatch remain blocking", {
+  result <- production_gate_finalize(rbind(
+    production_gate_row("prepare", "missing_artifact", "BLOCKING", "FAIL", "required artifact missing"),
+    production_gate_row("prepare", "finite_design", "BLOCKING", "FAIL", "required design is nonfinite"),
+    production_gate_row("prepare", "parent_sha", "BLOCKING", "FAIL", "parent SHA mismatch")
+  ))
+  expect_identical(result$outcome, "FAIL")
+  expect_equal(result$failure_count, 3L)
+})
+
+test_that("validation inventory records blocking, warning, and provenance policy", {
+  inventory <- production_validation_inventory()
+  expect_true(all(c("gate", "check_name", "current_location", "current_severity", "proposed_severity", "reason", "upstream_duplicate", "historical_only", "dynamic_or_hardcoded", "action") %in% names(inventory)))
+  expect_true(any(inventory$check_name == "theta_compatibility" & inventory$proposed_severity == "BLOCKING"))
+  expect_true(any(inventory$check_name == "dic_waic_comparison" & inventory$proposed_severity == "WARNING"))
+  expect_true(any(inventory$check_name == "artifact_shas" & inventory$proposed_severity == "PROVENANCE"))
 })
 
 cat("Production orchestration tests passed\n")
