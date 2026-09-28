@@ -1,71 +1,133 @@
-# Hominivorax-Geostat
+# hominivorax-geostat
 
-Hominivorax-Geostat is a joint geostatistical workflow for studying the spatial and temporal dynamics of New World screwworm (*Cochliomyia hominivorax*). It separates detection/report occurrence from abundance intensity so that surveillance effort and ecological signal are not treated as the same process.
+`hominivorax-geostat` is a model-based ecological workflow for understanding
+where New World screwworm (*Cochliomyia hominivorax*) is reported and how
+modeled occurrence intensity changes across space and time.
 
-## What the model does
+The workflow is designed for surveillance and ecological analysis. It combines
+cleaned observations with environmental, land-use, livestock, spatial, and
+temporal information. Because surveillance is uneven, a missing report is not
+treated as proof of biological absence.
 
-The workflow has two linked responses:
+## Purpose
 
-- Tier 1 models reported detections against spatial and temporal background support. Background locations are availability support, not confirmed absences.
-- Tier 2 models polygon-level positive counts with terrestrial-area exposure and environmental, livestock, spatial, and temporal effects.
+The project characterizes spatial and temporal patterns in New World screwworm
+occurrence and positive-count intensity. It keeps detection/reporting
+opportunity distinct from the intensity of positive counts, then produces
+model-derived surfaces that can be inspected, validated, mapped, and compared
+across epidemiological weeks.
 
-Tier 2 borrows a spatial signal from Tier 1 through the accepted copy-field structure while retaining its own spatial field. The [model workflow overview](docs/model-workflow-overview.md) explains the design for ecological readers; the [model specification](docs/model-specification.md) records the technical contract.
-
-## Production workflow
+The broad workflow is:
 
 ```text
-raw observations + covariates
+observations + environmental information
         ↓
-Stage 1  run_preprocessing.R       → model_inputs.rds
+spatiotemporal statistical model
         ↓
-Stage 2  prepare_joint_model.R     → joint_model_inputs.rds
+fitted and structural spatial predictions
         ↓
-Stage 3A build_joint_inla.R       → joint_inla_build.rds
+physiological temperature constraint
         ↓
-Stage 3B run_joint_inla.R         → joint_model_fit.rds
+persistence-oriented RPI classification
         ↓
-validation → projection → raster reconstruction → post-fit reporting → RPI
+validation summaries, maps, and reporting products
 ```
 
-The default production temporal endpoint is the last complete epidemiological week represented by the cleaned observation data. Tier 1 positive cell-week thinning is configurable and defaults to the accepted seed `1976`. A successful Stage 3B fit writes a reusable `joint_model_theta_init.rds` artifact, but theta reuse is opt-in and compatibility-checked.
+## What the model produces
 
-## Primary outputs
+- **Fitted/model-reconstruction outputs** retain the full modeled spatial and
+  temporal structure. They support interpretation of the fitted model and
+  reproducible reconstruction of predictions.
+- **Structural ecological predictions** remove the fitted SPDE spatial
+  contributions so that modeled environmental and temporal structure can be
+  examined without the dataset-specific residual spatial surface.
+- **Temperature-masked structural potential abundance** applies the current
+  physiological rule based on weekly minimum temperature of at least 14.5 °C.
+  It is a model-derived potential-abundance index, not a direct count of
+  animals.
+- **RPI** is a persistence-oriented index derived from the masked structural
+  product. Its threshold is recalculated for each run from same-week
+  observation/model pairs; the class boundaries are fixed. RPI is a derived
+  ecological classification, not direct proof of biological persistence.
 
-- Tier 1 detection probability surfaces and presence/background diagnostics.
-- Tier 2 intensity and held-out positive-count diagnostics.
-- Posterior component summaries, temporal effects, livestock effects, and standardized potential-abundance surfaces.
-- Reproductive Persistence Index (RPI) products when the semantic and calibration gates pass.
+## How the workflow is used
 
-Potential abundance is a standardized derived quantity: Tier 2 intensity multiplied by nominal raster-cell area. It is not a direct posterior expected count for every partial or coastal cell.
+The production workflow runs three connected stages:
 
-## Reproducibility
-
-Tracked example configurations are portable. Copy the relevant example to an ignored local configuration, provide private inputs, and run the staged scripts. Dynamic covariate files are indexed by epidemiological week; missing required weeks fail explicitly.
-
-```powershell
-& 'C:\Program Files\R\R-4.5.0\bin\Rscript.exe' scripts/run_preprocessing.R --config config/preprocessing.yml
-& 'C:\Program Files\R\R-4.5.0\bin\Rscript.exe' scripts/prepare_joint_model.R --config config/joint_model.yml
-& 'C:\Program Files\R\R-4.5.0\bin\Rscript.exe' scripts/build_joint_inla.R --config config/joint_inla.yml
-& 'C:\Program Files\R\R-4.5.0\bin\Rscript.exe' scripts/run_joint_inla.R --config config/joint_inla_fit.yml
+```text
+Prepare → Fit → Post-fit
 ```
 
-Do not commit private observations, fitted objects, production rasters, credentials, or machine-specific configuration. GitHub is the canonical source for code, configuration templates, tests, and documentation; Atlas is an execution environment for private data and large outputs. See [Atlas environment notes](docs/atlas-environment.md) and [data and preprocessing](docs/data-and-preprocessing.md).
+Prepare builds the model inputs and model definition, Fit estimates the joint
+model, and Post-fit creates validation, weekly prediction, raster, structural,
+temperature-masked, RPI, and reporting products. The workflow records the
+input and configuration checksums, resolved time horizon, artifact lineage,
+stage status, and diagnostics for each run.
 
-## Documentation
+## Quick start
 
-- [Model workflow overview](docs/model-workflow-overview.md)
-- [Model specification](docs/model-specification.md)
-- [Interpretation guide](docs/interpretation-guide.md)
-- [Data and preprocessing](docs/data-and-preprocessing.md)
-- [Validation](docs/validation.md)
-- [Post-fit reporting](docs/post-fit-reporting.md)
-- [Production workflow and provenance](docs/production-workflow.md)
-- [Deferred development roadmap](docs/deferred-development.md)
-- [GitHub/local/Atlas synchronization](docs/synchronization.md)
-- [Developer contracts](docs/developer/)
+Create a private production configuration from the tracked template, add the
+authorized observation and covariate paths, and keep the resulting file
+untracked:
 
-The rendered public site remains configured through `_quarto.yml` with output in `docs/`. Rendered pages are supporting documentation; the tracked R scripts and tests are the executable contract.
+```bash
+cp config/production.example.yml config/production.yml
+./scripts/submit_full_pipeline.sh --config config/production.yml
+```
 
-## Status
+The command submits the Prepare → Fit → Post-fit workflow. See the
+[user workflow guide](docs/user-workflow.md) for what to check before and
+after submission. Scheduler options, dry-runs, resumption, and resource
+profiles are documented in the [production orchestration guide](docs/developer/production-orchestration.md).
 
-The repository contains the accepted staged workflow, validation and reporting interfaces, and a consolidation branch for production-workflow closure. New ecological interpretation and model-development experiments are intentionally deferred; see the roadmap.
+## Where to find results
+
+Each run receives its own output directory. Start with:
+
+- the run manifest and final summary for provenance and stage status;
+- validation and diagnostics for holdout checks, reconstruction, and model
+  health;
+- projection and raster directories for weekly surfaces;
+- structural and masked directories for ecological prediction products; and
+- reporting outputs for maps, RPI, summaries, and product metadata.
+
+The run manifest is the best first point of reference because it records the
+run ID, source and configuration checksums, dynamic dimensions, output paths,
+gate outcomes, and scheduler IDs.
+
+## Main scientific caveats
+
+Presence/background validation evaluates ranking against the chosen support
+design; it is not classification accuracy. Structural surfaces are
+model-derived ecological predictions. Potential abundance combines modeled
+Tier 2 intensity with nominal cell area and is an index rather than a direct
+posterior count for every cell. RPI summarizes modeled persistence potential
+under its calibration and temporal rules; it does not observe persistence
+directly.
+
+## Repository structure
+
+```text
+R/           reusable model, validation, and reporting functions
+scripts/     runnable workflow entry points
+config/      tracked configuration templates
+docs/        user and technical documentation
+tests/       automated implementation and contract tests
+```
+
+## Technical documentation
+
+Use the [documentation index](docs/README.md) to navigate model architecture,
+workflow operations, validation, provenance, reporting semantics, and release
+procedures. The [model workflow overview](docs/model-workflow-overview.md)
+provides the ecological model explanation; technical contracts are maintained
+under [docs/developer](docs/developer/).
+
+## Citation and status
+
+Please cite the project and the associated scientific publication when the
+citation details are finalized. The repository contains the accepted
+full-horizon workflow, dynamic production validation, structural and
+temperature-masked reporting products, and the documentation needed to run
+and interpret the workflow. Future scientific recalibration and sensitivity
+analyses remain intentionally separate from this release.

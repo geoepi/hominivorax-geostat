@@ -40,8 +40,10 @@ The current four-stage contract uses Tier 1 `binomial` and Tier 2 `nbinomial` li
 the two SPDE fields plus estimated shared copy field, Tier 1 and Tier 2 weekly
 RW1 effects, administrative IID, and the cattle RW2 support. The fitting API
 uses the joint stack data and A matrix through `control.predictor`, with the
-row-specific `data$link` vector and `E = data$e`. The validated initialization
-mode is `default`; historical theta vectors are not restored.
+row-specific `data$link` vector and `E = data$e`. Initialization mode and theta
+provenance are recorded for reproducibility. Reuse of a theta vector is opt-in
+and compatibility-checked; initialization mode by itself is not a fit-health
+criterion.
 
 The preprocessing contract resolves `end_week: auto_last_complete_observation_week`
 from the observed temporal domain, excludes incomplete trailing weeks, and
