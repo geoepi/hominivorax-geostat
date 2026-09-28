@@ -87,6 +87,14 @@ test_that("resume selection skips passed stages and supports explicit stage rang
   expect_identical(production_orchestration_select_resume_stage(statuses, from = "postfit", through = "postfit"), "postfit")
 })
 
+test_that("Slurm wrap commands are protected as one argument", {
+  command <- production_orchestration_command_text("Rscript", "scripts/run_pipeline.R", c("--mode", "stage", "--stage", "prepare"))
+  wrapped <- production_orchestration_sbatch_wrap_arg(command)
+  expect_match(wrapped, "^--wrap=")
+  expect_gt(nchar(wrapped), nchar(paste0("--wrap=", command)))
+  expect_true(grepl("^--wrap='", wrapped) || grepl('^--wrap="', wrapped))
+})
+
 test_that("compact gate results use stable schema and failure semantics", {
   pass <- production_gate_row("fit", "fit_ok", "BLOCKING", "PASS", "fit completed")
   warning <- production_gate_row("fit", "dic", "WARNING", "WARN", "historical diagnostic changed")

@@ -28,6 +28,7 @@ through_arg <- option("through", "postfit")
 resume_arg <- option("resume")
 fit_job_id_arg <- option("fit-job-id", Sys.getenv("PIPELINE_FIT_JOB_ID", unset = "not-under-scheduler"))
 if (is.null(resume_arg) && flag("resume")) resume_arg <- run_id_arg
+if (!is.null(resume_arg) && is.null(run_id_arg)) run_id_arg <- resume_arg
 if (flag("resume") && is.null(run_id_arg)) stop("--resume requires --run-id for the existing run to resume.", call. = FALSE)
 
 print_contract <- function(contract, dry = FALSE) {
@@ -246,7 +247,8 @@ if (mode %in% c("submit", "direct", "dry-run")) {
   dry <- identical(mode, "dry-run") || flag("dry-run")
   if (!dry) contract <- prepare_contract(contract, write_files = TRUE)
   through <- production_orchestration_stage_alias(through_arg)
-  from <- production_orchestration_select_resume_stage(if (dry) list() else status_map(contract), from_arg, through)
+  resume_statuses <- if (dry && is.null(resume_arg)) list() else status_map(contract)
+  from <- production_orchestration_select_resume_stage(resume_statuses, from_arg, through)
   if (is.null(from)) {
     print_contract(contract, dry = dry)
     cat("All requested stages already have PASS status; nothing to run.\n")
@@ -294,7 +296,7 @@ if (mode %in% c("submit", "direct", "dry-run")) {
                      paste0("--output=", file.path(contract$paths$logs, paste0(stage, "-%j.out"))),
                      paste0("--error=", file.path(contract$paths$logs, paste0(stage, "-%j.err"))),
                      if (!is.null(dependency)) paste0("--dependency=", dependency),
-                     paste0("--wrap=", wrap))
+                     production_orchestration_sbatch_wrap_arg(wrap))
     value <- system2("sbatch", sbatch_args, stdout = TRUE, stderr = TRUE)
     if (!length(value) || !is.null(attr(value, "status"))) stop("Unable to submit ", stage, " job: ", paste(value, collapse = " "), call. = FALSE)
     jobs[[stage]] <- sub(";.*$", "", trimws(value[[length(value)]]))

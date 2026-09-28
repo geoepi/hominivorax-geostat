@@ -325,3 +325,7 @@ production_orchestration_command_text <- function(rscript, script, args) {
   paste(c(shQuote(rscript, type = "sh"), shQuote(script, type = "sh"), vapply(args, shQuote, character(1L), type = "sh")), collapse = " ")
 }
 
+production_orchestration_sbatch_wrap_arg <- function(command) {
+  paste0("--wrap=", shQuote(command, type = "sh"))
+}
+
