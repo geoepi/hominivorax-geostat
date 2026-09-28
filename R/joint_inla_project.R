@@ -606,8 +606,9 @@ joint_inla_project_hash_file <- function(path) {
 }
 
 joint_inla_project_write_outputs <- function(reconstruction, prediction, spatial_validation, components,
-                                            output_dir, run_id = "20725437", overwrite = FALSE,
+                                            output_dir, run_id = NULL, overwrite = FALSE,
                                             input_paths = list(), response_scale = NULL) {
+  if (is.null(run_id)) run_id <- paste0("projection_", format(Sys.time(), "%Y%m%d_%H%M%S"))
   dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
   weekly_dir <- file.path(output_dir, "weekly")
   dir.create(weekly_dir, recursive = TRUE, showWarnings = FALSE)

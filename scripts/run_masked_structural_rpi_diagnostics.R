@@ -26,7 +26,7 @@ parse_args <- function(args) {
 }
 arg <- function(values, name, default = NULL) if (is.null(values[[name]])) default else values[[name]]
 args <- parse_args(commandArgs(trailingOnly = TRUE))
-required <- c("stage2", "structural-root", "observations", "canonical-report-root", "output-root")
+required <- c("stage2", "structural-root", "observations", "output-root")
 missing <- required[vapply(required, function(name) is.null(args[[name]]) || !nzchar(as.character(args[[name]])), logical(1L))]
 if (length(missing)) stop("Supply explicit arguments: ", paste(paste0("--", missing), collapse = ", "))
 
@@ -35,13 +35,16 @@ structural_root <- arg(args, "structural-root")
 observation_path <- arg(args, "observations")
 canonical_report_root <- arg(args, "canonical-report-root")
 output_root <- arg(args, "output-root")
-run_id <- arg(args, "run-id", "20762325_masked")
+run_id <- arg(args, "run-id", paste0("masked_structural_", format(Sys.time(), "%Y%m%d_%H%M%S")))
+expected_weeks_arg <- arg(args, "expected-weeks")
+expected_cells_arg <- arg(args, "expected-cells")
 coordinate_source <- arg(args, "coordinate-source", "lonlat")
 source_crs <- arg(args, "source-crs", "EPSG:4326")
-threshold_celsius <- 14.5
+threshold_celsius <- as.numeric(arg(args, "threshold-celsius", "14.5"))
 thermal_cutoffs <- c(13.5, 14.5, 15.5)
 overwrite <- isTRUE(args[["overwrite"]])
-required_paths <- c(stage2 = stage2_path, structural_root = structural_root, observations = observation_path, canonical_report_root = canonical_report_root)
+if (length(threshold_celsius) != 1L || !is.finite(threshold_celsius)) stop("--threshold-celsius must be one finite numeric value.")
+required_paths <- c(stage2 = stage2_path, structural_root = structural_root, observations = observation_path)
 missing_paths <- required_paths[!file.exists(required_paths)]
 if (length(missing_paths)) stop("Required input path(s) do not exist: ", paste(names(missing_paths), missing_paths, sep = "=", collapse = "; "))
 if (dir.exists(output_root) && length(list.files(output_root, recursive = TRUE, all.files = TRUE, no.. = TRUE)) && !overwrite) stop("Refusing to write into non-empty output root without --overwrite: ", output_root)
@@ -51,9 +54,10 @@ stage2 <- readRDS(stage2_path)
 grid <- stage2$prediction_grid
 if (!is.data.frame(grid)) stop("Stage 2 artifact does not contain prediction_grid.")
 structural_files <- sort(list.files(file.path(structural_root, "structural_potential_abundance"), pattern = "^structural_potential_abundance_y[0-9]{4}_w[0-9]{2}\\.tif$", full.names = TRUE))
-if (length(structural_files) != 133L) stop("Existing structural potential stack must contain exactly 133 layers.")
+if (!length(structural_files)) stop("Existing structural potential stack is empty.")
 week_keys <- sub("^structural_potential_abundance_y([0-9]{4})_w([0-9]{2})\\.tif$", "\\1-W\\2", basename(structural_files))
-if (anyDuplicated(week_keys) || !identical(week_keys[[1L]], "2024-W01") || !identical(week_keys[[length(week_keys)]], "2026-W29")) stop("Structural stack does not cover 2024-W01 through 2026-W29 exactly.")
+expected_weeks <- if (is.null(expected_weeks_arg)) length(week_keys) else as.integer(expected_weeks_arg)
+if (length(expected_weeks) != 1L || is.na(expected_weeks) || expected_weeks < 1L || length(week_keys) != expected_weeks || anyDuplicated(week_keys)) stop("Structural stack does not match the dynamic modeled-week contract.")
 
 structural_stack <- terra::rast(structural_files)
 template <- structural_stack[[1L]]
@@ -62,7 +66,8 @@ observations <- structural_read_authoritative_observations(observation_path, tar
 if (!identical(observations$provenance$coordinate_source, "lonlat")) stop("This diagnostic requires authoritative lon/lat observations.")
 
 cells <- unique(grid[c("cell_id", "x", "y")])
-if (nrow(cells) != 15899L || nrow(grid) != 133L * 15899L) stop("Stage 2 support is not 133 weeks by 15,899 cells.")
+expected_cells <- if (is.null(expected_cells_arg)) nrow(cells) else as.integer(expected_cells_arg)
+if (length(expected_cells) != 1L || is.na(expected_cells) || expected_cells < 1L || nrow(cells) != expected_cells || nrow(grid) != expected_weeks * expected_cells) stop("Stage 2 support does not match the dynamic modeled-week and supported-cell contract.")
 ids <- as.integer(cells$cell_id)
 if (any(!is.finite(ids)) || any(ids < 1L | ids > terra::ncell(template))) stop("Stage 2 cell IDs do not map to the structural raster template.")
 template_xy <- terra::xyFromCell(template, ids)
@@ -70,17 +75,18 @@ geometry_error <- max(c(abs(template_xy[, 1L] - as.numeric(cells$x)), abs(templa
 stage2_crs <- stage2$joint_model_config$study$projected_crs %||% stage2$configuration$study$projected_crs
 crs_compatible <- is.null(stage2_crs) || isTRUE(tryCatch(sf::st_crs(stage2_crs) == sf::st_crs(target_crs), error = function(e) FALSE))
 grid_week <- paste(as.integer(grid$epiyear), sprintf("W%02d", as.integer(grid$epiweek)), sep = "-")
+if (!identical(week_keys, unique(grid_week))) stop("Structural stack week labels do not match Stage 2 temporal support.")
 week_rows <- lapply(week_keys, function(key) which(grid_week == key))
 names(week_rows) <- week_keys
 temperature_variable <- "mintemp"
 temperature_audit <- structural_validate_temperature_alignment(grid, length(week_keys), nrow(cells), temperature_variable)
 alignment <- list(
-  weeks = length(week_keys), expected_weeks = 133L, cells = nrow(cells), expected_cells = 15899L,
+  weeks = length(week_keys), expected_weeks = expected_weeks, cells = nrow(cells), expected_cells = expected_cells,
   week_labels_match = identical(week_keys, unique(grid_week)), crs_compatible = crs_compatible,
   supported_geometry_compatible = is.finite(geometry_error) && geometry_error <= 1e-7,
   geometry_max_absolute_difference = geometry_error, no_missing_temperature = temperature_audit$missing_values == 0L,
-  no_silent_temporal_recycling = !temperature_audit$duplicate_week_cell, pass = length(week_keys) == 133L &&
-    nrow(cells) == 15899L && isTRUE(temperature_audit$pass) && isTRUE(crs_compatible) &&
+  no_silent_temporal_recycling = !temperature_audit$duplicate_week_cell, pass = length(week_keys) == expected_weeks &&
+    nrow(cells) == expected_cells && isTRUE(temperature_audit$pass) && isTRUE(crs_compatible) &&
     is.finite(geometry_error) && geometry_error <= 1e-7 && !temperature_audit$duplicate_week_cell
 )
 if (!isTRUE(alignment$pass)) stop("Temperature/structural support alignment failed.")
@@ -193,17 +199,21 @@ masked_rpi_path <- file.path(output_root, "rpi", "masked_structural_rpi_continuo
 joint_inla_rasterize_write(masked_rpi$rpi, masked_rpi_path, overwrite = TRUE)
 joint_inla_rasterize_write(masked_rpi$classes, masked_rpi_class_path, overwrite = TRUE)
 
-canonical_class_path <- file.path(canonical_report_root, "spatial", "rpi_class.tif")
-canonical_metadata_path <- file.path(canonical_report_root, "metadata", "rpi_metadata.rds")
-if (!file.exists(canonical_class_path) || !file.exists(canonical_metadata_path)) stop("Accepted canonical RPI class/metadata is unavailable.")
-canonical_classes <- terra::rast(canonical_class_path)
-canonical_metadata <- readRDS(canonical_metadata_path)
-if (!isTRUE(joint_inla_rasterize_geometry_equal(canonical_classes, masked_rpi$classes))) stop("Canonical and masked RPI class rasters do not share the required geometry and projection.")
-canonical_summary <- cbind(data.frame(version = "canonical_spde_inclusive_unmasked_historical", threshold = as.numeric(canonical_metadata$threshold), stringsAsFactors = FALSE), rpi_summary(canonical_classes), latitude_summary(canonical_classes))
+canonical_class_path <- if (!is.null(canonical_report_root)) file.path(canonical_report_root, "spatial", "rpi_class.tif") else NA_character_
+canonical_metadata_path <- if (!is.null(canonical_report_root)) file.path(canonical_report_root, "metadata", "rpi_metadata.rds") else NA_character_
+canonical_available <- !is.na(canonical_class_path) && file.exists(canonical_class_path) && file.exists(canonical_metadata_path)
+canonical_classes <- if (canonical_available) terra::rast(canonical_class_path) else NULL
+canonical_metadata <- if (canonical_available) readRDS(canonical_metadata_path) else list(threshold = NA_real_)
+if (canonical_available && !isTRUE(joint_inla_rasterize_geometry_equal(canonical_classes, masked_rpi$classes))) stop("Canonical and masked RPI class rasters do not share the required geometry and projection.")
+canonical_summary <- if (canonical_available) {
+  cbind(data.frame(version = "canonical_spde_inclusive_unmasked_historical", threshold = as.numeric(canonical_metadata$threshold), stringsAsFactors = FALSE), rpi_summary(canonical_classes), latitude_summary(canonical_classes))
+} else {
+  cbind(data.frame(version = "canonical_unavailable_for_this_run", threshold = NA_real_, stringsAsFactors = FALSE), data.frame(Transient_Sink = NA_integer_, Seasonal = NA_integer_, Multi_Season = NA_integer_, Endemic_Core = NA_integer_, sum_classes = NA_integer_, supported_cells = NA_integer_, stringsAsFactors = FALSE), data.frame(max_latitude = NA_real_, q95_latitude = NA_real_, north_30 = NA_integer_, north_35 = NA_integer_, north_40 = NA_integer_, stringsAsFactors = FALSE))
+}
 masked_summary <- cbind(data.frame(version = "masked_structural_spde_excluded_14.5C_same_week", threshold = paired_threshold, stringsAsFactors = FALSE), rpi_summary(masked_rpi$classes), latitude_summary(masked_rpi$classes))
 comparison <- rbind(canonical_summary, masked_summary)
 utils::write.csv(comparison, file.path(output_root, "qa", "rpi_comparison_summary.csv"), row.names = FALSE)
-utils::write.csv(data.frame(stored_canonical_threshold = as.numeric(canonical_metadata$threshold), previously_recomputed_threshold = 0.6627025, stringsAsFactors = FALSE), file.path(output_root, "qa", "canonical_rpi_threshold_provenance.csv"), row.names = FALSE)
+utils::write.csv(data.frame(stored_canonical_threshold = as.numeric(canonical_metadata$threshold), previously_recomputed_threshold = NA_real_, stringsAsFactors = FALSE), file.path(output_root, "qa", "canonical_rpi_threshold_provenance.csv"), row.names = FALSE)
 
 thermal_sensitivity <- lapply(thermal_cutoffs, function(cutoff) {
   candidate_matrix <- structural_matrix
@@ -229,13 +239,17 @@ class_palette <- c("#f0f0f0", "#2c7fb8", "#41ab5d", "#d7301f")
 class_breaks <- c(-.5, .5, 1.5, 2.5, 3.5)
 grDevices::png(file.path(output_root, "figures", "canonical_vs_masked_structural_rpi_class.png"), width = 1800, height = 900, res = 150)
 graphics::par(mfrow = c(1, 2), mar = c(2, 2, 3, 5))
-terra::plot(canonical_classes, col = class_palette, breaks = class_breaks, axes = FALSE, legend = FALSE, main = "Canonical RPI")
+if (!canonical_available) {
+  graphics::plot.new(); graphics::title("Canonical RPI unavailable")
+} else {
+  terra::plot(canonical_classes, col = class_palette, breaks = class_breaks, axes = FALSE, legend = FALSE, main = "Canonical RPI")
+}
 graphics::legend("right", legend = c("Transient / Sink", "Seasonal", "Multi-Season", "Endemic Core"), fill = class_palette, bty = "n", cex = .8)
 terra::plot(masked_rpi$classes, col = class_palette, breaks = class_breaks, axes = FALSE, legend = FALSE, main = "14.5 C masked structural RPI")
 graphics::legend("right", legend = c("Transient / Sink", "Seasonal", "Multi-Season", "Endemic Core"), fill = class_palette, bty = "n", cex = .8)
 grDevices::dev.off()
 
-selected_weeks <- unique(c(week_keys[[1L]], week_keys[[ceiling(length(week_keys) / 2L)]], week_keys[[length(week_keys) - 1L]], "2026-W29"))
+selected_weeks <- unique(c(week_keys[[1L]], week_keys[[ceiling(length(week_keys) / 2L)]], week_keys[[max(1L, length(week_keys) - 1L)]], week_keys[[length(week_keys)]]))
 selected_index <- match(selected_weeks, week_keys)
 grDevices::png(file.path(output_root, "figures", "selected_week_structural_vs_masked_potential.png"), width = 1800, height = 900 * length(selected_index) / 2, res = 150)
 graphics::par(mfrow = c(length(selected_index), 2), mar = c(2, 2, 3, 4))
@@ -251,10 +265,7 @@ utils::write.csv(alignment, file.path(output_root, "qa", "temperature_alignment_
 metadata <- list(
   status = "MASKED STRUCTURAL RPI DIAGNOSTICS COMPLETE — READY FOR REVIEW", run_id = run_id,
   provenance = list(
-    fit_job = "20762325", fit_sha = "42bb427d9ea2c456bdabcb64d165bd00eb49091a6f93bfd6d1d7ff92d8c85c3e",
-    stage2_sha = "13281ea9dabd90724ab9f9eb4f7fee27c9ec948b6102272abbefcb3ae79bddb3",
-    stage3a_sha = "34d17b6cb49e114ba0d6b4a7344113b4a6afebb8f735adf36b96a9ec51fbd64d",
-    structural_root = normalizePath(structural_root, mustWork = TRUE), canonical_report_root = normalizePath(canonical_report_root, mustWork = TRUE),
+    structural_root = normalizePath(structural_root, mustWork = TRUE), canonical_report_root = if (canonical_available) normalizePath(canonical_report_root, mustWork = TRUE) else NA_character_,
     authoritative_observations = observations$provenance
   ),
   threshold_celsius = threshold_celsius, threshold_role = "lower developmental thermal threshold", source = "Gutierrez & Ponti 2014", application = "derived post-fit physiological mask",
@@ -264,7 +275,7 @@ metadata <- list(
   abundance_association = association, canonical_rpi = canonical_summary, masked_structural_rpi = masked_summary,
   thermal_sensitivity = thermal_sensitivity, rpi_parameters = list(gen_days = 21, days_per_layer = 7, class_boundaries = c("RPI < 3" = "Transient / Sink", "3 <= RPI < 8" = "Seasonal", "8 <= RPI < 15" = "Multi-Season", "RPI >= 15" = "Endemic Core")),
   outputs = list(masked_stack = masked_files, masked_rpi = masked_rpi_path, masked_rpi_class = masked_rpi_class_path),
-  visual_qa = list(class_comparison = file.path(output_root, "figures", "canonical_vs_masked_structural_rpi_class.png"), selected_weeks = selected_weeks, structural_vs_masked = file.path(output_root, "figures", "selected_week_structural_vs_masked_potential.png"), northern_core_contracts = masked_summary$max_latitude[[1L]] <= canonical_summary$max_latitude[[1L]] && masked_summary$north_35[[1L]] <= canonical_summary$north_35[[1L]])
+  visual_qa = list(class_comparison = file.path(output_root, "figures", "canonical_vs_masked_structural_rpi_class.png"), selected_weeks = selected_weeks, structural_vs_masked = file.path(output_root, "figures", "selected_week_structural_vs_masked_potential.png"), northern_core_contracts = if (canonical_available) masked_summary$max_latitude[[1L]] <= canonical_summary$max_latitude[[1L]] && masked_summary$north_35[[1L]] <= canonical_summary$north_35[[1L]] else NA)
 )
 saveRDS(metadata, file.path(output_root, "metadata", "masked_structural_rpi_diagnostics_metadata.rds"))
 if (requireNamespace("yaml", quietly = TRUE)) yaml::write_yaml(metadata, file.path(output_root, "metadata", "masked_structural_rpi_diagnostics_metadata.yml"))

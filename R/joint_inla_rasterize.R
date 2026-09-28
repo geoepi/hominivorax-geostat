@@ -340,7 +340,7 @@ joint_inla_rasterize_run <- function(phase2_dir,
                                      stage2_artifact = NULL,
                                      template_path = NULL,
                                      output_dir = NULL,
-                                     run_id = "20725437",
+                                     run_id = NULL,
                                      expected_weeks = NULL,
                                      expected_rows = NULL,
                                      coordinate_tolerance = 1e-7,
@@ -351,6 +351,11 @@ joint_inla_rasterize_run <- function(phase2_dir,
                                      repo_root = getwd()) {
   joint_inla_rasterize_require()
   phase2_dir <- normalizePath(phase2_dir, mustWork = TRUE)
+  if (is.null(run_id)) {
+    manifest_candidates <- list.files(phase2_dir, pattern = "^prediction_projection_manifest_.*\\.csv$", full.names = FALSE)
+    if (length(manifest_candidates) == 1L) run_id <- sub("^prediction_projection_manifest_(.*)\\.csv$", "\\1", manifest_candidates[[1L]])
+    if (is.null(run_id) || !length(run_id) || !nzchar(run_id)) run_id <- paste0("raster_", format(Sys.time(), "%Y%m%d_%H%M%S"))
+  }
   output_dir <- output_dir %||% file.path(dirname(phase2_dir), paste0("raster_surfaces_", run_id))
   output_dir <- normalizePath(output_dir, mustWork = FALSE)
   if (dir.exists(output_dir) && length(list.files(output_dir, recursive = TRUE, all.files = TRUE, no.. = TRUE)) && !isTRUE(overwrite)) {

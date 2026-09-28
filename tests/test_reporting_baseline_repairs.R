@@ -31,7 +31,7 @@ testthat::test_that("random-effect summaries retain canonical hyperparameter sem
 testthat::test_that("random-effect comparison has accepted run-specific schema", {
   reference <- data.frame(component = c("Tier 1 SPDE", "Tier 2 copy/shared field"), parameter = c("range", "copy coefficient"), mean = c(10, .1))
   production <- data.frame(component = reference$component, parameter = reference$parameter, mean = c(12, .2))
-  comparison <- postfit_reporting_random_effect_comparison(reference, production)
+  comparison <- postfit_reporting_random_effect_comparison(reference, production, reference_run = "20725437", production_run = "20742007")
   testthat::expect_equal(names(comparison), c("component", "parameter", "reference_20725437", "production_20742007", "absolute_difference", "ratio_or_fold_change"))
   testthat::expect_equal(comparison$ratio_or_fold_change, c(1.2, 2))
 })

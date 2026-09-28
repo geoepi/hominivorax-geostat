@@ -26,7 +26,7 @@ fit_path <- fit_arg %||% file.path(repo_root, "outputs", "joint_inla_fit", "join
 holdout_path <- holdout_arg %||% file.path(dirname(fit_path), "holdout_predictions.csv")
 stage2_path <- stage2_arg %||% file.path(repo_root, "outputs", "joint_model", "joint_model_inputs.rds")
 output_root <- output_arg %||% dirname(fit_path)
-run_id <- run_id_arg %||% "20725437"
+run_id <- run_id_arg %||% if (identical(acceptance_mode, "reference")) "20725437" else stop("Production validation requires an explicit --run-id.")
 source_fit_job <- option("source-fit-job", if (identical(acceptance_mode, "reference")) "20725437" else NA_character_)
 prior_validation_job <- option("prior-validation-job", if (identical(acceptance_mode, "reference")) "20740207" else NA_character_)
 output_dir <- file.path(output_root, paste0("validation_presence_background_", run_id))

@@ -27,15 +27,17 @@ parse_args <- function(args) {
 }
 arg <- function(values, name, default = NULL) if (is.null(values[[name]])) default else values[[name]]
 args <- parse_args(commandArgs(trailingOnly = TRUE))
-required_args <- c("fit", "build", "stage2", "phase2", "phase3", "observations", "full-potential-root", "output-root")
+required_args <- c("fit", "build", "stage2", "phase2", "phase3", "observations", "output-root")
 missing_args <- required_args[vapply(required_args, function(name) is.null(args[[name]]) || !nzchar(as.character(args[[name]])), logical(1L))]
 if (length(missing_args)) stop("Supply explicit arguments: ", paste(paste0("--", missing_args), collapse = ", "))
 
 fit_path <- arg(args, "fit"); build_path <- arg(args, "build"); stage2_path <- arg(args, "stage2")
 phase2_root <- arg(args, "phase2"); phase3_root <- arg(args, "phase3")
 observation_path <- arg(args, "observations"); full_potential_root <- arg(args, "full-potential-root")
-accepted_rpi_metadata_path <- arg(args, "canonical-rpi-metadata", file.path(dirname(dirname(full_potential_root)), "metadata", "rpi_metadata.rds"))
-output_root <- arg(args, "output-root"); run_id <- arg(args, "run-id", "20762325_9a1a478")
+accepted_rpi_metadata_path <- arg(args, "canonical-rpi-metadata", if (is.null(full_potential_root)) NULL else file.path(dirname(dirname(full_potential_root)), "metadata", "rpi_metadata.rds"))
+output_root <- arg(args, "output-root"); run_id <- arg(args, "run-id", paste0("structural_", format(Sys.time(), "%Y%m%d_%H%M%S")))
+expected_weeks_arg <- arg(args, "expected-weeks")
+expected_cells_arg <- arg(args, "expected-cells")
 coordinate_source <- arg(args, "coordinate-source", "lonlat"); source_crs <- arg(args, "source-crs", "EPSG:4326")
 temperature_variable <- arg(args, "temperature-variable", "mintemp")
 threshold_text <- arg(args, "temperature-threshold", NULL)
@@ -43,7 +45,7 @@ temperature_threshold <- if (is.null(threshold_text) || identical(tolower(as.cha
 cell_area_km2 <- as.numeric(arg(args, "cell-area-km2", "623.467152902406"))
 overwrite <- isTRUE(args[["overwrite"]])
 if (length(cell_area_km2) != 1L || !is.finite(cell_area_km2) || cell_area_km2 <= 0) stop("--cell-area-km2 must be one finite positive value.")
-all_paths <- c(fit = fit_path, build = build_path, stage2 = stage2_path, phase2 = phase2_root, phase3 = phase3_root, observations = observation_path, full_potential_root = full_potential_root)
+all_paths <- c(fit = fit_path, build = build_path, stage2 = stage2_path, phase2 = phase2_root, phase3 = phase3_root, observations = observation_path)
 missing_paths <- all_paths[!file.exists(all_paths)]
 if (length(missing_paths)) stop("Required input path(s) do not exist: ", paste(names(missing_paths), missing_paths, sep = "=", collapse = "; "))
 if (dir.exists(output_root) && length(list.files(output_root, recursive = TRUE, all.files = TRUE, no.. = TRUE)) && !overwrite) stop("Refusing to write into non-empty diagnostic output root without --overwrite: ", output_root)
@@ -60,6 +62,14 @@ groups <- sort(unique(as.integer(grid$quarter_index)))
 if (!identical(groups, seq_len(layout$n_groups))) stop("Stage 2 quarter_index levels are not exactly contiguous 1:n_groups from Stage 3A.")
 components <- joint_inla_project_prepare_components(build, fit_artifact, stage2)
 if (!identical(as.integer(components$n_groups), as.integer(layout$n_groups))) stop("Prepared component group count disagrees with Stage 3A.")
+weeks <- paste(as.integer(grid$epiyear), sprintf("W%02d", as.integer(grid$epiweek)), sep = "-")
+week_keys <- unique(weeks)
+cells <- unique(grid[c("cell_id", "x", "y")])
+if (anyDuplicated(cells$cell_id)) stop("Stage 2 cells map to multiple coordinates.")
+expected_weeks <- if (is.null(expected_weeks_arg)) length(week_keys) else as.integer(expected_weeks_arg)
+expected_cells <- if (is.null(expected_cells_arg)) nrow(cells) else as.integer(expected_cells_arg)
+if (length(expected_weeks) != 1L || is.na(expected_weeks) || expected_weeks < 1L || length(expected_cells) != 1L || is.na(expected_cells) || expected_cells < 1L) stop("Expected week/cell dimensions must be positive integers.")
+if (length(week_keys) != expected_weeks || nrow(cells) != expected_cells || nrow(grid) != expected_weeks * expected_cells) stop("Stage 2 support does not match the dynamic expected horizon and cell dimensions.")
 
 template_files <- list.files(phase3_root, pattern = "tier2_intensity.*\\.tif$", recursive = TRUE, full.names = TRUE)
 if (!length(template_files)) stop("Could not locate an existing Phase 3 Tier 2 intensity raster.")
@@ -74,22 +84,24 @@ coordinate_table <- do.call(rbind, lapply(names(coordinate_audit$ranges), functi
 utils::write.csv(coordinate_table, file.path(output_root, "qa", "coordinate_ranges_audit.csv"), row.names = FALSE, na = "")
 saveRDS(coordinate_audit, file.path(output_root, "metadata", "coordinate_audit.rds"))
 
-potential_files <- sort(list.files(full_potential_root, pattern = "potential_abundance.*\\.tif$", recursive = TRUE, full.names = TRUE))
-if (!length(potential_files)) stop("No accepted potential-abundance rasters found under --full-potential-root.")
-full_potential <- terra::rast(potential_files)
-if (terra::nlyr(full_potential) != 133L) stop("Accepted full potential-abundance stack must contain 133 layers.")
-intersection <- structural_observation_intersection_audit(observations$data, template, full_potential)
-if (intersection$finite_potential_extraction < 1L) stop("No authoritative observations intersect a finite accepted potential-abundance value.")
+full_potential <- NULL
+potential_files <- character()
+if (!is.null(full_potential_root) && dir.exists(full_potential_root)) {
+  potential_files <- sort(list.files(full_potential_root, pattern = "potential_abundance.*\\.tif$", recursive = TRUE, full.names = TRUE))
+  if (length(potential_files)) {
+    full_potential <- terra::rast(potential_files)
+    if (terra::nlyr(full_potential) != expected_weeks) stop("Accepted full potential-abundance stack does not match the dynamic modeled-week count.")
+  }
+}
+intersection <- if (!is.null(full_potential)) structural_observation_intersection_audit(observations$data, template, full_potential) else data.frame(
+  total = nrow(observations$data), inside_extent = NA_integer_, outside_extent = NA_integer_, supported = NA_integer_,
+  unsupported = NA_integer_, finite_potential_extraction = NA_integer_, stringsAsFactors = FALSE
+)
+if (!is.null(full_potential) && intersection$finite_potential_extraction < 1L) stop("No authoritative observations intersect a finite accepted potential-abundance value.")
 utils::write.csv(intersection, file.path(output_root, "qa", "observation_intersection_audit.csv"), row.names = FALSE, na = "")
 
 weekly_files <- sort(list.files(file.path(phase2_root, "weekly"), pattern = "^prediction_y[0-9]{4}_w[0-9]{2}\\.rds$", full.names = TRUE))
-if (length(weekly_files) != 133L) stop("Existing Phase 2 weekly output must contain 133 files.")
-weeks <- paste(as.integer(grid$epiyear), sprintf("W%02d", as.integer(grid$epiweek)), sep = "-")
-week_keys <- unique(weeks)
-if (length(week_keys) != 133L || nrow(grid) != 133L * 15899L) stop("Stage 2 support is not the accepted 133-week, 15,899-cell horizon.")
-
-cells <- unique(grid[c("cell_id", "x", "y")])
-if (anyDuplicated(cells$cell_id)) stop("Stage 2 cells map to multiple coordinates.")
+if (length(weekly_files) != expected_weeks) stop("Existing Phase 2 weekly output does not match the dynamic modeled-week count.")
 if (!requireNamespace("INLA", quietly = TRUE)) stop("INLA is required for the saved-mesh projection diagnostic.")
 mesh <- joint_inla_project_mesh(build)
 A_cell <- INLA::inla.spde.make.A(mesh, loc = as.matrix(cells[c("x", "y")]))
@@ -148,7 +160,7 @@ utils::write.csv(reconstruction_audit, file.path(output_root, "qa", "structural_
 structural_intensity_summary <- do.call(rbind, intensity_stats)
 utils::write.csv(structural_intensity_summary, file.path(output_root, "qa", "structural_intensity_summary.csv"), row.names = FALSE)
 full_intensity_files <- sort(list.files(phase3_root, pattern = "^tier2_intensity_y[0-9]{4}_w[0-9]{2}\\.tif$", recursive = TRUE, full.names = TRUE))
-if (length(full_intensity_files) != 133L) stop("Existing Phase 3 full Tier 2 intensity stack does not contain 133 layers.")
+if (length(full_intensity_files) != expected_weeks) stop("Existing Phase 3 full Tier 2 intensity stack does not match the dynamic modeled-week count.")
 full_intensity <- terra::rast(full_intensity_files)
 full_q95 <- terra::global(full_intensity, fun = function(x) stats::quantile(x, .95, na.rm = TRUE))[, 1L]
 full_q99 <- terra::global(full_intensity, fun = function(x) stats::quantile(x, .99, na.rm = TRUE))[, 1L]
@@ -165,11 +177,16 @@ full_intensity_summary <- data.frame(
 utils::write.csv(full_intensity_summary, file.path(output_root, "qa", "full_vs_structural_intensity_summary.csv"), row.names = FALSE)
 utils::write.csv(do.call(rbind, written), file.path(output_root, "metadata", "structural_raster_manifest.csv"), row.names = FALSE, na = "")
 
-full_threshold_values <- as.matrix(terra::extract(full_potential, terra::vect(observations$data, geom = c("x", "y"), crs = terra::crs(full_potential)))[, -1L, drop = FALSE])
-canonical_threshold <- as.numeric(stats::quantile(as.numeric(full_threshold_values), .10, na.rm = TRUE, names = FALSE))
-accepted_rpi_threshold <- if (file.exists(accepted_rpi_metadata_path)) as.numeric(readRDS(accepted_rpi_metadata_path)$threshold) else 0.6834011847
-canonical_threshold_pass <- abs(canonical_threshold - accepted_rpi_threshold) <= 1e-8
-canonical_threshold_audit <- data.frame(reproduced_threshold = canonical_threshold, accepted_metadata_threshold = accepted_rpi_threshold, absolute_difference = abs(canonical_threshold - accepted_rpi_threshold), pass = canonical_threshold_pass, status = if (canonical_threshold_pass) "PASS" else "WARNING_CANONICAL_METADATA_MISMATCH", source = "accepted unmasked full potential-abundance stack; current RPI extraction semantics", accepted_metadata_path = accepted_rpi_metadata_path, stringsAsFactors = FALSE)
+if (!is.null(full_potential)) {
+  full_threshold_values <- as.matrix(terra::extract(full_potential, terra::vect(observations$data, geom = c("x", "y"), crs = terra::crs(full_potential)))[, -1L, drop = FALSE])
+  canonical_threshold <- as.numeric(stats::quantile(as.numeric(full_threshold_values), .10, na.rm = TRUE, names = FALSE))
+  accepted_rpi_threshold <- if (!is.null(accepted_rpi_metadata_path) && file.exists(accepted_rpi_metadata_path)) as.numeric(readRDS(accepted_rpi_metadata_path)$threshold) else NA_real_
+  canonical_threshold_pass <- is.finite(accepted_rpi_threshold) && abs(canonical_threshold - accepted_rpi_threshold) <= 1e-8
+  canonical_threshold_audit <- data.frame(reproduced_threshold = canonical_threshold, accepted_metadata_threshold = accepted_rpi_threshold, absolute_difference = abs(canonical_threshold - accepted_rpi_threshold), pass = canonical_threshold_pass, status = if (canonical_threshold_pass) "PASS" else "WARNING_CANONICAL_METADATA_MISMATCH", source = "accepted unmasked full potential-abundance stack; current RPI extraction semantics", accepted_metadata_path = accepted_rpi_metadata_path %||% NA_character_, stringsAsFactors = FALSE)
+} else {
+  canonical_threshold <- NA_real_; accepted_rpi_threshold <- NA_real_
+  canonical_threshold_audit <- data.frame(reproduced_threshold = NA_real_, accepted_metadata_threshold = NA_real_, absolute_difference = NA_real_, pass = NA, status = "NOT_SUPPLIED", source = "No canonical unmasked potential-abundance stack supplied to the structural diagnostic.", accepted_metadata_path = NA_character_, stringsAsFactors = FALSE)
+}
 utils::write.csv(canonical_threshold_audit, file.path(output_root, "qa", "canonical_rpi_threshold_audit.csv"), row.names = FALSE, na = "")
 
 grDevices::png(file.path(output_root, "figures", "observation_locations_supported_domain.png"), width = 1600, height = 1200, res = 150)
@@ -183,7 +200,8 @@ if (!is.null(temperature_threshold)) {
   same_week <- structural_same_week_extract(observations$data, masked_stack, week_keys)
   utils::write.csv(same_week, file.path(output_root, "qa", "same_week_structural_masked_extraction.csv"), row.names = FALSE, na = "")
   candidates <- as.numeric(stats::quantile(as.numeric(terra::values(masked_stack, mat = FALSE)), probs = seq(.05, .95, length.out = 9L), na.rm = TRUE, names = FALSE))
-  sensitivity <- structural_rpi_threshold_sensitivity(masked_stack, observations$data, unique(c(canonical_threshold, candidates)))
+  sensitivity_thresholds <- if (is.finite(canonical_threshold)) unique(c(canonical_threshold, candidates)) else candidates
+  sensitivity <- structural_rpi_threshold_sensitivity(masked_stack, observations$data, sensitivity_thresholds)
   utils::write.csv(sensitivity, file.path(output_root, "qa", "rpi_threshold_sensitivity.csv"), row.names = FALSE)
   same_week_status <- "COMPLETED"
 }
@@ -191,7 +209,7 @@ if (!is.null(temperature_threshold)) {
 final_status <- if (is.null(temperature_threshold)) "STRUCTURAL SURFACE COMPLETE — TEMPERATURE THRESHOLD REQUIRED" else "STRUCTURAL SURFACE AND RPI DIAGNOSTICS COMPLETE — READY FOR REVIEW"
 qa <- data.frame(
   check = c("coordinate_audit", "observation_intersection", "quarter_group_structure", "spde_excluded_reconstruction", "temperature_alignment", "canonical_rpi_threshold", "same_week_masked_rpi"),
-  status = c("PASS", if (intersection$supported > 0L) "PASS" else "FAIL", "PASS", if (all(reconstruction_audit$pass)) "PASS" else "FAIL", if (temperature_audit$pass) "PASS" else "FAIL", if (canonical_threshold_audit$pass) "PASS" else "WARNING", same_week_status),
+  status = c("PASS", if (is.finite(intersection$supported) && intersection$supported > 0L) "PASS" else "WARNING", "PASS", if (all(reconstruction_audit$pass)) "PASS" else "FAIL", if (temperature_audit$pass) "PASS" else "FAIL", if (isTRUE(canonical_threshold_audit$pass)) "PASS" else "WARNING", same_week_status),
   details = c("Explicit authoritative coordinate source and CRS recorded.", paste(names(intersection), intersection, sep = "=", collapse = "; "), paste0("Stage 3A n_groups=", layout$n_groups, "; exact levels 1:n_groups."), "Full eta2 equals structural eta2 plus Tier 2 field plus Tier 2 copy field within tolerance.", "Stage 2 mintemp is complete for every modeled week/cell.", paste0("Reproduced threshold=", canonical_threshold, "; accepted metadata threshold=", accepted_rpi_threshold, "."), "Masked same-week diagnostics remain blocked until an authoritative temperature threshold is supplied."),
   stringsAsFactors = FALSE
 )

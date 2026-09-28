@@ -117,7 +117,7 @@ postfit_reporting_random_effect_summaries <- function(fit_artifact, build) {
 }
 
 postfit_reporting_random_effect_comparison <- function(reference, production,
-                                                        reference_run = "20725437", production_run = "20742007",
+                                                        reference_run = "reference", production_run = "production",
                                                         statistic = "mean") {
   required <- c("component", "parameter", statistic)
   if (!is.data.frame(reference) || !is.data.frame(production) || length(setdiff(required, names(reference))) || length(setdiff(required, names(production)))) {
@@ -984,15 +984,17 @@ postfit_reporting_geometry_equal <- function(x, y) {
 }
 
 postfit_reporting_prepare_structural_products <- function(structural_root, masked_root, output_spatial,
-                                                           expected_weeks = 133L, expected_cells = 15899L,
+                                                           expected_weeks = NULL, expected_cells = NULL,
                                                            threshold_celsius = 14.5, overwrite = FALSE,
-                                                           expected_start_week = "2024-W01", expected_end_week = "2026-W29") {
+                                                           expected_start_week = NULL, expected_end_week = NULL) {
   postfit_reporting_require(c("terra", "digest"))
   required <- c(structural_root, masked_root)
   if (any(!dir.exists(required))) stop("Accepted structural product root(s) do not exist: ", paste(required[!dir.exists(required)], collapse = "; "))
   structural_intensity <- sort(list.files(file.path(structural_root, "structural_intensity"), pattern = "^tier2_intensity_structural_y[0-9]{4}_w[0-9]{2}\\.tif$", full.names = TRUE))
   structural_potential <- sort(list.files(file.path(structural_root, "structural_potential_abundance"), pattern = "^structural_potential_abundance_y[0-9]{4}_w[0-9]{2}\\.tif$", full.names = TRUE))
   masked_potential <- sort(list.files(file.path(masked_root, "structural_potential_abundance_temp_masked"), pattern = "^structural_potential_abundance_temp_masked_[0-9]{4}_W[0-9]{2}\\.tif$", full.names = TRUE))
+  if (is.null(expected_weeks)) expected_weeks <- length(structural_intensity)
+  if (length(expected_weeks) != 1L || is.na(expected_weeks) || expected_weeks < 1L) stop("expected_weeks must be a positive integer.")
   if (any(length(structural_intensity) != expected_weeks, length(structural_potential) != expected_weeks, length(masked_potential) != expected_weeks)) stop("Accepted structural products must contain exactly ", expected_weeks, " weekly rasters in each required family.")
   intensity_manifest <- postfit_reporting_parse_week_paths(structural_intensity, "tier2_intensity_structural", "year_week")
   potential_manifest <- postfit_reporting_parse_week_paths(structural_potential, "structural_potential_abundance", "year_week")
@@ -1000,12 +1002,16 @@ postfit_reporting_prepare_structural_products <- function(structural_root, maske
   week <- paste(intensity_manifest$epiyear, sprintf("W%02d", intensity_manifest$epiweek), sep = "-")
   potential_week <- paste(potential_manifest$epiyear, sprintf("W%02d", potential_manifest$epiweek), sep = "-")
   masked_week <- paste(masked_manifest$epiyear, sprintf("W%02d", masked_manifest$epiweek), sep = "-")
+  if (is.null(expected_start_week)) expected_start_week <- week[[1L]]
+  if (is.null(expected_end_week)) expected_end_week <- week[[length(week)]]
   if (!identical(week, potential_week) || !identical(week, masked_week) || !identical(week[[1L]], expected_start_week) || !identical(week[[length(week)]], expected_end_week)) stop("Accepted structural products do not share the expected temporal horizon.")
   intensity_stack <- terra::rast(structural_intensity)
   potential_stack <- terra::rast(structural_potential)
   masked_stack <- terra::rast(masked_potential)
   if (!postfit_reporting_geometry_equal(intensity_stack[[1L]], potential_stack[[1L]]) || !postfit_reporting_geometry_equal(intensity_stack[[1L]], masked_stack[[1L]])) stop("Accepted structural products do not share exact raster geometry and CRS.")
   support <- !is.na(terra::values(intensity_stack[[1L]], mat = FALSE))
+  if (is.null(expected_cells)) expected_cells <- sum(support)
+  if (length(expected_cells) != 1L || is.na(expected_cells) || expected_cells < 1L) stop("expected_cells must be a positive integer.")
   if (sum(support) != expected_cells) stop("Accepted structural support contains ", sum(support), " cells; expected ", expected_cells, ".")
   masked_values <- terra::values(masked_stack, mat = TRUE)
   nonfinite_supported <- sum(!is.finite(masked_values[support, drop = FALSE]))
@@ -1171,14 +1177,14 @@ postfit_reporting_rpi_audit <- function(count_stack_semantics, observed_source =
       if (count_stack_semantics %in% c("standardized_potential_abundance", "masked_structural_potential_abundance")) "PASS" else "FAIL",
       if (!is.null(observed_source) && file.exists(observed_source)) "PASS" else "FAIL",
       if (!is.null(time_span_weeks) && as.integer(time_span_weeks) >= 1L) "PASS" else "UNRESOLVED",
-      if (identical(as.numeric(cut_quant), 0.10)) "PASS" else "WARNING",
+      if (length(cut_quant) == 1L && is.finite(cut_quant) && cut_quant >= 0 && cut_quant <= 1) "PASS" else "FAIL",
       if (identical(as.numeric(class_boundaries), c(3, 8, 15))) "PASS" else "WARNING"
     ),
     details = c(
       if (identical(count_stack_semantics, "masked_structural_potential_abundance")) "RPI receives the 14.5 C masked structural potential-abundance stack." else "RPI must receive the standardized potential-abundance stack, not raw Tier 2 intensity.",
       "Observation locations are required for threshold calibration.",
       "The supplied Phase 3 stack is evaluated as one ordered continuous stack.",
-      if (identical(count_stack_semantics, "masked_structural_potential_abundance")) "Threshold is the lower cut_quant quantile of same-week observation-paired masked structural values and suitability is value > threshold." else "Threshold is the lower cut_quantile of values extracted at observation locations and suitability is value > threshold.",
+      if (identical(count_stack_semantics, "masked_structural_potential_abundance")) paste0("Threshold is the lower quantile (p=", cut_quant, ") of same-week observation-paired masked structural values and suitability is value > threshold.") else paste0("Threshold is the lower quantile (p=", cut_quant, ") of values extracted at observation locations and suitability is value > threshold."),
       "Classes use <3, 3–8, 8–15, and >=15 generations; boundary behavior is retained from R/calc_RPI.R."
     ), stringsAsFactors = FALSE
   )

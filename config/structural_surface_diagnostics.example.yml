@@ -1,6 +1,6 @@
 # Post-fit structural ecological prediction diagnostic.
 # This configuration is reporting-only and does not change the fitted model.
-run_id: "20762325_9a1a478"
+run_id: null # The orchestrator supplies the immutable run identifier.
 fit: null
 build: null
 stage2: null

@@ -14,7 +14,7 @@ source(file.path(repo_root, "R", "joint_inla_project.R"))
 
 build_path <- option("build", file.path(repo_root, "outputs", "joint_inla", "joint_inla_build.rds"))
 fit_path <- option("fit", file.path(repo_root, "outputs", "joint_inla_fit", "joint_model_fit.rds"))
-run_id <- option("run-id", "20725437")
+run_id <- option("run-id", paste0("projection_", format(Sys.time(), "%Y%m%d_%H%M%S")))
 output_dir <- option("output-dir", file.path(dirname(fit_path), paste0("prediction_projection_", run_id)))
 expected_rows_arg <- option("expected-rows")
 expected_weeks_arg <- option("expected-weeks")

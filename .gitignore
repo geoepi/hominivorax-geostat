@@ -82,6 +82,8 @@ outputs/preprocessing_demo/
 !/scripts/run_joint_inla_rasterization_atlas.sh
 !/scripts/run_postfit_reporting.R
 !/scripts/run_postfit_reporting_atlas.sh
+!/scripts/run_pipeline.R
+!/scripts/submit_full_pipeline.sh
 
 # Jupyter checkpoint files
 .ipynb_checkpoints/
