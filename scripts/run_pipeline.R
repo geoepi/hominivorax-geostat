@@ -258,7 +258,7 @@ if (mode %in% c("submit", "direct", "dry-run")) {
     print_contract(contract, dry = TRUE)
     for (stage in c("prepare", "fit", "postfit")) {
       if (stage == "prepare" && from != "prepare") next
-      if (stage == "fit" && !from %in% c("prepare", "fit")) next
+      if (stage == "fit" && (through == "prepare" || !from %in% c("prepare", "fit"))) next
       if (stage == "postfit" && through != "postfit") next
       profile <- contract$scheduler[[stage]]
       dependency <- if (stage == "fit") "afterok:<prepare-job-id>" else if (stage == "postfit") "afterok:<fit-job-id>" else "none"
@@ -273,7 +273,7 @@ if (mode %in% c("submit", "direct", "dry-run")) {
   if (identical(mode, "direct")) {
     for (stage in c("prepare", "fit", "postfit")) {
       if (stage == "prepare" && from != "prepare") next
-      if (stage == "fit" && !from %in% c("prepare", "fit")) next
+      if (stage == "fit" && (through == "prepare" || !from %in% c("prepare", "fit"))) next
       if (stage == "postfit" && through != "postfit") next
       contract <- execute_stage(contract, stage, fit_job_id_arg)
     }
@@ -283,7 +283,7 @@ if (mode %in% c("submit", "direct", "dry-run")) {
   jobs <- list()
   for (stage in c("prepare", "fit", "postfit")) {
     if (stage == "prepare" && from != "prepare") next
-    if (stage == "fit" && !from %in% c("prepare", "fit")) next
+    if (stage == "fit" && (through == "prepare" || !from %in% c("prepare", "fit"))) next
     if (stage == "postfit" && through != "postfit") next
     profile <- contract$scheduler[[stage]]
     dependency <- if (stage == "fit" && !is.null(jobs$prepare)) paste0("afterok:", jobs$prepare) else if (stage == "postfit" && !is.null(jobs$fit)) paste0("afterok:", jobs$fit) else NULL
