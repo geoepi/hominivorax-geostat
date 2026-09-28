@@ -6,6 +6,8 @@ This directory separates operator guidance from technical contracts.
 
 - [User workflow](user-workflow.md) — one-page preparation, submission,
   monitoring, results, and resume guide.
+- [Atlas deployment](developer/atlas-deployment.md) — canonical production
+  checkout, secure configuration, output location, and operator commands.
 - [Model workflow overview](model-workflow-overview.md) — ecological purpose,
   observations, Tier 1/Tier 2 logic, and derived products.
 - [Interpretation guide](interpretation-guide.md) — how to read modeled

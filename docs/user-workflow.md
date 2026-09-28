@@ -25,6 +25,11 @@ The real `config/production.yml` is a governed deployment input. Do not commit
 private paths, credentials, observations, fitted objects, or production
 rasters.
 
+This checkout-relative example is portable for local or other governed
+environments. Atlas production uses the canonical checkout and the secure
+absolute configuration path documented in the [Atlas deployment guide](developer/atlas-deployment.md);
+do not copy the private Atlas configuration into Git.
+
 ## 3. Submit the workflow
 
 ```bash
@@ -94,5 +99,6 @@ the [production orchestration guide](developer/production-orchestration.md).
 - [Documentation index](README.md)
 - [Model architecture](developer/model-architecture.md)
 - [Production validation contract](developer/production-validation.md)
+- [Atlas deployment](developer/atlas-deployment.md)
 - [Provenance and data residency](developer/provenance-and-data-residency.md)
 - [Interpretation guide](interpretation-guide.md)

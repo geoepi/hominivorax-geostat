@@ -1,0 +1,11 @@
+platform: atlas
+code_root: /project/disease_ecology/hominivorax-geostat
+secure_config_root: /project/disease_ecology/hominivorax-geostat-config
+production_config: /project/disease_ecology/hominivorax-geostat-config/production.yml
+output_root: /project/disease_ecology/nws-geostat-output/production_runs
+public_docs:
+  - docs/user-workflow.md
+  - docs/developer/atlas-deployment.md
+local_docs:
+  - README-ATLAS.md
+  - deployment-manifest.yml

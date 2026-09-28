@@ -123,6 +123,10 @@ procedures. The [model workflow overview](docs/model-workflow-overview.md)
 provides the ecological model explanation; technical contracts are maintained
 under [docs/developer](docs/developer/).
 
+For the operator-facing workflow, start with the [user workflow guide](docs/user-workflow.md).
+Atlas operators should also read the [Atlas deployment guide](docs/developer/atlas-deployment.md),
+which records the canonical production checkout and secure configuration paths.
+
 ## Citation and status
 
 Please cite the project and the associated scientific publication when the
