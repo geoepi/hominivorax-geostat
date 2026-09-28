@@ -118,6 +118,12 @@ test_that("missing artifacts, nonfinite required outputs, and provenance mismatc
   expect_equal(result$failure_count, 3L)
 })
 
+test_that("fit provenance and projection dimensions use authoritative dynamic fields", {
+  metadata <- list(provenance = list(chain = list(stage3a = list(artifact_sha256 = "stage3a-sha"))))
+  expect_identical(production_gate_fit_stage3a_shas(list(), metadata), "stage3a-sha")
+  expect_identical(production_gate_projection_row_count(data.frame(week = 1:2, rows = c(2L, 3L))), 5L)
+})
+
 test_that("validation inventory records blocking, warning, and provenance policy", {
   inventory <- production_validation_inventory()
   expect_true(all(c("gate", "check_name", "current_location", "current_severity", "proposed_severity", "reason", "upstream_duplicate", "historical_only", "dynamic_or_hardcoded", "action") %in% names(inventory)))

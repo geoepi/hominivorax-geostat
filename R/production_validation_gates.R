@@ -98,6 +98,29 @@ production_gate_equal_path <- function(observed, expected) {
   normalizePath(as.character(observed[[1L]]), mustWork = FALSE) == normalizePath(as.character(expected), mustWork = FALSE)
 }
 
+production_gate_fit_stage3a_shas <- function(fit_artifact, metadata) {
+  candidates <- list(
+    fit_artifact$provenance$stage3a_artifact_sha256,
+    metadata$provenance$stage3a_artifact_sha256,
+    metadata$provenance$stage3a_sha256,
+    metadata$provenance$chain$stage3a$artifact_sha256,
+    metadata$audit$stage3a_artifact_sha256
+  )
+  values <- unlist(candidates, use.names = FALSE)
+  values <- as.character(values[!is.na(values) & nzchar(as.character(values))])
+  unique(values)
+}
+
+production_gate_projection_row_count <- function(projection) {
+  if (!is.data.frame(projection) || !nrow(projection)) return(NA_integer_)
+  if ("rows" %in% names(projection)) {
+    values <- suppressWarnings(as.numeric(projection$rows))
+    if (!length(values) || any(!is.finite(values))) return(NA_integer_)
+    return(as.integer(sum(values)))
+  }
+  as.integer(nrow(projection))
+}
+
 production_gate_prepare <- function(contract, dims = contract$dynamic_dimensions) {
   gate <- "prepare"
   rows <- list()
@@ -159,8 +182,7 @@ production_gate_fit <- function(contract) {
   fit <- if (is.list(fit_artifact) && !is.null(fit_artifact$fit)) fit_artifact$fit else fit_artifact
   add("fit_readable", "BLOCKING", if (production_gate_file_ok(fit_path) && !is.null(fit_artifact)) "PASS" else "FAIL", "Completed fit artifact is readable.", fit_path, "readable non-empty RDS", fit_path)
   expected_build_sha <- if (production_gate_file_ok(build_path)) production_orchestration_hash_file(build_path) else NA_character_
-  recorded_build_sha <- c(fit_artifact$provenance$stage3a_artifact_sha256, metadata$provenance$stage3a_artifact_sha256, metadata$provenance$stage3a_sha256)
-  recorded_build_sha <- recorded_build_sha[!is.null(recorded_build_sha) & !is.na(recorded_build_sha)]
+  recorded_build_sha <- production_gate_fit_stage3a_shas(fit_artifact, metadata)
   provenance_ok <- length(recorded_build_sha) > 0L && any(as.character(recorded_build_sha) == as.character(expected_build_sha))
   add("fit_provenance", "BLOCKING", if (provenance_ok) "PASS" else "FAIL", "Fit provenance records the accepted Stage 3A artifact SHA.", fit_path, expected_build_sha, if (length(recorded_build_sha)) paste(recorded_build_sha, collapse = ";") else "missing")
   fit_ok <- if (is.list(fit)) fit$ok else FALSE
@@ -205,8 +227,9 @@ production_gate_postfit <- function(contract, dims = contract$dynamic_dimensions
   projection_audit <- production_gate_find_file(contract$paths$projection, "^prediction_projection_audit_.*\\.csv$")
   required_file("projection_reconstruction", projection_audit, "Phase 2 projection audit exists.")
   projection <- if (!is.na(projection_manifest)) tryCatch(utils::read.csv(projection_manifest, stringsAsFactors = FALSE), error = function(e) NULL) else NULL
-  projection_ok <- is.data.frame(projection) && nrow(projection) == as.integer(dims$prediction_rows) && !is.na(projection_audit) && !production_gate_audit_has_fail(projection_audit)
-  add("projection_dimensions", "BLOCKING", if (projection_ok) "PASS" else "FAIL", "Phase 2 projection rows and reconstruction reconcile with dynamic dimensions.", projection_manifest, dims$prediction_rows, if (is.data.frame(projection)) nrow(projection) else "missing")
+  projection_rows <- production_gate_projection_row_count(projection)
+  projection_ok <- isTRUE(projection_rows == as.integer(dims$prediction_rows)) && !is.na(projection_audit) && !production_gate_audit_has_fail(projection_audit)
+  add("projection_dimensions", "BLOCKING", if (projection_ok) "PASS" else "FAIL", "Phase 2 projection rows and reconstruction reconcile with dynamic dimensions.", projection_manifest, dims$prediction_rows, if (is.finite(projection_rows)) projection_rows else "missing")
   raster_manifest <- file.path(contract$paths$raster, "qa", "temporal_manifest.csv")
   raster_audit <- file.path(contract$paths$raster, "qa", "file_integrity_manifest.csv")
   required_file("raster_mapping", raster_manifest, "Phase 3 temporal raster manifest exists.", dims$modeled_weeks)
@@ -229,7 +252,7 @@ production_gate_postfit <- function(contract, dims = contract$dynamic_dimensions
   reporting_summary <- file.path(contract$paths$reporting, "qa", "reporting_qa_summary.csv")
   reporting_table <- if (production_gate_file_ok(reporting_summary)) tryCatch(utils::read.csv(reporting_summary, stringsAsFactors = FALSE), error = function(e) NULL) else NULL
   reporting_ok <- production_gate_file_ok(reporting_manifest) && is.data.frame(reporting_table) && nrow(reporting_table) > 0L && !identical(toupper(as.character(reporting_table$status[[1L]])), "FAIL")
-  add("reporting_manifest", "BLOCKING", if (reporting_ok) "PASS" else "FAIL", "Final reporting manifest and QA summary exist without a blocking failure.", reporting_manifest, "manifest plus non-FAIL QA", if (is.data.frame(reporting_table)) reporting_table$status[[1L]] else "missing")
+  add("final_manifest", "BLOCKING", if (reporting_ok) "PASS" else "FAIL", "Final reporting manifest and QA summary exist without a blocking failure.", reporting_manifest, "manifest plus non-FAIL QA", if (is.data.frame(reporting_table)) reporting_table$status[[1L]] else "missing")
   threshold_path <- file.path(contract$paths$reporting, "objects", "rpi_dynamic_threshold.rds")
   threshold_qa <- file.path(contract$paths$reporting, "qa", "rpi_dynamic_threshold_reproducibility.csv")
   threshold_obj <- production_gate_safe_rds(threshold_path)
@@ -240,23 +263,55 @@ production_gate_postfit <- function(contract, dims = contract$dynamic_dimensions
   rpi_class_ok <- production_gate_file_ok(rpi_class) && !is.null(production_gate_safe_rds(rpi_class))
   add("rpi_class_support", "BLOCKING", if (rpi_class_ok) "PASS" else "FAIL", "RPI class summary is present for the dynamic supported-cell product.", rpi_class, "readable class summary", rpi_class)
   metadata_rds <- production_gate_find_file(contract$paths$reporting, "reporting_metadata.*\\.rds$")
+  reporting_metadata <- production_gate_safe_rds(metadata_rds)
+  coordinate_transform <- reporting_metadata$rpi_observations$coordinate_transform
+  coordinate_ok <- is.list(reporting_metadata) && identical(as.character(reporting_metadata$rpi_observations$coordinate_source), "lonlat") && identical(as.character(reporting_metadata$rpi_observations$source_crs), "EPSG:4326") && identical(as.character(coordinate_transform$source_columns), c("lon", "lat")) && nzchar(as.character(coordinate_transform$target_crs)) && nzchar(as.character(coordinate_transform$method))
+  add("authoritative_coordinate_transform", "BLOCKING", if (coordinate_ok) "PASS" else "FAIL", "Authoritative lon/lat coordinates are projected with an explicit source CRS.", metadata_rds, "lon/lat; EPSG:4326; explicit transform", if (coordinate_ok) paste(reporting_metadata$rpi_observations$coordinate_source, reporting_metadata$rpi_observations$source_crs, coordinate_transform$method, sep = ";") else "missing or inconsistent")
+  dynamic_threshold <- reporting_metadata$rpi$dynamic_threshold
+  same_week_ok <- is.list(dynamic_threshold) && isTRUE(dynamic_threshold$same_week_matching) && is.finite(as.numeric(dynamic_threshold$n_observations_total)) && is.finite(as.numeric(dynamic_threshold$n_observations_matched)) && as.numeric(dynamic_threshold$n_observations_matched) > 0 && as.numeric(dynamic_threshold$n_observations_matched) <= as.numeric(dynamic_threshold$n_observations_total)
+  add("same_week_rpi_matching", "BLOCKING", if (same_week_ok) "PASS" else "FAIL", "Same-week observation pairing produced a positive, bounded matched set.", metadata_rds, "same_week_matching=TRUE; 0 < matched <= total", if (same_week_ok) paste(dynamic_threshold$same_week_matching, dynamic_threshold$n_observations_matched, dynamic_threshold$n_observations_total, sep = ";") else "missing or inconsistent")
   add("final_reporting_artifacts", "BLOCKING", if (!is.na(metadata_rds) && production_gate_file_ok(metadata_rds)) "PASS" else "FAIL", "Required final reporting metadata are present.", metadata_rds, "readable reporting metadata", metadata_rds)
   add("provenance_coordinates", "PROVENANCE", "INFO", "Authoritative coordinate source and CRS remain recorded in the post-fit metadata.", contract$input$observations, "lon/lat, EPSG:4326", contract$input$coordinate_fields)
   production_gate_finalize(rows)
 }
 
 production_validation_inventory <- function() {
-  blocking <- data.frame(
-    gate = c(rep("prepare", 11L), rep("fit", 9L), rep("postfit", 12L), rep("prepare", 4L), rep("fit", 3L), rep("postfit", 9L)),
-    check_name = c(
-      "input_readable", "input_sha_recorded", "production_config", "dynamic_horizon", "stage1_artifact", "stage2_artifact", "stage3a_artifact", "stage1_to_stage2_provenance", "stage2_to_stage3a_provenance", "dynamic_dimensions", "fit_executed_false",
-      "fit_readable", "fit_provenance", "fit_ok", "convergence_completion", "posterior_summaries", "posterior_values_finite", "predictor_values_finite", "family_link_contract",
-      "extraction_completed", "holdout_alignment", "projection_reconstruction", "projection_dimensions", "raster_reconciliation", "structural_reconstruction", "temperature_mask", "authoritative_coordinate_transform", "same_week_rpi_matching", "dynamic_rpi_threshold", "rpi_class_support", "final_reporting_artifacts", "final_manifest",
-      "historical_reference_statistics", "historical_mesh_summary", "runtime_estimate", "historical_holdout_count", "initialization_provenance", "theta_source", "theta_compatibility", "dic_waic_comparison", "marginal_likelihood_comparison", "historical_metric_comparison", "historical_rpi_comparison", "host_denominator_expansion", "environment_versions", "scheduler_job_id", "resolved_horizon_provenance", "artifact_shas"),
-    current_location = c(rep("orchestrator/preflight", 11L), rep("fit-health/orchestrator", 9L), rep("post-fit audits/orchestrator", 12L), rep("historical diagnostics", 16L)),
-    current_severity = c(rep("BLOCKING", 32L), rep("MIXED", 16L)),
-    proposed_severity = c(rep("BLOCKING", 32L), "WARNING", "WARNING", "PROVENANCE", "WARNING", "PROVENANCE", "PROVENANCE", "BLOCKING", "WARNING", "WARNING", "WARNING", "WARNING", "WARNING", "PROVENANCE", "PROVENANCE", "PROVENANCE", "PROVENANCE"),
-    reason = c(rep("Scientific correctness, lineage, dimensions, finite values, or required output contract.", 32L), "Informs operators but is not a correctness criterion.", "Current mesh is valid when independently dimensioned.", "Operational estimate only.", "Current support is dynamic.", "Provenance is retained; initialization source is not fit health.", "Provenance retained.", "Pre-fit theta compatibility protects model initialization lineage.", "Historical diagnostic only.", "Historical diagnostic only.", "Historical diagnostic only.", "Historical diagnostic only.", "Nonblocking host-composition warning.", "Provenance unless incompatible.", "Provenance only.", "Provenance only.", "Provenance only."),
-    upstream_duplicate = FALSE, historical_only = c(rep(FALSE, 32L), TRUE, TRUE, TRUE, TRUE, FALSE, FALSE, FALSE, TRUE, TRUE, TRUE, TRUE, TRUE, FALSE, FALSE, FALSE, FALSE), dynamic_or_hardcoded = c(rep("dynamic", 32L), "historical", "historical", "none", "historical", "dynamic", "dynamic", "dynamic", "historical", "historical", "historical", "historical", "dynamic", "environment", "provenance", "dynamic", "provenance"), action = c(rep("retain", 32L), "demote", "demote", "demote", "demote", "demote", "demote", "demote", "demote", "demote", "demote", "demote", "demote", "retain", "retain", "retain", "retain"), stringsAsFactors = FALSE
+  prepare_checks <- c(
+    "input_readable", "input_sha_recorded", "production_config", "dynamic_horizon",
+    "stage1_artifact", "stage2_artifact", "stage3a_artifact",
+    "stage_artifact_deserialization", "stage1_to_stage2_provenance", "stage2_to_stage3a_provenance",
+    "dynamic_dimensions", "dynamic_spde_group_dimensions", "model_covariates_finite", "fit_executed_false",
+    "preflight_contract", "theta_compatibility"
   )
+  fit_checks <- c(
+    "fit_readable", "fit_provenance", "fit_ok", "convergence_completion", "family_link_contract",
+    "posterior_summaries", "posterior_values_finite", "predictor_values_finite", "fit_health_structure"
+  )
+  postfit_checks <- c(
+    "extraction_completed", "holdout_alignment", "validation_predictions_finite", "projection_reconstruction",
+    "projection_dimensions", "raster_mapping", "raster_reconciliation", "structural_reconstruction",
+    "temperature_mask", "authoritative_coordinate_transform", "same_week_rpi_matching", "dynamic_rpi_threshold",
+    "rpi_class_support", "final_reporting_artifacts", "final_manifest"
+  )
+  historical_checks <- c(
+    "historical_reference_statistics", "historical_mesh_summary", "runtime_estimate", "historical_holdout_count",
+    "initialization_provenance", "theta_source", "dic_waic_comparison", "marginal_likelihood_comparison",
+    "historical_metric_comparison", "historical_rpi_comparison", "host_denominator_expansion", "environment_versions",
+    "scheduler_job_id", "resolved_horizon_provenance", "artifact_shas"
+  )
+  gate <- c(rep("prepare", length(prepare_checks)), rep("fit", length(fit_checks)), rep("postfit", length(postfit_checks)), rep("fit", length(historical_checks)))
+  check_name <- c(prepare_checks, fit_checks, postfit_checks, historical_checks)
+  current_location <- c(rep("orchestrator/preflight", length(prepare_checks)), rep("fit-health/orchestrator", length(fit_checks)), rep("post-fit audits/orchestrator", length(postfit_checks)), rep("historical diagnostics", length(historical_checks)))
+  current_severity <- c(rep("BLOCKING", length(prepare_checks) + length(fit_checks) + length(postfit_checks)), rep("MIXED", length(historical_checks)))
+  proposed_severity <- c(rep("BLOCKING", length(prepare_checks) + length(fit_checks) + length(postfit_checks)), "WARNING", "WARNING", "PROVENANCE", "WARNING", "PROVENANCE", "PROVENANCE", "WARNING", "WARNING", "WARNING", "WARNING", "WARNING", "PROVENANCE", "PROVENANCE", "PROVENANCE", "PROVENANCE")
+  reason <- c(
+    rep("Scientific correctness, lineage, dimensions, finite values, or required output contract.", length(prepare_checks) + length(fit_checks) + length(postfit_checks)),
+    "Informs operators but is not a correctness criterion.", "Current mesh is valid when independently dimensioned.", "Operational estimate only.", "Current support is dynamic.",
+    "Provenance is retained; initialization source is not fit health.", "Provenance retained.", "Historical diagnostic only.", "Historical diagnostic only.", "Historical diagnostic only.",
+    "Historical diagnostic only.", "Historical diagnostic only.", "Nonblocking host-composition warning.", "Provenance unless incompatible.", "Provenance only.", "Provenance only."
+  )
+  historical_only <- c(rep(FALSE, length(prepare_checks) + length(fit_checks) + length(postfit_checks)), TRUE, TRUE, TRUE, TRUE, FALSE, FALSE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, FALSE, FALSE, FALSE)
+  dynamic_or_hardcoded <- c(rep("dynamic", length(prepare_checks) + length(fit_checks) + length(postfit_checks)), "historical", "historical", "none", "historical", "dynamic", "dynamic", "historical", "historical", "historical", "historical", "historical", "dynamic", "environment", "provenance", "provenance")
+  action <- c(rep("retain", length(prepare_checks) + length(fit_checks) + length(postfit_checks)), rep("demote", length(historical_checks)))
+  data.frame(gate, check_name, current_location, current_severity, proposed_severity, reason, upstream_duplicate = FALSE, historical_only, dynamic_or_hardcoded, action, stringsAsFactors = FALSE)
 }
