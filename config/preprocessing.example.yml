@@ -1,0 +1,57 @@
+project:
+  seed: 1976
+  output_directory: outputs/preprocessing
+study:
+  start_date: '2022-01-01'
+  end_date: '2022-12-31'
+  projected_crs: 'EPSG:5070' # Projected metres; choose a CRS appropriate to the study area.
+temporal:
+  start_week: null # Optional YYYY-Www override; otherwise study.start_date is used.
+  end_week: auto_last_complete_observation_week # Or YYYY-Www / ISO date for an explicit reproducibility override.
+inputs:
+  observation_mode: raw # raw or standardized
+  observation_crs: null # Required when observation_mode is standardized, e.g. EPSG:4326.
+  observations: data/private/observations.csv
+  study_boundary: data/private/study_boundary.gpkg
+  admin_boundary: null # Optional separate administrative geometry; defaults to study_boundary.
+  admin_column: null # Optional attribute; common names are inferred when omitted.
+  template_raster: data/private/template.tif
+dynamic_covariates:
+  minimum_temperature: data/private/mintemp_weekly
+  soil_moisture: data/private/soilmoist_weekly
+  leaf_area_low: data/private/leafarea_weekly
+  relative_humidity: data/private/humidity_weekly
+static_covariates:
+  cattle: data/private/cattle.tif
+  horses: data/private/horses.tif
+  pigs: data/private/pigs.tif
+  sheep: data/private/sheep.tif
+  goats: data/private/goats.tif
+  road_density: data/private/road_density.tif
+  night_illumination: data/private/night_illumination.tif
+mesh:
+  boundary_buffer_km: 20
+  use_observation_locations: false
+  cutoff_km: 25
+  max_edge_km: [50, 200]
+  offset_km: [100, 250]
+  minimum_angle_degrees: 30
+  island_area_threshold_km2: 500
+extraction:
+  search_radius_km: 75
+  dynamic_search_radius_km: 75
+transformations:
+  temperature_hinge: 12
+  dynamic_missing_policy: fail
+  livestock_missing_policy: impute_zero
+tier1:
+  positive_cellweek_thinning:
+    enabled: true
+    seed: 1976
+outputs:
+  model_inputs: model_inputs.rds
+  observation_audit: observation_audit.csv
+  covariate_audit: covariate_audit.csv
+  excluded_observations: excluded_observations.csv
+  excluded_tier1_positives: excluded_tier1_positives.csv
+# Copy this file to config/preprocessing.yml, edit it, and keep that file untracked.

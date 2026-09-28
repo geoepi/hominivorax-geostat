@@ -89,6 +89,22 @@ $$\log(\mu_{it}) = \log(\text{Area}_i) + \beta_{0}^{(2)} + \sum \beta_{2} \mathb
 
 > **Note on $\alpha \xi_{1,it}$:** This represents a shared spatial component where $\alpha$ quantifies the association between surveillance effort and biological intensity, allowing for the correction of preferential sampling.
 
+## Standardized preprocessing output
+
+The model-facing object is now produced by `scripts/run_preprocessing.R`. The compatibility adapter below preserves the legacy names used by the model demonstration while the canonical source remains `model_inputs.rds`.
+
+```{r eval=FALSE}
+source(here::here("R/load_preprocessing.R"))
+load_preprocessing(here::here())
+model_inputs <- readRDS(here::here("outputs/preprocessing/model_inputs.rds"))
+tier_1.set <- model_inputs$tier1
+tier_2.set <- model_inputs$tier2
+grid_combos <- model_inputs$prediction_grid
+mesh.dom <- model_inputs$mesh
+tier_1.set <- add_legacy_model_fields(tier_1.set)
+tier_2.set <- add_legacy_model_fields(tier_2.set)
+```
+
 ---
 
 ## Spatial Projection
@@ -154,7 +170,7 @@ jtier1.stk <- inla.stack(
 
 ### Abundance Stack
 ```{r eval=FALSE}
-locs_t2 <- cbind(tier_1.set$x, tier_1.set$y) # geographic coordinates
+locs_t2 <- cbind(tier_2.set$x, tier_2.set$y) # geographic coordinates
 
 A.xi2 <- inla.spde.make.A(mesh.dom, # same as prior chunk
                           loc = locs_t2, 

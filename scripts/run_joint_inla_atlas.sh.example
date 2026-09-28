@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# Example SLURM wrapper for the Stage 3B Atlas fit.
+# Supply the account, partition, resources, project root, and Rscript path for your site.
+# The historical NB run used approximately 14 CPUs, 280 GB RAM, and a 36 hour allocation;
+# those values are documentation only and are not assumed to be required here.
+
+#SBATCH -A YOUR_ACCOUNT
+#SBATCH -p YOUR_PARTITION
+#SBATCH --cpus-per-task=12
+#SBATCH --mem=280G
+#SBATCH -t 36:00:00
+
+set -euo pipefail
+
+PROJECT_ROOT="/path/to/hominivorax-geostat"
+RSCRIPT_BIN="Rscript"
+CONFIG_PATH="${PROJECT_ROOT}/config/joint_inla_fit.atlas.yml"
+OUTPUT_PATH="${PROJECT_ROOT}/outputs/joint_inla_fit"
+
+cd "${PROJECT_ROOT}"
+"${RSCRIPT_BIN}" scripts/run_joint_inla.R \
+  --config "${CONFIG_PATH}" \
+  --output "${OUTPUT_PATH}"

@@ -1,0 +1,49 @@
+# Single-command production orchestration contract.
+# Copy to config/production.yml and replace private input/config paths.
+
+project:
+  output_root: /project/disease_ecology/nws-geostat-output/production_runs
+
+input:
+  observations: /project/disease_ecology/NWScrewworm/data/processed_data/case_detections/combined_clean_obs_2027-07-31.csv
+
+temporal:
+  start_epiweek: "2024-W01"
+  end_rule: last_complete_epiweek
+
+# Stage-specific files contain model rules. The orchestrator overrides only
+# run-specific inputs and output directories.
+stage_configs:
+  preprocessing: preprocessing.example.yml
+  joint_model: joint_model.example.yml
+  joint_inla: joint_inla.example.yml
+  fit: joint_inla_fit.example.yml
+
+reporting:
+  temperature_mask:
+    enabled: true
+    variable: mintemp
+    threshold_c: 14.5
+  rpi:
+    calibration: same_week_observation_pairs
+    quantile: 0.10
+    generation_days: 21
+    days_per_layer: 7
+  canonical_report_root: null
+
+scheduler:
+  account: disease_ecology
+  partition: bigmem
+  prepare:
+    cpus: 4
+    mem: 64G
+    time: "08:00:00"
+  fit:
+    cpus: 12
+    mem: 280G
+    time: "36:00:00"
+  postfit:
+    cpus: 4
+    mem: 64G
+    time: "12:00:00"
+

@@ -87,8 +87,10 @@ library(INLA) # mesh construction, inference
 ## Custom Functions 
 Load customized functions.  
 ```{r, warning=FALSE, message=FALSE}
+source(here("R/load_preprocessing.R"))
+load_preprocessing(here())
 source(here("R/utilities.R"))
-source_dir(here("R"))
+source(here("R/plot_bivariate_response.R"))
 ```
 
 ## Load Preprocessed Data
@@ -163,17 +165,18 @@ calendar_weeks <- data.frame(date = seq(study_start, study_end, by = "day")) %>%
   ) %>%
   distinct(year, week)
 
-time_index <- bind_rows(data_weeks, calendar_weeks) %>%
-  distinct(year, week) %>%
-  mutate(year = as.numeric(year), week = as.numeric(week)) %>%
-  filter(year >= 2022) %>%
-  arrange(year, week)
+time_index <- make_week_index(study_start, study_end)
+# Legacy plotting chunks below use year/week; these aliases retain the shared ISO keys.
+time_index$year <- time_index$epiyear
+time_index$week <- time_index$epiweek
 
 ```
 
 Replicate nodes to ensure a copy for each week in the study period.  
 ```{r}
-quad_expand <- crossing(integ_df, time_index)
+quad_expand <- crossing(integ_df, time_index) %>%
+  transmute(Y1 = Y1, Exp = Exp, x = x, y = y,
+            year = epiyear, week = epiweek, time_index = time_index)
 
 dim(quad_expand) # dimensions
 
@@ -185,14 +188,15 @@ tail(quad_expand)
 ```{r}
 nws_detections_df <- sim_data_df %>%
   mutate(Y1 = 1, # NWS detection was reported
-         Exp = NA) %>% # no exposure (point locations, no area)
-  select(Y1, Exp, x, y, year, week)
+         Exp = NA,
+         time_index = match(paste(year, week), paste(time_index$epiyear, time_index$epiweek))) %>% # no exposure (point locations, no area)
+  select(Y1, Exp, x, y, year, week, time_index)
 ```
 
 ## Combine Detection Tier
 Combine mesh nodes (quadrature) with NWS detections (simulated)
 ```{r}
-tier1_df <- rbind(nws_detections_df, quad_expand)
+tier1_df <- dplyr::bind_rows(nws_detections_df, quad_expand)
 
 # check
 sum(tier1_df$Y1) == nrow(nws_detections_df)

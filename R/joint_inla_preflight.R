@@ -1,0 +1,746 @@
+joint_inla_preflight_text <- function(value, missing = NA_character_) {
+  if (is.null(value) || !length(value)) return(missing)
+  if (length(value) == 1L && is.na(value)) return(missing)
+  paste(as.character(value), collapse = ",")
+}
+
+joint_inla_preflight_class <- function(value) {
+  classes <- class(value)
+  if (is.null(classes) || !length(classes)) "<none>" else paste(classes, collapse = "|")
+}
+
+joint_inla_preflight_storage <- function(value) {
+  tryCatch(storage.mode(value), error = function(e) "<unavailable>")
+}
+
+joint_inla_preflight_numeric_storage_ok <- function(value) {
+  !is.null(value) && is.atomic(value) &&
+    typeof(value) %in% c("integer", "double") &&
+    is.numeric(value) && !is.factor(value) && !is.ordered(value) &&
+    !is.character(value) && !is.logical(value) && !is.list(value)
+}
+
+joint_inla_preflight_index_storage_ok <- function(value) {
+  !is.null(value) && is.atomic(value) && typeof(value) == "integer" && is.numeric(value) &&
+    !is.factor(value) && !is.ordered(value) && !is.character(value) &&
+    !is.logical(value) && !is.list(value)
+}
+
+joint_inla_preflight_integer_observed <- function(value, tolerance = sqrt(.Machine$double.eps)) {
+  if (!joint_inla_preflight_numeric_storage_ok(value)) return(NA)
+  finite <- value[is.finite(value)]
+  if (!length(finite)) return(NA)
+  all(abs(finite - round(finite)) <= tolerance)
+}
+
+joint_inla_preflight_covers_joint_rows <- function(value, n_rows) {
+  !is.null(value) && length(n_rows) == 1L && !is.na(n_rows) && length(value) >= n_rows
+}
+
+joint_inla_preflight_active_rows <- function(Y, link, likelihood) {
+  if (!is.matrix(Y) || ncol(Y) < likelihood || length(link) != nrow(Y)) {
+    return(rep(FALSE, if (is.matrix(Y)) nrow(Y) else 0L))
+  }
+  !is.na(Y[, likelihood]) & link == likelihood
+}
+
+joint_inla_preflight_projected_values <- function(value, A, active) {
+  active <- as.logical(active)
+  if (!length(active)) return(list(values = numeric(), row_values = numeric(), missing_rows = integer(), referenced_columns = integer()))
+  if (is.null(A) || length(dim(A)) != 2L || nrow(A) != length(active) ||
+      !joint_inla_preflight_numeric_storage_ok(value) || !requireNamespace("Matrix", quietly = TRUE)) {
+    row_values <- value[seq_len(min(length(value), length(active)))][active]
+    return(list(
+      values = row_values, row_values = row_values,
+      missing_rows = integer(), referenced_columns = integer()
+    ))
+  }
+  n_predictors <- ncol(A)
+  if (length(value) < n_predictors) {
+    return(list(values = numeric(), row_values = numeric(), missing_rows = which(active), referenced_columns = integer()))
+  }
+  value <- value[seq_len(n_predictors)]
+  support <- which(!is.na(value) | is.nan(value))
+  active_rows <- which(active)
+  if (!length(support) || !length(active_rows)) {
+    return(list(values = numeric(), row_values = numeric(), missing_rows = active_rows, referenced_columns = integer()))
+  }
+  projected <- A[active_rows, support, drop = FALSE]
+  nonzero <- if (inherits(projected, "Matrix")) Matrix::which(projected != 0, arr.ind = TRUE) else which(projected != 0, arr.ind = TRUE)
+  if (!length(nonzero)) {
+    return(list(values = numeric(), row_values = numeric(), missing_rows = active_rows, referenced_columns = integer()))
+  }
+  referenced_support <- sort(unique(nonzero[, "col"]))
+  represented_rows <- sort(unique(active_rows[nonzero[, "row"]]))
+  list(
+    values = value[support[referenced_support]],
+    row_values = value[support[nonzero[, "col"]]],
+    missing_rows = setdiff(active_rows, represented_rows),
+    referenced_columns = support[referenced_support]
+  )
+}
+
+joint_inla_preflight_number <- function(value) {
+  if (is.null(value) || !length(value)) return(NA_character_)
+  if (any(!is.finite(value))) return(NA_character_)
+  format(value, scientific = FALSE, trim = TRUE)
+}
+
+joint_inla_preflight_formula_fixed_names <- function(formula) {
+  labels <- attr(stats::terms(formula), "term.labels")
+  if (!length(labels)) return(character())
+  is_random <- vapply(labels, function(label) {
+    expression <- tryCatch(str2lang(label), error = function(e) NULL)
+    is.call(expression) && identical(as.character(expression[[1L]]), "f")
+  }, logical(1L))
+  fixed_labels <- labels[!is_random]
+  unique(unlist(lapply(fixed_labels, function(label) {
+    expression <- tryCatch(str2lang(label), error = function(e) NULL)
+    if (is.null(expression)) character() else all.vars(expression)
+  }), use.names = FALSE))
+}
+
+joint_inla_preflight_theta_inventory <- function(theta_order = NULL, theta_length = NULL) {
+  component_inventory <- paste(c(
+    "tier1_field SPDE hyperparameters",
+    "tier1_field group iid hyperparameter",
+    "week_steps RW1 hyperparameter",
+    "admin_f iid hyperparameter",
+    "tier2_field SPDE hyperparameters",
+    "tier2_field group iid hyperparameter",
+    "tier2_copy_field copy coefficient",
+    "tier2_week RW1 hyperparameter",
+    "cattle_q RW2 hyperparameter",
+    "any additional reference-model hyperparameter exposed by INLA"
+  ), collapse = "; ")
+  verified <- !is.null(theta_order) && length(theta_order) > 0L && all(nzchar(as.character(theta_order)))
+  theta_length <- if (verified) length(theta_order) else if (is.null(theta_length)) 0L else as.integer(theta_length)
+  labels <- if (verified) as.character(theta_order) else if (theta_length > 0L) paste0("theta_", seq_len(theta_length)) else character()
+  data.frame(
+    position = seq_len(theta_length),
+    assumed_label = if (verified) labels else paste0(labels, " (semantic label unverified)"),
+    expected_model_components = component_inventory,
+    assumed_order_note = if (verified) "Canonical theta order is reconstructed from the verified Stage 3A model signature." else "Retain the current artifact theta positions as provenance; semantic order is not established from Stage 3A metadata.",
+    order_verified = verified,
+    stringsAsFactors = FALSE
+  )
+}
+
+joint_inla_preflight_quarter_group_expectation <- function(build) {
+  sources <- list()
+  add_levels <- function(name, value) {
+    if (is.null(value) || !length(value)) return(invisible(NULL))
+    values <- suppressWarnings(as.numeric(value))
+    if (!length(values) || any(!is.finite(values)) || any(values != round(values)) || any(values < 1)) {
+      sources[[name]] <<- NA_integer_
+    } else {
+      sources[[name]] <<- sort(unique(as.integer(round(values))))
+    }
+    invisible(NULL)
+  }
+  add_count <- function(name, value) {
+    if (is.null(value) || length(value) != 1L) return(invisible(NULL))
+    count <- suppressWarnings(as.numeric(value))
+    if (!is.finite(count) || count != round(count) || count < 1) sources[[name]] <<- NA_integer_
+    else sources[[name]] <<- seq_len(as.integer(count))
+    invisible(NULL)
+  }
+
+  build_audit <- if (is.data.frame(build$build_audit)) build$build_audit else NULL
+  if (!is.null(build_audit) && all(c("scope", "metric", "value") %in% names(build_audit))) {
+    temporal <- build_audit[build_audit$scope == "temporal" & build_audit$metric == "quarter_groups", , drop = FALSE]
+    if (nrow(temporal) == 1L) add_count("stage3a_build_audit.temporal.quarter_groups", temporal$value[[1L]])
+    prediction_count <- build_audit[build_audit$scope == "prediction" & build_audit$metric == "prediction_temporal_groups", , drop = FALSE]
+    if (nrow(prediction_count) == 1L) add_count("stage3a_build_audit.prediction.prediction_temporal_groups", prediction_count$value[[1L]])
+  }
+
+  prediction <- build$prediction_compatibility
+  if (is.list(prediction)) {
+    add_levels("stage3a_prediction_compatibility.groups", prediction$groups)
+    add_count("stage3a_prediction_compatibility.temporal_groups", prediction$temporal_groups)
+  }
+
+  fields <- build$fields
+  field_sources <- list(
+    tier1_field = c("tier1", "tier1_field.group"),
+    tier2_field = c("tier2", "tier2_field.group"),
+    tier2_copy_field = c("copy", "tier2_copy_field.group")
+  )
+  for (name in names(field_sources)) {
+    location <- field_sources[[name]]
+    field <- if (is.list(fields)) fields[[location[[1L]]]] else NULL
+    value <- if (is.list(field)) field[[location[[2L]]]] else NULL
+    add_levels(paste0("stage3a_fields.", name, ".group"), value)
+  }
+
+  invalid_sources <- names(sources)[vapply(sources, function(value) length(value) == 1L && is.na(value[[1L]]), logical(1L))]
+  available <- sources[!names(sources) %in% invalid_sources]
+  if (!length(available)) {
+    return(list(success = FALSE, n_groups = NA_integer_, expected_levels = integer(),
+                sources = sources, invalid_sources = invalid_sources,
+                details = "Stage 3A quarter-group metadata is missing or invalid."))
+  }
+
+  reference <- available[[1L]]
+  agreement <- all(vapply(available, identical, logical(1L), y = reference)) && !length(invalid_sources)
+  n_groups <- if (length(reference)) max(reference) else NA_integer_
+  contiguous <- length(reference) && identical(reference, seq_len(n_groups))
+  list(
+    success = isTRUE(agreement) && isTRUE(contiguous),
+    n_groups = as.integer(n_groups), expected_levels = as.integer(reference),
+    sources = sources, invalid_sources = invalid_sources,
+    agreement = agreement, contiguous = contiguous,
+    details = if (isTRUE(agreement) && isTRUE(contiguous)) {
+      paste0("Authoritative Stage 3A quarter-group metadata agrees across ", paste(names(available), collapse = ", "), ".")
+    } else {
+      paste0("Stage 3A quarter-group metadata must agree and be contiguous 1:n_groups; sources: ",
+             paste(vapply(sources, function(value) paste(value, collapse = ","), character(1L)), collapse = "; "))
+    }
+  )
+}
+
+joint_inla_preflight_build <- function(build, build_path = NA_character_, expected_nspde = NULL,
+                                      expected_cattle_bins = NULL) {
+  checks <- list()
+  artifact_sha256 <- joint_inla_fit_hash_file(build_path)
+  add_check <- function(section, check, status, observed, expected, details = "", metrics = list()) {
+    metric_character <- function(name) {
+      value <- metrics[[name]]
+      if (is.null(value) || !length(value)) NA_character_ else as.character(value[[1L]])
+    }
+    metric_logical <- function(name) {
+      value <- metrics[[name]]
+      if (is.null(value) || !length(value)) NA else as.logical(value[[1L]])
+    }
+    metric_numeric <- function(name) {
+      value <- metrics[[name]]
+      if (is.null(value) || !length(value)) NA_real_ else as.numeric(value[[1L]])
+    }
+    checks[[length(checks) + 1L]] <<- data.frame(
+      section = as.character(section), check = as.character(check), status = as.character(status),
+      observed = joint_inla_preflight_text(observed), expected = joint_inla_preflight_text(expected),
+      details = as.character(details), artifact_path = joint_inla_preflight_text(build_path),
+      artifact_sha256 = artifact_sha256,
+      source_column = metric_character("source_column"),
+      class = metric_character("class"), typeof = metric_character("typeof"),
+      storage_accepted = metric_logical("storage_accepted"),
+      length_observed = metric_numeric("length_observed"),
+      length_expected = metric_numeric("length_expected"),
+      length_matches = metric_logical("length_matches"),
+      integer_valued_required = metric_logical("integer_valued_required"),
+      integer_valued_observed = metric_logical("integer_valued_observed"),
+      minimum = metric_numeric("minimum"), maximum = metric_numeric("maximum"),
+      unique_count = metric_numeric("unique_count"),
+      range_contiguity = metric_character("range_contiguity"),
+      active_finite_count = metric_numeric("active_finite_count"),
+      active_nonfinite_count = metric_numeric("active_nonfinite_count"),
+      active_unprojected_count = metric_numeric("active_unprojected_count"),
+      configured_bin_count = metric_numeric("configured_bin_count"),
+      full_support_bin_count = metric_numeric("full_support_bin_count"),
+      active_bin_count = metric_numeric("active_bin_count"),
+      active_missing_bins = metric_character("active_missing_bins"),
+      active_counts_by_bin = metric_character("active_counts_by_bin"),
+      active_support_proportion = metric_numeric("active_support_proportion"),
+      stringsAsFactors = FALSE
+    )
+  }
+  fail <- function(section, check, observed, expected, details, metrics = list()) add_check(section, check, "fail", observed, expected, details, metrics)
+  pass <- function(section, check, observed, expected, details = "", metrics = list()) add_check(section, check, "pass", observed, expected, details, metrics)
+  warn <- function(section, check, observed, expected, details, metrics = list()) add_check(section, check, "warning", observed, expected, details, metrics)
+
+  if (!is.list(build)) {
+    fail("artifact", "build_object", "not a list", "Stage 3A build list", "Cannot inspect the production artifact.")
+    return(list(success = FALSE, audit = do.call(rbind, checks), theta_inventory = joint_inla_preflight_theta_inventory(),
+                summary = list(failures = 1L, warnings = 0L)))
+  }
+
+  stack <- if (is.list(build$stacks)) build$stacks$joint else NULL
+  data <- NULL
+  A <- NULL
+  stack_error <- NULL
+  if (is.null(stack)) {
+    fail("artifact", "stacks_joint", "missing", "stacks$joint", "The production joint stack is required.")
+  } else {
+    materialized <- tryCatch({
+      joint_inla_fit_require_inla()
+      list(data = INLA::inla.stack.data(stack), A = INLA::inla.stack.A(stack))
+    }, error = function(error) {
+      list(error = conditionMessage(error))
+    })
+    if (!is.null(materialized$error)) stack_error <- materialized$error
+    else if (!is.null(materialized)) {
+      data <- materialized$data
+      A <- materialized$A
+    }
+    if (!is.null(stack_error)) fail("artifact", "joint_stack_materialization", stack_error, "materializable INLA stack", "Stage 3B cannot validate the production stack.")
+    else pass("artifact", "joint_stack_materialization", "data and A materialized", "data and A materialized", "No model fit was called.")
+  }
+
+  Y <- if (is.list(data)) data$Y else NULL
+  link <- if (is.list(data)) data$link else NULL
+  E <- if (is.list(data)) data$e else NULL
+  n_rows <- if (is.matrix(Y)) nrow(Y) else NA_integer_
+  n_for_rep <- if (is.na(n_rows)) 0L else n_rows
+  stack_row_count <- tryCatch({
+    if (exists("inla.stack.nrow", envir = asNamespace("INLA"), inherits = FALSE)) INLA::inla.stack.nrow(stack) else NA_integer_
+  }, error = function(error) NA_integer_)
+  if (is.na(stack_row_count) && is.list(stack$data) && is.matrix(stack$data$Y)) stack_row_count <- nrow(stack$data$Y)
+  if (is.na(stack_row_count) && is.matrix(Y)) stack_row_count <- nrow(Y)
+  if (!is.na(n_rows) && !is.na(stack_row_count) && identical(as.integer(n_rows), as.integer(stack_row_count))) pass("response", "joint_stack_row_count", n_rows, stack_row_count, "Y has the same row count as the production joint stack.")
+  else fail("response", "joint_stack_row_count", paste(n_rows, stack_row_count, sep = "/"), "Y rows equal joint stack rows", "Joint response row count does not match the underlying stack.")
+  link_active <- if (!is.null(link) && length(link) == n_rows) link %in% c(1, 2) else rep(FALSE, n_for_rep)
+  tier1_rows <- if (!is.null(link) && length(link) == n_rows) link == 1 else rep(FALSE, n_for_rep)
+  tier2_rows <- if (!is.null(link) && length(link) == n_rows) link == 2 else rep(FALSE, n_for_rep)
+
+  y_ok <- is.matrix(Y) && is.numeric(Y) && ncol(Y) == 2L
+  if (y_ok) pass("response", "Y_shape_type", paste(typeof(Y), dim(Y), collapse = " x "), "numeric matrix with 2 columns", "Joint response matrix has the required shape.")
+  else fail("response", "Y_shape_type", if (is.null(Y)) "missing" else paste(typeof(Y), dim(Y), collapse = " x "), "numeric matrix with 2 columns", "Y must be a numeric two-column matrix.")
+
+  if (y_ok && !is.null(link)) {
+    pass("response", "joint_row_count", nrow(Y), "nrow(Y) equals joint stack row count", "Y row count is defined by the materialized joint stack.")
+  }
+  y1 <- if (y_ok) Y[, 1L] else NULL
+  y2 <- if (y_ok) Y[, 2L] else NULL
+  y1_active <- if (y_ok) !is.na(y1) else logical()
+  y2_active <- if (y_ok) !is.na(y2) else logical()
+  tier1_active_rows <- if (y_ok) joint_inla_preflight_active_rows(Y, link, 1L) else rep(FALSE, n_for_rep)
+  tier2_active_rows <- if (y_ok) joint_inla_preflight_active_rows(Y, link, 2L) else rep(FALSE, n_for_rep)
+  observation_active <- y1_active | y2_active
+  if (y_ok) {
+    pass("response", "likelihood_1_non_na_count", sum(y1_active), "recorded", "Tier 1 response count.")
+    pass("response", "likelihood_2_non_na_count", sum(y2_active), "recorded", "Tier 2 response count.")
+    simultaneous <- sum(y1_active & y2_active)
+    if (simultaneous == 0L) pass("response", "no_simultaneous_responses", simultaneous, 0L, "Likelihood responses are mutually exclusive by row.")
+    else fail("response", "no_simultaneous_responses", simultaneous, 0L, "A joint row has both likelihood responses active.")
+    invalid_y1 <- sum(y1_active & !(is.finite(y1) & y1 %in% c(0, 1)))
+    if (invalid_y1 == 0L) pass("response", "tier1_binary_values", invalid_y1, 0L, "Tier 1 values are limited to 0/1/NA.")
+    else fail("response", "tier1_binary_values", invalid_y1, 0L, "Tier 1 contains values outside 0/1/NA.")
+    invalid_y2 <- sum(y2_active & !(is.finite(y2) & y2 > 0))
+    if (invalid_y2 == 0L) pass("response", "tier2_positive_values", invalid_y2, 0L, "Active Tier 2 responses are finite and positive.")
+    else fail("response", "tier2_positive_values", invalid_y2, 0L, "Active Tier 2 responses must be finite and > 0.")
+  }
+
+  link_ok <- is.numeric(link) && length(link) == n_rows && all(is.finite(link)) && all(link == as.integer(link)) && all(link %in% c(1, 2))
+  if (link_ok) {
+    pass("link_exposure", "link_type_values", paste(typeof(link), paste(sort(unique(link)), collapse = ",")), "integer-valued numeric with values 1/2", "Link values identify the two likelihood rows.")
+    pass("link_exposure", "link_row_counts", paste(sum(tier1_rows), sum(tier2_rows), sep = "/"), "counts sum to joint row count", "Tier 1/Tier 2 link counts cover the joint stack.")
+    wrong_link_active <- sum((y1_active & !tier1_rows) | (y2_active & !tier2_rows))
+    if (wrong_link_active == 0L) pass("link_exposure", "link_response_alignment", wrong_link_active, 0L, "Active responses align with their likelihood link.")
+    else fail("link_exposure", "link_response_alignment", wrong_link_active, 0L, "Active responses are assigned to the wrong likelihood link.")
+  } else {
+    fail("link_exposure", "link_type_values", if (is.null(link)) "missing" else paste(typeof(link), length(link)), "integer-valued numeric with values 1/2", "Link must be integer-valued and match Y rows.")
+  }
+
+  e_ok <- is.numeric(E) && length(E) == n_rows
+  if (e_ok) pass("link_exposure", "exposure_length", length(E), n_rows, "Exposure vector matches joint response rows.")
+  else fail("link_exposure", "exposure_length", if (is.null(E)) "missing" else length(E), n_rows, "E must have one value per joint response row.")
+  if (e_ok && link_ok) {
+    tier1_e_non_na <- sum(!is.na(E[tier1_rows]))
+    if (tier1_e_non_na == 0L) pass("link_exposure", "tier1_exposure_semantics", "all NA", "all NA", "Tier 1 uses implicit binomial trials; E is explicitly all NA.")
+    else fail("link_exposure", "tier1_exposure_semantics", tier1_e_non_na, 0L, "Tier 1 E values are not all NA; binomial exposure semantics are ambiguous.")
+    invalid_e2 <- sum(tier2_rows & y2_active & !(is.finite(E) & E > 0))
+    if (invalid_e2 == 0L) pass("link_exposure", "tier2_active_exposure", invalid_e2, 0L, "Active Tier 2 exposures are finite and positive.")
+    else fail("link_exposure", "tier2_active_exposure", invalid_e2, 0L, "Active Tier 2 exposures must be finite and > 0.")
+  }
+
+  formula_env <- if (inherits(build$formula, "formula")) environment(build$formula) else NULL
+  required_formula_objects <- c("spde_tier1", "spde_tier2", "pc_rw", "pc_rw_strong", "pc_rw_cat", "hyper_copy")
+  if (is.null(formula_env)) {
+    fail("formula_environment", "formula_environment_exists", "missing", "formula environment", "Cannot inspect required formula objects.")
+  } else {
+    pass("formula_environment", "formula_environment_exists", "present", "present", "Formula environment loaded.")
+    for (name in required_formula_objects) {
+      present <- exists(name, envir = formula_env, inherits = FALSE)
+      if (present) pass("formula_environment", paste0("object_", name), joint_inla_preflight_class(get(name, envir = formula_env, inherits = FALSE)), "present", "Required formula-environment object.")
+      else fail("formula_environment", paste0("object_", name), "missing", "present", "Required object is absent from the formula environment.")
+    }
+  }
+
+  n_predictors <- if (!is.null(A) && length(dim(A)) == 2L) ncol(A) else n_rows
+  mesh_counts <- c(build$spde$tier1$n.spde, build$spde$tier2$n.spde)
+  if (is.null(expected_nspde)) {
+    expected_nspde <- if (length(mesh_counts) == 2L && all(is.finite(mesh_counts)) && length(unique(as.integer(mesh_counts))) == 1L) as.integer(mesh_counts[[1L]]) else NA_integer_
+  }
+  q_values <- if ("cattle_q" %in% names(data)) joint_inla_preflight_projected_values(data[["cattle_q"]], A, rep(TRUE, n_rows))$values else numeric()
+  if (is.null(expected_cattle_bins)) {
+    finite_q <- q_values[is.finite(q_values)]
+    expected_cattle_bins <- if (length(finite_q)) max(as.integer(round(finite_q))) else NA_integer_
+  }
+
+  nspde_values <- c(
+    tier1 = if (!is.null(build$spde$tier1$n.spde)) build$spde$tier1$n.spde else NA_integer_,
+    tier2 = if (!is.null(build$spde$tier2$n.spde)) build$spde$tier2$n.spde else NA_integer_
+  )
+  for (tier in names(nspde_values)) {
+    if (identical(as.integer(nspde_values[[tier]]), as.integer(expected_nspde))) pass("random_effects", paste0(tier, "_mesh_nspde"), nspde_values[[tier]], expected_nspde, "Production mesh vertex count.")
+    else fail("random_effects", paste0(tier, "_mesh_nspde"), nspde_values[[tier]], expected_nspde, "Unexpected SPDE mesh vertex count.")
+  }
+
+  data_names <- if (is.list(data)) names(data) else character()
+  tier1_fixed <- c("intercept1", "north", "road_dens", "night_illum")
+  tier2_fixed <- c("intercept2", "mintemp", "soilmoist", "leafarea", "rhum", "cattle", "horses", "pigs", "goats", "sheep")
+  fixed_names <- character()
+  if (inherits(build$formula, "formula")) {
+    fixed_names <- tryCatch(joint_inla_preflight_formula_fixed_names(build$formula), error = function(error) {
+      fail("fixed_effects", "formula_fixed_term_extraction", conditionMessage(error), "extractable fixed terms", "Unable to identify fixed effects from the production formula.")
+      character()
+    })
+    pass("fixed_effects", "formula_fixed_terms", paste(fixed_names, collapse = ","), "all fixed terms identified", "Random f() terms were excluded from fixed-column validation.")
+  }
+  for (name in fixed_names) {
+    value <- if (name %in% data_names) data[[name]] else NULL
+    expected_likelihood <- if (name %in% tier1_fixed) "tier1" else if (name %in% tier2_fixed) "tier2" else "both"
+    active <- if (expected_likelihood == "tier1") tier1_active_rows else if (expected_likelihood == "tier2") tier2_active_rows else observation_active
+    storage_ok <- joint_inla_preflight_numeric_storage_ok(value)
+    length_ok <- joint_inla_preflight_covers_joint_rows(value, n_predictors)
+    type_metrics <- list(
+      class = if (is.null(value)) NA_character_ else joint_inla_preflight_class(value),
+      typeof = if (is.null(value)) NA_character_ else typeof(value),
+      source_column = name,
+      storage_accepted = storage_ok,
+      length_observed = if (is.null(value)) NA_real_ else length(value),
+      length_expected = n_predictors,
+      length_matches = length_ok
+    )
+    if (storage_ok) pass("fixed_effects", paste0(name, "_type"), paste0("class=", joint_inla_preflight_class(value), "; typeof=", typeof(value), "; storage.mode=", joint_inla_preflight_storage(value)), "integer/double numeric atomic vector", "Fixed-effect storage type is accepted.", type_metrics)
+    else fail("fixed_effects", paste0(name, "_type"), if (is.null(value)) "missing" else paste0("class=", joint_inla_preflight_class(value), "; typeof=", typeof(value), "; storage.mode=", joint_inla_preflight_storage(value)), "integer/double numeric atomic vector; no factor/ordered/character/logical/list", "Fixed-effect columns must use accepted numeric storage.", type_metrics)
+    if (storage_ok && length_ok) pass("fixed_effects", paste0(name, "_length"), length(value), paste0(">=", n_predictors), "Fixed-effect column covers the joint predictor columns.", type_metrics)
+    else if (storage_ok) fail("fixed_effects", paste0(name, "_length"), length(value), paste0(">=", n_predictors), "Fixed-effect column is shorter than the joint predictor count.", type_metrics)
+    if (storage_ok && length_ok) {
+      projected_values <- joint_inla_preflight_projected_values(value, A, active)
+      active_values <- projected_values$values
+      finite_mask <- is.finite(active_values)
+      invalid <- sum(!finite_mask) + length(projected_values$missing_rows)
+      finite <- active_values[finite_mask]
+      value_metrics <- c(type_metrics, list(
+        active_finite_count = sum(finite_mask), active_nonfinite_count = invalid,
+        active_unprojected_count = length(projected_values$missing_rows),
+        minimum = if (length(finite)) min(finite) else NA_real_,
+        maximum = if (length(finite)) max(finite) else NA_real_,
+        unique_count = length(unique(finite))
+      ))
+      if (invalid == 0L) pass("fixed_effects", paste0(name, "_active_finite"), invalid, 0L, paste0("Finite on ", expected_likelihood, " likelihood rows."), value_metrics)
+      else fail("fixed_effects", paste0(name, "_active_finite"), invalid, 0L, "Active fixed-effect values must be finite.", value_metrics)
+      pass("fixed_effects", paste0(name, "_summary"), paste0("source=", name, "; min=", joint_inla_preflight_number(if (length(finite)) min(finite) else NA_real_), "; max=", joint_inla_preflight_number(if (length(finite)) max(finite) else NA_real_), "; unique=", length(unique(finite))), "source column with min/max/unique recorded", "Fixed-effect distribution summary for the production model column.", value_metrics)
+    }
+  }
+
+  check_index <- function(name, active, integer_valued = TRUE, expected_min = 1L, expected_max = NULL,
+                          exact_levels = NULL, contiguous = FALSE) {
+    value <- if (name %in% data_names) data[[name]] else NULL
+    storage_ok <- if (isTRUE(integer_valued)) joint_inla_preflight_index_storage_ok(value) else joint_inla_preflight_numeric_storage_ok(value)
+    length_ok <- joint_inla_preflight_covers_joint_rows(value, n_predictors)
+    type_metrics <- list(
+      class = if (is.null(value)) NA_character_ else joint_inla_preflight_class(value),
+      typeof = if (is.null(value)) NA_character_ else typeof(value),
+      source_column = name,
+      storage_accepted = storage_ok,
+      length_observed = if (is.null(value)) NA_real_ else length(value),
+      length_expected = n_predictors,
+      length_matches = length_ok,
+      integer_valued_required = integer_valued
+    )
+    expected_storage <- if (isTRUE(integer_valued)) "integer numeric atomic vector (typeof == 'integer')" else "integer/double numeric atomic vector"
+    detail_storage <- if (isTRUE(integer_valued)) "Random-effect/index variables must use exact integer storage." else "Continuous numeric random-effect covariate storage is accepted."
+    if (storage_ok) pass("random_effects", paste0(name, "_type"), paste0("class=", joint_inla_preflight_class(value), "; typeof=", typeof(value), "; storage.mode=", joint_inla_preflight_storage(value)), expected_storage, "Random-effect/index storage type is accepted.", type_metrics)
+    else fail("random_effects", paste0(name, "_type"), if (is.null(value)) "missing" else paste0("class=", joint_inla_preflight_class(value), "; typeof=", typeof(value), "; storage.mode=", joint_inla_preflight_storage(value)), paste0(expected_storage, "; no factor/ordered/character/logical/list"), detail_storage, type_metrics)
+    if (storage_ok && !length_ok) {
+      fail("random_effects", paste0(name, "_length"), length(value), paste0(">=", n_predictors), "Random-effect/index variable is shorter than the joint predictor count.", type_metrics)
+      return(invisible(FALSE))
+    }
+    if (storage_ok) pass("random_effects", paste0(name, "_length"), length(value), paste0(">=", n_predictors), "Random-effect/index variable covers the joint predictor columns.", type_metrics)
+    if (!storage_ok) return(invisible(FALSE))
+    projected_values <- joint_inla_preflight_projected_values(value, A, active)
+    active_values <- projected_values$values
+    finite_mask <- is.finite(active_values)
+    invalid_finite <- sum(!finite_mask) + length(projected_values$missing_rows)
+    finite <- active_values[finite_mask]
+    integer_observed <- joint_inla_preflight_integer_observed(active_values)
+    finite_metrics <- c(type_metrics, list(
+      integer_valued_observed = integer_observed,
+      active_finite_count = sum(finite_mask), active_nonfinite_count = invalid_finite,
+      active_unprojected_count = length(projected_values$missing_rows),
+      minimum = if (length(finite)) min(finite) else NA_real_,
+      maximum = if (length(finite)) max(finite) else NA_real_,
+      unique_count = if (length(finite)) length(unique(finite)) else 0L
+    ))
+    if (invalid_finite == 0L) pass("random_effects", paste0(name, "_active_finite"), invalid_finite, 0L, "Active random-effect/index values are finite.", finite_metrics)
+    else fail("random_effects", paste0(name, "_active_finite"), invalid_finite, 0L, "Active random-effect/index values must be finite.", finite_metrics)
+    if (!length(finite)) {
+      fail("random_effects", paste0(name, "_active_values"), "none", "at least one active value", "No active values were available for validation.", finite_metrics)
+      return(invisible(FALSE))
+    }
+    if (integer_valued) {
+      non_integer <- sum(abs(finite - round(finite)) > sqrt(.Machine$double.eps))
+      if (non_integer == 0L) pass("random_effects", paste0(name, "_integer_valued"), non_integer, 0L, "Index/group values are integer-valued within numerical tolerance.", finite_metrics)
+      else fail("random_effects", paste0(name, "_integer_valued"), non_integer, 0L, "Index/group values must be integer-valued within numerical tolerance.", finite_metrics)
+    }
+    if (!is.null(expected_min)) {
+      below_min <- sum(finite < expected_min)
+      if (below_min == 0L) pass("random_effects", paste0(name, "_minimum"), min(finite), paste0(">=", expected_min), "Index/group minimum is valid.", finite_metrics)
+      else fail("random_effects", paste0(name, "_minimum"), min(finite), paste0(">=", expected_min), "Index/group values below the valid minimum.", finite_metrics)
+    }
+    if (!is.null(expected_max)) {
+      above_max <- sum(finite > expected_max)
+      if (above_max == 0L) pass("random_effects", paste0(name, "_maximum"), max(finite), paste0("<=", expected_max), "Index/group maximum is within the expected range.", finite_metrics)
+      else fail("random_effects", paste0(name, "_maximum"), max(finite), paste0("<=", expected_max), "Index/group values exceed the expected range.", finite_metrics)
+    }
+    levels <- if (isTRUE(integer_observed)) sort(unique(as.integer(round(finite)))) else sort(unique(finite))
+    range_contiguity <- "not_required"
+    if (!is.null(exact_levels)) {
+      exact <- isTRUE(integer_observed) && identical(levels, as.integer(exact_levels))
+      range_contiguity <- if (exact) "pass" else "fail"
+      if (exact) pass("random_effects", paste0(name, "_levels"), paste(levels, collapse = ","), paste(as.integer(exact_levels), collapse = ","), "Expected levels are represented.", c(finite_metrics, list(range_contiguity = range_contiguity)))
+      else fail("random_effects", paste0(name, "_levels"), paste(levels, collapse = ","), paste(as.integer(exact_levels), collapse = ","), "Expected levels are not represented exactly.", c(finite_metrics, list(range_contiguity = range_contiguity)))
+    } else if (isTRUE(contiguous)) {
+      expected_levels <- seq.int(min(levels), max(levels))
+      contiguous_ok <- isTRUE(integer_observed) && identical(levels, expected_levels)
+      range_contiguity <- if (contiguous_ok) "pass" else "fail"
+      if (contiguous_ok) pass("random_effects", paste0(name, "_contiguous_levels"), paste(levels, collapse = ","), paste(expected_levels, collapse = ","), "Levels are contiguous.", c(finite_metrics, list(range_contiguity = range_contiguity)))
+      else fail("random_effects", paste0(name, "_contiguous_levels"), paste(levels, collapse = ","), paste(expected_levels, collapse = ","), "Levels have gaps.", c(finite_metrics, list(range_contiguity = range_contiguity)))
+    }
+    pass("random_effects", paste0(name, "_summary"), paste0("class=", joint_inla_preflight_class(value), "; typeof=", typeof(value), "; storage_accepted=TRUE; integer_required=", integer_valued, "; integer_observed=", integer_observed, "; min=", min(finite), "; max=", max(finite), "; unique=", length(levels)), "class/typeof/storage/integer/range summary recorded", "Random-effect/index audit summary.", c(finite_metrics, list(range_contiguity = range_contiguity)))
+    invisible(TRUE)
+  }
+
+  check_cattle_rw2_support <- function() {
+    configured_bins <- seq_len(expected_cattle_bins)
+    q_value <- if ("cattle_q" %in% data_names) data[["cattle_q"]] else NULL
+    mid_value <- if ("cattle_mid_log1p" %in% data_names) data[["cattle_mid_log1p"]] else NULL
+    q_full <- joint_inla_preflight_projected_values(q_value, A, tier2_rows)
+    mid_full <- joint_inla_preflight_projected_values(mid_value, A, tier2_rows)
+    q_full_values <- q_full$row_values
+    if (!length(q_full_values)) q_full_values <- q_full$values
+    mid_full_values <- mid_full$row_values
+    if (!length(mid_full_values)) mid_full_values <- mid_full$values
+
+    q_finite <- is.finite(q_full_values)
+    q_integer <- joint_inla_preflight_integer_observed(q_full_values)
+    q_finite_values <- q_full_values[q_finite]
+    q_levels <- if (length(q_finite_values) && isTRUE(q_integer)) sort(unique(as.integer(round(q_finite_values)))) else sort(unique(q_finite_values))
+    q_invalid <- length(q_full$missing_rows) + sum(!q_finite)
+    if (length(q_finite_values) && isTRUE(q_integer)) q_invalid <- q_invalid + sum(abs(q_finite_values - round(q_finite_values)) > sqrt(.Machine$double.eps))
+    if (length(q_finite_values)) q_invalid <- q_invalid + sum(q_finite_values < 1L | q_finite_values > expected_cattle_bins)
+    full_support_valid <- joint_inla_preflight_index_storage_ok(q_value) &&
+      joint_inla_preflight_covers_joint_rows(q_value, n_predictors) &&
+      isTRUE(q_integer) && q_invalid == 0L && identical(q_levels, as.integer(configured_bins))
+
+    active_q_values <- joint_inla_preflight_projected_values(q_value, A, tier2_active_rows)$row_values
+    active_q_finite <- is.finite(active_q_values)
+    active_q_integer <- joint_inla_preflight_integer_observed(active_q_values)
+    active_q_finite_values <- active_q_values[active_q_finite]
+    active_q_valid <- active_q_finite_values[isTRUE(active_q_integer) &
+      abs(active_q_finite_values - round(active_q_finite_values)) <= sqrt(.Machine$double.eps)]
+    active_q_valid <- active_q_valid[active_q_valid >= 1L & active_q_valid <= expected_cattle_bins]
+    active_counts <- tabulate(match(active_q_valid, configured_bins), nbins = expected_cattle_bins)
+    active_levels <- configured_bins[active_counts > 0L]
+    active_missing <- setdiff(configured_bins, active_levels)
+    active_counts_text <- paste(paste0(configured_bins, "=", active_counts), collapse = ";")
+    occupancy_metrics <- list(
+      configured_bin_count = expected_cattle_bins,
+      full_support_bin_count = length(q_levels),
+      active_bin_count = length(active_levels),
+      active_missing_bins = paste(active_missing, collapse = ","),
+      active_counts_by_bin = active_counts_text,
+      active_support_proportion = length(active_levels) / expected_cattle_bins
+    )
+    support_metrics <- c(occupancy_metrics, list(
+      source_column = "cattle_q",
+      class = if (is.null(q_value)) NA_character_ else joint_inla_preflight_class(q_value),
+      typeof = if (is.null(q_value)) NA_character_ else typeof(q_value),
+      storage_accepted = joint_inla_preflight_index_storage_ok(q_value),
+      length_observed = if (is.null(q_value)) NA_real_ else length(q_value),
+      length_expected = n_predictors,
+      length_matches = joint_inla_preflight_covers_joint_rows(q_value, n_predictors),
+      integer_valued_required = TRUE,
+      integer_valued_observed = q_integer,
+      minimum = if (length(q_finite_values)) min(q_finite_values) else NA_real_,
+      maximum = if (length(q_finite_values)) max(q_finite_values) else NA_real_,
+      unique_count = length(q_levels),
+      active_finite_count = sum(active_q_finite),
+      active_nonfinite_count = sum(!active_q_finite),
+      active_unprojected_count = length(joint_inla_preflight_projected_values(q_value, A, tier2_active_rows)$missing_rows)
+    ))
+    if (full_support_valid) {
+      pass("random_effects", "cattle_rw2_feature_support", paste(q_levels, collapse = ","), paste(configured_bins, collapse = ","), "Full fitted Tier 2 cattle_q support is exactly 1:n_bins and finite/integer-valued.", support_metrics)
+    } else {
+      fail("random_effects", "cattle_rw2_feature_support", paste(q_levels, collapse = ","), paste(configured_bins, collapse = ","), "Full fitted Tier 2 cattle_q support must be finite, integer-valued, within 1:n_bins, and contain every configured bin.", support_metrics)
+    }
+
+    minimum_active_bins <- 5L
+    if (length(active_levels) >= minimum_active_bins) {
+      pass("random_effects", "cattle_rw2_active_structural_support", length(active_levels), paste0(">=", minimum_active_bins), "Sufficient response-active cattle bins support the intended RW2 structure without requiring every configured bin to be directly observed.", occupancy_metrics)
+    } else {
+      fail("random_effects", "cattle_rw2_active_structural_support", length(active_levels), paste0(">=", minimum_active_bins), "Too few response-active cattle bins support the intended RW2 structure.", occupancy_metrics)
+    }
+    warning_text <- "Some cattle RW2 levels have no direct response-active Tier 2 observations. Their effects are informed by the RW2 prior and neighboring occupied levels."
+    if (length(active_missing)) {
+      warn("random_effects", "cattle_rw2_active_occupancy", paste(active_levels, collapse = ","), paste(active_missing, collapse = ","), warning_text, occupancy_metrics)
+    } else {
+      pass("random_effects", "cattle_rw2_active_occupancy", paste(active_levels, collapse = ","), paste(configured_bins, collapse = ","), "All configured cattle RW2 bins have direct response-active Tier 2 observations.", occupancy_metrics)
+    }
+
+    mid_finite <- is.finite(mid_full_values)
+    mid_alignment <- joint_inla_preflight_numeric_storage_ok(mid_value) &&
+      joint_inla_preflight_covers_joint_rows(mid_value, n_predictors) &&
+      length(mid_full$missing_rows) == 0L && all(mid_finite) &&
+      identical(sort(q_full$referenced_columns), sort(mid_full$referenced_columns))
+    mid_metrics <- c(occupancy_metrics, list(
+      source_column = "cattle_mid_log1p",
+      class = if (is.null(mid_value)) NA_character_ else joint_inla_preflight_class(mid_value),
+      typeof = if (is.null(mid_value)) NA_character_ else typeof(mid_value),
+      storage_accepted = joint_inla_preflight_numeric_storage_ok(mid_value),
+      length_observed = if (is.null(mid_value)) NA_real_ else length(mid_value),
+      length_expected = n_predictors,
+      length_matches = joint_inla_preflight_covers_joint_rows(mid_value, n_predictors),
+      integer_valued_required = FALSE,
+      integer_valued_observed = joint_inla_preflight_integer_observed(mid_full_values),
+      minimum = if (length(mid_full_values[mid_finite])) min(mid_full_values[mid_finite]) else NA_real_,
+      maximum = if (length(mid_full_values[mid_finite])) max(mid_full_values[mid_finite]) else NA_real_,
+      unique_count = length(unique(mid_full_values[mid_finite])),
+      active_finite_count = sum(is.finite(joint_inla_preflight_projected_values(mid_value, A, tier2_active_rows)$row_values)),
+      active_nonfinite_count = sum(!is.finite(joint_inla_preflight_projected_values(mid_value, A, tier2_active_rows)$row_values), na.rm = TRUE),
+      active_unprojected_count = length(joint_inla_preflight_projected_values(mid_value, A, tier2_active_rows)$missing_rows)
+    ))
+    if (mid_alignment) pass("random_effects", "cattle_mid_log1p_feature_alignment", "finite and aligned", "finite and aligned with cattle_q", "cattle_mid_log1p is finite across the full Tier 2 support and references the same projected rows as cattle_q.", mid_metrics)
+    else fail("random_effects", "cattle_mid_log1p_feature_alignment", "not finite or not aligned", "finite and aligned with cattle_q", "cattle_mid_log1p must be finite and aligned with the full fitted cattle_q support.", mid_metrics)
+  }
+
+  nspde <- as.integer(expected_nspde)
+  quarter_groups <- joint_inla_preflight_quarter_group_expectation(build)
+  if (isTRUE(quarter_groups$success)) {
+    pass("random_effects", "quarter_group_metadata", quarter_groups$n_groups, quarter_groups$n_groups,
+         quarter_groups$details)
+  } else {
+    fail("random_effects", "quarter_group_metadata",
+         paste(vapply(quarter_groups$sources, function(value) paste(value, collapse = ","), character(1L)), collapse = "; "),
+         if (length(quarter_groups$expected_levels)) paste(quarter_groups$expected_levels, collapse = ",") else "authoritative contiguous Stage 3A quarter groups",
+         quarter_groups$details)
+  }
+  expected_quarter_groups <- if (is.finite(quarter_groups$n_groups)) quarter_groups$n_groups else NULL
+  expected_quarter_levels <- if (length(quarter_groups$expected_levels)) quarter_groups$expected_levels else NULL
+  check_index("tier1_field", tier1_active_rows, expected_max = if (is.finite(nspde)) nspde else NULL)
+  check_index("tier1_field.group", tier1_active_rows, expected_max = expected_quarter_groups, exact_levels = expected_quarter_levels)
+  check_index("week_steps", tier1_rows, expected_max = NULL, contiguous = TRUE)
+  check_index("admin_f", tier1_active_rows, expected_max = NULL)
+  check_index("tier2_field", tier2_active_rows, expected_max = if (is.finite(nspde)) nspde else NULL)
+  check_index("tier2_field.group", tier2_active_rows, expected_max = expected_quarter_groups, exact_levels = expected_quarter_levels)
+  check_index("tier2_copy_field", tier2_active_rows, expected_max = if (is.finite(nspde)) nspde else NULL)
+  check_index("tier2_copy_field.group", tier2_active_rows, expected_max = expected_quarter_groups, exact_levels = expected_quarter_levels)
+  check_index("tier2_week", tier2_rows, expected_max = NULL, contiguous = TRUE)
+  check_index("cattle_q", tier2_active_rows, expected_max = if (is.finite(expected_cattle_bins)) expected_cattle_bins else NULL)
+  check_index("cattle_mid_log1p", tier2_active_rows, integer_valued = FALSE, expected_min = NULL)
+  if (is.finite(expected_cattle_bins)) {
+    check_cattle_rw2_support()
+  } else {
+    warn("random_effects", "cattle_rw2_feature_support", "unavailable", "dynamic cattle_q support", "Cattle-bin support could not be derived from the current Stage 3A design; compatibility remains a pre-fit model-contract check.")
+  }
+
+  if (link_ok) {
+    observed_groups <- sort(unique(c(
+      joint_inla_preflight_projected_values(data[["tier1_field.group"]], A, tier1_active_rows)$values,
+      joint_inla_preflight_projected_values(data[["tier2_field.group"]], A, tier2_active_rows)$values,
+      joint_inla_preflight_projected_values(data[["tier2_copy_field.group"]], A, tier2_active_rows)$values
+    )))
+    if (!is.null(expected_quarter_levels) && identical(as.integer(observed_groups), as.integer(expected_quarter_levels))) {
+      pass("random_effects", "quarter_group_count", length(observed_groups), expected_quarter_groups,
+           paste0("Quarter groups are exactly 1:", expected_quarter_groups, " and agree across Tier 1, Tier 2, and the copy field."))
+    } else {
+      fail("random_effects", "quarter_group_count", paste(observed_groups, collapse = ","),
+           if (is.null(expected_quarter_levels)) "authoritative contiguous Stage 3A quarter groups" else paste(expected_quarter_levels, collapse = ","),
+           "Quarter groups must be contiguous 1:n_groups and agree across Tier 1, Tier 2, and the copy field.")
+    }
+  }
+
+  if (!is.null(A) && !is.null(n_rows) && !is.na(n_rows)) {
+    a_dim <- dim(A)
+    if (length(a_dim) == 2L && a_dim[[2L]] > 0L) pass("projection", "A_dimensions", paste(a_dim, collapse = " x "), "two-dimensional matrix with positive latent width", "Projection dimensions are internally defined.")
+    else fail("projection", "A_dimensions", paste(a_dim, collapse = " x "), "two-dimensional matrix with positive latent width", "Projection matrix dimensions are invalid.")
+    if (length(a_dim) == 2L && identical(as.integer(a_dim[[1L]]), as.integer(n_rows))) pass("projection", "A_row_count", a_dim[[1L]], n_rows, "Projection rows match joint predictor rows.")
+    else fail("projection", "A_row_count", paste(a_dim, collapse = " x "), n_rows, "A row count must equal the joint predictor count.")
+    finite_entries <- tryCatch({
+      if (inherits(A, "sparseMatrix")) all(is.finite(A@x)) else all(is.finite(as.numeric(A)))
+    }, error = function(error) FALSE)
+    if (finite_entries) pass("projection", "A_finite_entries", "finite", "finite", "All sparse/dense projection entries are finite.")
+    else fail("projection", "A_finite_entries", "non-finite or unavailable", "finite", "Projection matrix contains invalid entries.")
+    row_sums <- tryCatch({
+      if (inherits(A, "sparseMatrix") && requireNamespace("Matrix", quietly = TRUE)) as.numeric(Matrix::rowSums(A)) else rowSums(A)
+    }, error = function(error) numeric())
+    if (length(row_sums) == n_rows && length(observation_active) == n_rows) {
+      zero_rows <- sum(observation_active & row_sums == 0)
+      if (zero_rows == 0L) pass("projection", "active_nonzero_rows", zero_rows, 0L, "No active observation has a zero-sum projection row.")
+      else fail("projection", "active_nonzero_rows", zero_rows, 0L, "Active observation has a zero-sum projection row.")
+    } else fail("projection", "A_internal_dimensions", paste(length(row_sums), n_rows, sep = "/"), "row sums match joint rows", "Could not validate projection row sums.")
+  }
+
+  prediction <- build$prediction_compatibility
+  if (is.list(prediction) && isTRUE(prediction$compatible)) pass("prediction", "prediction_compatibility", TRUE, TRUE, "Stage 3A prediction compatibility passed.")
+  else fail("prediction", "prediction_compatibility", if (is.null(prediction)) "missing" else prediction$compatible, TRUE, "Stage 3A prediction compatibility must be TRUE.")
+  if (is.list(prediction) && !is.null(prediction$nonfinite_counts)) {
+    counts <- as.numeric(prediction$nonfinite_counts)
+    if (length(counts) && all(counts == 0)) pass("prediction", "prediction_required_variables_finite", paste(names(prediction$nonfinite_counts), collapse = ","), "all nonfinite counts are 0", "All required prediction variables are finite.")
+    else fail("prediction", "prediction_required_variables_finite", joint_inla_preflight_text(prediction$nonfinite_counts), "all nonfinite counts are 0", "Prediction compatibility reports non-finite required variables.")
+  } else fail("prediction", "prediction_required_variables_finite", "missing", "nonfinite_counts all zero", "Prediction-variable finite-value audit is unavailable.")
+
+  theta <- build$fit_reference$control_mode$theta
+  theta_type_ok <- is.numeric(theta) && !is.factor(theta) && !is.character(theta) && !is.list(theta)
+  theta_order <- if (is.list(build$model_signature) && isTRUE(build$model_signature$theta_order_verified)) build$model_signature$theta_order else NULL
+  expected_theta_length <- if (length(theta_order)) length(theta_order) else if (theta_type_ok && length(theta)) length(theta) else NA_integer_
+  theta_valid <- theta_type_ok && length(theta) > 0L && all(is.finite(theta)) && (is.na(expected_theta_length) || length(theta) == expected_theta_length)
+  if (theta_valid) pass("theta", "theta_shape", paste(typeof(theta), length(theta)), paste0("numeric finite vector length dynamically derived as ", expected_theta_length), "Theta shape is checked against the current Stage 3A model signature when available.")
+  else warn("theta", "theta_shape", if (is.null(theta)) "missing" else paste(typeof(theta), length(theta)), "numeric finite vector with current-model length", "Theta shape is retained as provenance; authoritative compatibility is checked before a previous-theta fit.")
+  theta_inventory <- joint_inla_preflight_theta_inventory(theta_order, theta_length = if (theta_type_ok) length(theta) else NULL)
+  if (isTRUE(theta_inventory$order_verified[[1L]])) {
+    pass("theta", "theta_order_provenance", paste(theta_order, collapse = ","), "verified Stage 3A theta order", "Canonical theta order is established from the Stage 3A model signature.")
+  } else {
+    warn("theta", "theta_order_provenance", "unverified", "explicit order equivalence", paste0("Theta order cannot be established from Stage 3A metadata; retain this as provenance and require explicit pre-fit compatibility before reusing theta. Artifact: ", build_path))
+  }
+  warn("theta", "historical_fit_comparison", "not performed", "optional external comparison", "An external historical fit artifact was not required or supplied.")
+
+  audit <- do.call(rbind, checks)
+  failures <- sum(audit$status == "fail")
+  warnings <- sum(audit$status == "warning")
+  list(
+    success = failures == 0L,
+    audit = audit,
+    theta_inventory = theta_inventory,
+    summary = list(failures = failures, warnings = warnings, checks = nrow(audit)),
+    build_path = build_path
+  )
+}
+
+joint_inla_preflight_audit_path <- function(path, overwrite = FALSE) {
+  path <- normalizePath(path, mustWork = FALSE)
+  if (!file.exists(path) || isTRUE(overwrite)) return(path)
+  stamp <- format(Sys.time(), "%Y%m%dT%H%M%SZ", tz = "UTC")
+  stem <- sub("\\.csv$", "", basename(path), ignore.case = TRUE)
+  file.path(dirname(path), paste0(stem, "_", stamp, ".csv"))
+}
+
+joint_inla_preflight_write_audit <- function(result, path, overwrite = FALSE) {
+  target <- joint_inla_preflight_audit_path(path, overwrite)
+  dir.create(dirname(target), recursive = TRUE, showWarnings = FALSE)
+  staged <- tempfile("joint-inla-preflight-", fileext = ".csv", tmpdir = dirname(target))
+  on.exit(unlink(staged, force = TRUE), add = TRUE)
+  utils::write.csv(result$audit, staged, row.names = FALSE, na = "NA")
+  if (file.exists(target)) {
+    if (!isTRUE(overwrite)) stop("Preflight audit target unexpectedly exists: ", target)
+    if (!file.remove(target)) stop("Unable to replace preflight audit: ", target)
+  }
+  if (!file.rename(staged, target)) stop("Unable to write preflight audit: ", target)
+  target
+}
+
+joint_inla_preflight_print <- function(result, audit_path = NULL) {
+  status <- if (isTRUE(result$success)) "PASS" else "FAIL"
+  cat("Stage 3B production-artifact preflight: ", status, "\n", sep = "")
+  cat("  Checks: ", result$summary$checks, "\n", sep = "")
+  cat("  Failures: ", result$summary$failures, "\n", sep = "")
+  cat("  Warnings: ", result$summary$warnings, "\n", sep = "")
+  if (!is.null(audit_path)) cat("  Audit: ", audit_path, "\n", sep = "")
+  warning_rows <- result$audit[result$audit$status == "warning", , drop = FALSE]
+  if (nrow(warning_rows)) {
+    for (detail in warning_rows$details) cat("  WARNING: ", detail, "\n", sep = "")
+  }
+  invisible(result)
+}

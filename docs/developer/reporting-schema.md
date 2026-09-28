@@ -1,0 +1,3 @@
+# Reporting contract
+
+Post-fit reporting consumes explicit Stage 2, Stage 3A, Stage 3B, projection, raster, and observation inputs. It writes canonical objects first, then tables, figures, spatial products, QA, manifests, checksums, fitted random-effect summaries, reference-vs-production comparisons when requested, and RPI products when readiness inputs are present. Potential abundance remains the standardized Tier 2 intensity × nominal cell-area quantity. RPI status is `BLOCKED`, `READY`, or `COMPLETED`; it is not globally blocked by historical provenance when the accepted cleaned-observation representation is supplied.

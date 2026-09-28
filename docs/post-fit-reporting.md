@@ -1,0 +1,145 @@
+# Post-fit reporting architecture
+
+This branch adds a results pipeline after the validated fit/acceptance workflow:
+
+```text
+MODEL PIPELINE       Stage 1 -> Stage 2 -> Stage 3A -> Stage 3B
+ACCEPTANCE PIPELINE  fit health -> extraction -> Phase 1 -> Phase 2 -> Phase 3
+RESULTS PIPELINE     extract -> canonical objects -> tables/figures -> later report
+```
+
+The reporting module is [R/postfit_reporting.R](../R/postfit_reporting.R). It consumes explicit artifact paths and run IDs. It does not alter model specification, preprocessing, likelihoods, priors, SPDE/copy-field structure, holdouts, validation, projection, or rasterization.
+
+The accepted historical run `20742007` is the private regression reference;
+the canonical object, table, figure, manifest, and portability
+interfaces are now frozen in [docs/post-fit-reporting-schema.md](post-fit-reporting-schema.md)
+for migration to a future accepted production fit. Host composition is an
+independent descriptive product from the real observation CSV, not a fit or
+RPI-provenance input. Map aesthetics may be revisited after production-fit
+acceptance, but the deterministic map-selection rule and product interfaces
+should remain unchanged. The accepted historical cleaned-observation source
+is a valid RPI calibration input when supplied explicitly.
+
+Atlas runtime recovery and spatial preflight belong to the canonical
+[Atlas environment record](atlas-environment.md). In particular, reporting
+must use the compute-node module stack and `.libPaths()` before concluding that
+`terra` or `sf` is unavailable; it must not modify the environment to silence
+the documented GEOS ABI warning.
+
+## Canonical objects
+
+The runner writes a run-isolated hierarchy:
+
+```text
+postfit_reporting/<run_id>/
+  objects/
+  tables/
+  figures/
+  spatial/
+  metadata/
+  qa/
+```
+
+Every table and figure is derived from a canonical object. The initial object schemas are:
+
+- `fixed_effects_tier1`: one row per fitted Tier 1 fixed term; model term, label, posterior summary, scale, source variable, and transformation note.
+- `fixed_effects_tier2`: the equivalent Tier 2 object. Tier 2 nonlinear cattle support is not mixed into this table.
+- `cattle_effect`: one row per `cattle_q` support bin, including active/full/positive support, `cattle_mid`, `cattle_mid_log1p`, raw RW2 summaries, and the weighted model contribution.
+- `temporal_effects`: one row per fitted `week_steps` or `tier2_week` timestep, joined to the Stage 2 temporal mapping.
+- `species_composition`: one row per normalized host and broad group from the
+  authoritative observation CSV, with expanded-host denominator metadata.
+- `host_assignments` and `host_lookup`: row-level raw/cleaned host values,
+  every matched historical pattern, the mapping version, and the canonical
+  broad groups.
+- `species_composition_first_host_sensitivity`: a separate comparison to the
+  historical first-host interpretation; it is not the primary figure.
+- `selected_map_values`: direct values read from selected Phase 3 rasters, with the selection rule and source paths.
+- `model_summary`: factual fit context, not a diagnostics verdict.
+- `random_effect_summaries`: fitted INLA hyperparameters with canonical components, units, scales, and source columns.
+- `random_effect_comparison`: reference-vs-production fitted means when both accepted fit/build pairs are supplied.
+- `rpi`: continuous RPI object plus `rpi_class_summary` and `rpi_class_map` when readiness is complete.
+- `rpi_readiness_audit`: the semantic gate and parameters; a final RPI product is written only when the gate passes.
+
+The stable schemas and logical product names are defined in
+[docs/post-fit-reporting-schema.md](post-fit-reporting-schema.md). The cattle
+axis is supported as `Cattle density (individuals/km²)` when the Stage 2
+provenance resolves the configured `cattle_density.tif` /
+`GLW4-2020.D-DA.CTL` layer. Reporting records the raw source variable,
+`log1p` transformation, quantile-midpoint definition, and units without
+rescaling the fitted partial contribution.
+
+Canonical tables are saved as both RDS and CSV. Plots are saved as RDS plus PDF/PNG where generated.
+
+## Extraction authority
+
+Fixed effects, temporal effects, and cattle effects call the validated helpers in [R/joint_inla_extract.R](../R/joint_inla_extract.R). The cattle contribution is explicitly:
+
+```text
+posterior cattle_q RW2 summary × cattle_mid_log1p
+```
+
+This matches the fitted term `f(cattle_q, cattle_mid_log1p, model = "rw2", ...)`; the raw RW2 latent value is retained separately and is not plotted as the model contribution.
+
+Temporal calendar dates are copied only from `stage2$temporal_mapping`. If no date field is present, the object retains timestep/year/week and does not invent dates.
+
+## Species-cohort and host-source audit
+
+The authoritative descriptive host source is a private observation CSV when
+supplied through `--observation-input`. The runner records its absolute path,
+SHA-256, row count, column names, missing/blank host count, and unique raw
+host count. This source is not generated by the fit and is not assumed to be
+the RPI observation set.
+
+The accepted historical RPI source is the cleaned-observation representation
+at `/project/disease_ecology/NWScrewworm/data/processed_data/case_detections/combined_clean_obs_2027-07-31.csv` when available on Atlas. It is supplied explicitly with `--rpi-observations` (or the compatibility alias `--observations`) and is recorded with its checksum; raw host CSVs, holdouts, synthetic points, Tier 2 positives, background rows, and arbitrary replacement locations are not valid substitutes.
+
+Historical construction notes are represented by the versioned lookup returned
+by `postfit_reporting_host_lookup()`. The primary interpretation normalizes
+each raw host by lowercasing and removing nonalphabetic characters, then keeps
+all matching species assignments. Compound records therefore contribute once
+per identified species. Unmatched records become `Unreported` and are retained.
+The canonical denominator is `expanded_host_assignments`; the audit reports
+submission rows, expanded assignments, compound rows, unmatched rows, and
+Unreported assignments. The primary figure therefore labels its axis as
+expanded assignments rather than silently calling the denominator total
+submissions. A first-host table is retained only as a sensitivity comparison.
+
+The old generic species input remains available for compatibility, but the
+runner requires `--species-cohort` whenever `--species-data` is used in that
+mode. It does not guess a denominator.
+
+The old result material inventoried for manuscript compatibility includes:
+
+- `local/linear_predict.R`;
+- `local/results_summary.qmdx`;
+- legacy `local/Results_2026-02-23/*/fixed_eff.rds` and host-effect RDS files.
+
+Those scripts use legacy positional/model-specific objects and do not define a stable manuscript table schema. The new canonical coefficient tables are therefore the compatibility layer; exact manuscript-specific formatting remains unavailable until the draft table definition is supplied from the manuscript workflow.
+
+## Phase 3 maps
+
+The map reader consumes validated Phase 3 Tier 1 probability and Tier 2 intensity rasters. It selects deterministic positions 1, approximately one-third, approximately two-thirds, and the final modeled week. Raster values are read directly by cell; no resampling, interpolation, clipping, or display rescaling is applied. Tier 1 and Tier 2 limits are held constant across their selected panels. An explicit current administrative/coastline layer can be supplied with `--boundary`; when supplied it is transformed to the raster CRS for a consistent context overlay.
+
+## Potential abundance and RPI gate
+
+The legacy conversion is traceable in `local/results_summary.qmdx`:
+
+```r
+cell_area <- prod(res(r_template))
+```
+
+The legacy template `local/spatial_templates/study_area_raster.tif` has resolution approximately `24.99502 × 24.94366` in the historical projected-kilometre workflow, giving an exact product of approximately `623.4672 km^2`; the old documentation rounds this to 625 km². The runner derives the area from the supplied template (or an explicitly audited constant). The derived quantity is named `potential_abundance` and is documented as:
+
+```text
+tier2_intensity_plugin × nominal_average_raster_cell_area
+```
+
+It is not a direct model output and is not called `expected_count`.
+
+[R/calc_RPI.R](../R/calc_RPI.R) remains the semantic reference. The reporting implementation extracts values at supplied cleaned-observation locations, calibrates the lower `cut_quant` threshold, uses the longest consecutive run above threshold, converts weeks to generations, and applies the four class boundaries. Supply the cleaned representation with `--rpi-observations`; the older `--observations` flag remains a compatibility alias for that explicit input. If the standardized potential stack or cleaned observations are absent, `metadata/rpi_readiness_audit.*` records `BLOCKED`; otherwise readiness is `READY` and successful output writing is `COMPLETED`.
+
+## Provenance
+
+The runner records input checksums, git commit, R/package versions, output object/table/figure lists, map selection, species audit, cattle/temporal semantics, cell-area provenance, RPI status, and a manifest containing artifact paths, formats, checksums, source objects, source run, timestamp, and file sizes.
+
+Use [scripts/run_postfit_reporting.R](../scripts/run_postfit_reporting.R) with explicit `--fit`, `--build`, `--stage2`, `--phase3-root`, `--observation-input`, `--rpi-observations`, and output arguments. Add `--reference-fit` and `--reference-build` to write the comparison product. The Atlas wrapper [scripts/run_postfit_reporting_atlas.sh](../scripts/run_postfit_reporting_atlas.sh) establishes the module stack and prints runtime provenance. The example configuration is [config/postfit_reporting.example.yml](../config/postfit_reporting.example.yml). No final Quarto/HTML/PDF summary report is part of this milestone.

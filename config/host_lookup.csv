@@ -1,0 +1,16 @@
+host_cleaned,host_standardized,host_group,multiple_host_flag,notes
+bovine,bovine,livestock,FALSE,
+bovino,bovine,livestock,FALSE,
+bovinosuino,bovine,livestock,TRUE,Reference workflow uses first species.
+bufalino,bovine,livestock,FALSE,
+caprine,caprine,livestock,FALSE,
+ovine,ovine,livestock,FALSE,
+porcine,porcine,livestock,FALSE,
+canine,canine,domestic,FALSE,
+feline,feline,domestic,FALSE,
+equine,equine,livestock,FALSE,
+bird,bird,wildlife,FALSE,
+wildbird,bird,wildlife,FALSE,
+wildterrestrial,wildlife,wildlife,FALSE,
+human,human,human,FALSE,
+unknown,unknown,unknown,FALSE,

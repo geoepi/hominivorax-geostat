@@ -1,0 +1,20 @@
+# Post-fit structural ecological prediction diagnostic.
+# This configuration is reporting-only and does not change the fitted model.
+run_id: null # The orchestrator supplies the immutable run identifier.
+fit: null
+build: null
+stage2: null
+phase2: null
+phase3: null
+observations: "/project/disease_ecology/NWScrewworm/data/processed_data/case_detections/combined_clean_obs_2027-07-31.csv"
+full_potential_root: null
+output_root: null
+coordinate_source: "lonlat"
+source_crs: "EPSG:4326"
+temperature:
+  enabled: true
+  variable: "mintemp"
+  source: "Stage 2 prediction_grid$mintemp (model-aligned weekly covariate)"
+  threshold: null # Supply only an authoritative documented physiological threshold.
+  operator: ">="
+nominal_cell_area_km2: 623.467152902406

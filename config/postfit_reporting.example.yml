@@ -1,0 +1,43 @@
+# Parameterized post-fit reporting configuration.
+# This file names the validated reference artifacts only; it does not fit or
+# modify a model and it never uses the running production fit implicitly.
+run_id: "production-run-id"
+output_root: null # Supply a private local/Atlas output directory.
+fit: null # Supply the explicit Stage 3B fit path.
+build: null # Supply the explicit Stage 3A build path.
+stage2: null # Supply the explicit Stage 2 artifact path.
+phase2: null # Supply the explicit Phase 2 output directory.
+phase3: null # Supply the explicit Phase 3 output directory.
+boundary: null
+
+# Host composition uses the authoritative descriptive observation source. This
+# CSV is separate from fit provenance and is not implicitly the RPI source.
+observation_input: null # Supply the private authoritative observation CSV.
+host_column: host
+mapping_version: "historical-host-normalization-v2"
+cattle_units: "individuals/km²"
+
+# Legacy/generic species input remains available only when its cohort and
+# denominator are explicit.
+species_data: null
+species_column: host_standardized
+species_category_column: host_group
+species_cohort: null
+
+# Legacy conversion audit. Either supply an audited template or an explicit
+# constant plus units. Do not use the old approximate 625 km^2 label when the
+# current Phase 3 template gives a different exact value.
+cell_area_template: null
+cell_area: null
+cell_area_units: "km^2"
+
+# RPI uses a cleaned observation representation derived with the accepted
+# preprocessing semantics. The historical private source is documented as
+# /project/disease_ecology/NWScrewworm/data/processed_data/case_detections/combined_clean_obs_2027-07-31.csv.
+rpi_observations: null
+observations: null # Compatibility alias for rpi_observations.
+rpi:
+  gen_days: 21
+  days_per_layer: 7
+  cut_quant: 0.10
+  class_boundaries: [3, 8, 15]
