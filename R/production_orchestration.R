@@ -102,6 +102,40 @@ production_orchestration_run_id <- function(git_commit = NA_character_, now = Sy
   paste0(format(as.POSIXct(now, tz = "UTC"), "%Y%m%d_%H%M%S", tz = "UTC"), "_", short)
 }
 
+production_orchestration_normalize_chime_execution_id <- function(value) {
+  if (is.null(value) || !length(value)) return(NA_character_)
+  value <- as.character(value[[1L]])
+  if (is.na(value)) return(NA_character_)
+  value <- trimws(value)
+  if (!nzchar(value)) NA_character_ else value
+}
+
+production_orchestration_environment_chime_execution_id <- function() {
+  production_orchestration_normalize_chime_execution_id(Sys.getenv("CHIME_EXECUTION_ID", unset = ""))
+}
+
+production_orchestration_resolve_chime_execution_id <- function(stored = NULL, supplied = production_orchestration_environment_chime_execution_id()) {
+  stored <- production_orchestration_normalize_chime_execution_id(stored)
+  supplied <- production_orchestration_normalize_chime_execution_id(supplied)
+  if (!is.na(stored) && !is.na(supplied) && !identical(stored, supplied)) {
+    stop(
+      "CHIME execution ID conflict on resume: run manifest contains '", stored,
+      "' but CHIME_EXECUTION_ID supplies '", supplied, "'.",
+      call. = FALSE
+    )
+  }
+  list(
+    value = if (is.na(stored)) supplied else stored,
+    bound = is.na(stored) && !is.na(supplied)
+  )
+}
+
+production_orchestration_rehydrate_chime_execution_id <- function(contract, supplied = production_orchestration_environment_chime_execution_id()) {
+  resolution <- production_orchestration_resolve_chime_execution_id(contract$chime_execution_id, supplied)
+  contract$chime_execution_id <- resolution$value
+  list(contract = contract, bound = resolution$bound)
+}
+
 production_orchestration_read_config <- function(path, repo_root = getwd()) {
   production_orchestration_require("yaml")
   path <- normalizePath(path, mustWork = TRUE)
@@ -196,7 +230,7 @@ production_orchestration_contract <- function(config_path, repo_root, run_id = N
   root <- run_root %||% file.path(cfg$project$output_root, run_id)
   root <- normalizePath(root, mustWork = FALSE)
   list(
-    run_id = run_id, run_root = root,
+    run_id = run_id, run_root = root, chime_execution_id = production_orchestration_environment_chime_execution_id(),
     repository = list(root = normalizePath(repo_root, mustWork = TRUE), branch = production_orchestration_git_branch(repo_root), git_commit = git_commit),
     config = list(path = normalizePath(config_path, mustWork = TRUE), sha256 = production_orchestration_hash_file(config_path)),
     input = list(observations = normalizePath(cfg$input$observations, mustWork = TRUE), sha256 = production_orchestration_hash_file(cfg$input$observations), rows = nrow(observations), columns = names(observations), coordinate_fields = c("lon", "lat"), crs = "EPSG:4326"),
@@ -268,6 +302,7 @@ production_orchestration_write_final_summary <- function(contract, path = file.p
   summary <- list(
     status = "PRODUCTION PIPELINE COMPLETE",
     run_id = contract$run_id,
+    chime_execution_id = contract$chime_execution_id %||% NA_character_,
     stages = list(prepare = contract$prepare_gate_status %||% "NOT_RUN", fit = contract$fit_gate_status %||% "NOT_RUN", postfit = contract$postfit_gate_status %||% "NOT_RUN"),
     modeled_weeks = contract$dynamic_dimensions$modeled_weeks %||% NA_integer_,
     supported_cells = contract$dynamic_dimensions$supported_cells %||% NA_integer_,
