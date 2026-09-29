@@ -20,7 +20,14 @@ the portable template for local or other governed environments.
 
 ## Operator commands
 
-Load the validated Atlas runtime before running the workflow:
+The production entry point self-bootstraps the validated Atlas runtime profile
+`atlas-r44-spatial-v1`. The profile loads the UDUNITS, PROJ, GEOS, GDAL, MKL,
+and R 4.4.3 modules and runs a bounded `units`/`sf`/`terra` preflight before
+the production contract is created. Operators do not need to rely on an
+interactive shell's module environment.
+
+Manual or direct development execution still requires the validated runtime to
+be loaded explicitly:
 
 ```bash
 module purge
@@ -35,6 +42,10 @@ cd /project/disease_ecology/hominivorax-geostat
 ./scripts/submit_full_pipeline.sh \
   --config /project/disease_ecology/hominivorax-geostat-config/production.yml
 ```
+
+The same wrapper is used by every submitted Prepare, Fit, and Post-fit job, so
+each allocation initializes and validates the runtime independently. If the
+preflight fails, no production run directory or Slurm stage jobs are created.
 
 Submission dry-run (no scheduler jobs are submitted):
 
@@ -60,6 +71,10 @@ under that run's `logs/` directory. The private configuration root also holds
 the operator deployment manifest and historical audit records; accepted or
 failed historical audits must not be rewritten to remove their original
 provenance.
+
+Run manifests record the runtime platform, stable module profile, requested
+module set, resolved R version, and preflight status. The scheduler dependency
+chain and stage resources are unchanged.
 
 Historical or development worktrees, including paths with a suffix such as
 `-prefit-20260926`, are not production checkouts. Use the canonical path above

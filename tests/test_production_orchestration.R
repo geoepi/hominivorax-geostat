@@ -108,6 +108,9 @@ test_that("production config generation preserves source residency and writes ru
   rscript <- file.path(R.home("bin"), if (.Platform$OS.type == "windows") "Rscript.exe" else "Rscript")
   dry_run <- system2(rscript, c("--vanilla", file.path(repo_root, "scripts", "run_pipeline.R"), "--mode", "dry-run", "--config", config_path), stdout = TRUE, stderr = TRUE)
   expect_true(any(grepl("DRY RUN", dry_run, fixed = TRUE)))
+  expect_true(any(grepl("Runtime: atlas-r44-spatial-v1", dry_run, fixed = TRUE)))
+  expect_true(any(grepl("Runtime preflight: NOT_RUN", dry_run, fixed = TRUE)))
+  expect_true(any(grepl("run_pipeline_atlas.sh", dry_run, fixed = TRUE)))
   expect_true(any(grepl("dependency=afterok:<prepare-job-id>", dry_run, fixed = TRUE)))
   expect_false(file.exists(file.path(root, "runs", "test_run", "observations.csv")))
 })
@@ -170,6 +173,7 @@ test_that("production summary includes the persisted CHIME execution ID", {
   summary_path <- production_orchestration_write_final_summary(contract)
   summary <- yaml::read_yaml(summary_path)
   expect_identical(summary$chime_execution_id, "test-execution-123")
+  expect_identical(summary$runtime$module_profile, "atlas-r44-spatial-v1")
 })
 
 test_that("historical manifests without CHIME execution correlation remain readable", {
@@ -203,6 +207,70 @@ test_that("Slurm wrap commands are protected as one argument", {
   expect_match(wrapped, "^--wrap=")
   expect_gt(nchar(wrapped), nchar(paste0("--wrap=", command)))
   expect_true(grepl("^--wrap='", wrapped) || grepl('^--wrap="', wrapped))
+})
+
+test_that("Atlas runtime identity and preflight guard are explicit", {
+  previous_profile <- Sys.getenv("ATLAS_RUNTIME_PROFILE", unset = NA_character_)
+  previous_preflight <- Sys.getenv("ATLAS_RUNTIME_PREFLIGHT", unset = NA_character_)
+  on.exit({
+    if (is.na(previous_profile)) Sys.unsetenv("ATLAS_RUNTIME_PROFILE") else Sys.setenv(ATLAS_RUNTIME_PROFILE = previous_profile)
+    if (is.na(previous_preflight)) Sys.unsetenv("ATLAS_RUNTIME_PREFLIGHT") else Sys.setenv(ATLAS_RUNTIME_PREFLIGHT = previous_preflight)
+  }, add = TRUE)
+  Sys.setenv(ATLAS_RUNTIME_PROFILE = "atlas-r44-spatial-v1", ATLAS_RUNTIME_PREFLIGHT = "PASS")
+  runtime <- production_orchestration_runtime_identity()
+  expect_identical(runtime$module_profile, "atlas-r44-spatial-v1")
+  expect_identical(runtime$platform, "atlas")
+  expect_identical(runtime$preflight, "PASS")
+  expect_true(all(c("udunits/2.2.28", "gdal/3.8.5", "r/4.4.3") %in% runtime$modules))
+  expect_silent(production_orchestration_assert_runtime_preflight("submit"))
+  Sys.unsetenv("ATLAS_RUNTIME_PREFLIGHT")
+  expect_error(production_orchestration_assert_runtime_preflight("submit"), "runtime preflight is required")
+  expect_silent(production_orchestration_assert_runtime_preflight("direct"))
+})
+
+test_that("submission refuses to proceed when runtime preflight is absent", {
+  previous_profile <- Sys.getenv("ATLAS_RUNTIME_PROFILE", unset = NA_character_)
+  previous_preflight <- Sys.getenv("ATLAS_RUNTIME_PREFLIGHT", unset = NA_character_)
+  on.exit({
+    if (is.na(previous_profile)) Sys.unsetenv("ATLAS_RUNTIME_PROFILE") else Sys.setenv(ATLAS_RUNTIME_PROFILE = previous_profile)
+    if (is.na(previous_preflight)) Sys.unsetenv("ATLAS_RUNTIME_PREFLIGHT") else Sys.setenv(ATLAS_RUNTIME_PREFLIGHT = previous_preflight)
+  }, add = TRUE)
+  Sys.unsetenv("ATLAS_RUNTIME_PROFILE")
+  Sys.unsetenv("ATLAS_RUNTIME_PREFLIGHT")
+  rscript <- file.path(R.home("bin"), if (.Platform$OS.type == "windows") "Rscript.exe" else "Rscript")
+  output <- system2(
+    rscript,
+    c("--vanilla", file.path(repo_root, "scripts", "run_pipeline.R"), "--mode", "submit", "--config", file.path(tempdir(), "not-used.yml")),
+    stdout = TRUE,
+    stderr = TRUE
+  )
+  expect_identical(as.integer(attr(output, "status")), 1L)
+  expect_true(any(grepl("runtime preflight is required", output, fixed = TRUE)))
+})
+
+test_that("all stages use the central Atlas runtime wrapper without changing resources or dependencies", {
+  fixture <- make_production_contract_fixture(repo_root)
+  previous_profile <- Sys.getenv("ATLAS_RUNTIME_PROFILE", unset = NA_character_)
+  previous_preflight <- Sys.getenv("ATLAS_RUNTIME_PREFLIGHT", unset = NA_character_)
+  on.exit({
+    if (is.na(previous_profile)) Sys.unsetenv("ATLAS_RUNTIME_PROFILE") else Sys.setenv(ATLAS_RUNTIME_PROFILE = previous_profile)
+    if (is.na(previous_preflight)) Sys.unsetenv("ATLAS_RUNTIME_PREFLIGHT") else Sys.setenv(ATLAS_RUNTIME_PREFLIGHT = previous_preflight)
+  }, add = TRUE)
+  Sys.setenv(ATLAS_RUNTIME_PROFILE = "atlas-r44-spatial-v1", ATLAS_RUNTIME_PREFLIGHT = "PASS")
+  contract <- production_orchestration_contract(fixture$config_path, repo_root, run_id = "runtime")
+  expect_identical(contract$scheduler$prepare$cpus, 4L)
+  expect_identical(contract$scheduler$fit$cpus, 12L)
+  expect_identical(contract$scheduler$postfit$cpus, 4L)
+  for (stage in c("prepare", "fit", "postfit")) {
+    command <- production_orchestration_stage_command(repo_root, c("--mode", "stage", "--stage", stage))
+    expect_true(grepl("run_pipeline_atlas.sh", command, fixed = TRUE))
+    expect_true(grepl("bash", command, fixed = TRUE))
+  }
+  wrapper_text <- paste(readLines(file.path(repo_root, "scripts", "run_pipeline_atlas.sh"), warn = FALSE), collapse = "\n")
+  runtime_text <- paste(readLines(file.path(repo_root, "scripts", "atlas_runtime.sh"), warn = FALSE), collapse = "\n")
+  expect_true(grepl("atlas_runtime_preflight", wrapper_text, fixed = TRUE))
+  expect_true(grepl("module purge", runtime_text, fixed = TRUE))
+  expect_true(grepl("module load udunits proj geos/3.12.1 gdal/3.8.5", runtime_text, fixed = TRUE))
 })
 
 test_that("compact gate results use stable schema and failure semantics", {
