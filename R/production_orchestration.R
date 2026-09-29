@@ -97,6 +97,26 @@ production_orchestration_git_branch <- function(repo_root) {
   if (!length(value)) NA_character_ else trimws(value[[1L]])
 }
 
+production_orchestration_assert_resume_repository <- function(contract, repo_root) {
+  recorded <- contract$repository$git_commit %||% NA_character_
+  recorded <- if (length(recorded)) trimws(as.character(recorded[[1L]])) else NA_character_
+  current <- production_orchestration_git_commit(repo_root)
+  if (is.na(recorded) || !nzchar(recorded)) {
+    stop("Cannot safely resume: run manifest does not record a repository git commit; manual review is required.", call. = FALSE)
+  }
+  if (is.na(current) || !nzchar(current)) {
+    stop("Cannot safely resume: current repository git commit could not be determined.", call. = FALSE)
+  }
+  if (!identical(recorded, current)) {
+    stop(
+      "Resume repository SHA does not match the run manifest (recorded ", recorded,
+      "; current ", current, ").",
+      call. = FALSE
+    )
+  }
+  invisible(TRUE)
+}
+
 production_orchestration_run_id <- function(git_commit = NA_character_, now = Sys.time()) {
   short <- if (is.na(git_commit) || !nzchar(git_commit)) "nogit" else substr(git_commit, 1L, 8L)
   paste0(format(as.POSIXct(now, tz = "UTC"), "%Y%m%d_%H%M%S", tz = "UTC"), "_", short)
@@ -309,6 +329,7 @@ production_orchestration_write_final_summary <- function(contract, path = file.p
     prediction_rows = contract$dynamic_dimensions$prediction_rows %||% NA_integer_,
     dynamic_rpi_threshold = contract$dynamic_rpi_threshold %||% NA_real_,
     run_manifest = file.path(contract$paths$metadata, "run_manifest.yml"),
+    upstream_provenance = contract$upstream_provenance %||% list(),
     final_reporting_path = contract$final_reporting_path %||% NA_character_,
     overall_status = contract$overall_status %||% "PASS",
     prepare_gate_status = contract$prepare_gate_status %||% "NOT_RUN",

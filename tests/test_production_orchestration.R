@@ -148,6 +148,20 @@ test_that("CHIME execution correlation survives rehydration and handles resume c
   )
 })
 
+test_that("resume requires the recorded repository commit to match the current checkout", {
+  current <- production_orchestration_git_commit(repo_root)
+  expect_true(nzchar(current))
+  expect_silent(production_orchestration_assert_resume_repository(list(repository = list(git_commit = current)), repo_root))
+  expect_error(
+    production_orchestration_assert_resume_repository(list(repository = list(git_commit = paste0(current, "-different"))), repo_root),
+    "Resume repository SHA does not match"
+  )
+  expect_error(
+    production_orchestration_assert_resume_repository(list(repository = list(git_commit = NA_character_)), repo_root),
+    "does not record a repository git commit"
+  )
+})
+
 test_that("production summary includes the persisted CHIME execution ID", {
   fixture <- make_production_contract_fixture(repo_root)
   contract <- with_chime_execution_id("test-execution-123", production_orchestration_contract(fixture$config_path, repo_root, run_id = "summary"))
