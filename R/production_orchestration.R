@@ -239,6 +239,46 @@ production_orchestration_scheduler_config <- function(cfg) {
   list(account = as.character(supplied$account %||% defaults$account), partition = as.character(supplied$partition %||% defaults$partition), prepare = merge_profile(defaults$prepare, supplied$prepare), fit = merge_profile(defaults$fit, supplied$fit), postfit = merge_profile(defaults$postfit, supplied$postfit))
 }
 
+production_orchestration_runtime_identity <- function() {
+  profile <- Sys.getenv("ATLAS_RUNTIME_PROFILE", unset = "atlas-r44-spatial-v1")
+  if (!identical(profile, "atlas-r44-spatial-v1")) {
+    stop("Unsupported Atlas runtime profile: ", profile, call. = FALSE)
+  }
+  list(
+    platform = "atlas",
+    module_profile = profile,
+    modules = c(
+      "udunits/2.2.28", "proj/9.7.0", "geos/3.12.1", "gdal/3.8.5",
+      "intel-oneapi-mkl/2023.2.0", "r/4.4.3"
+    ),
+    wrapper = "scripts/run_pipeline_atlas.sh",
+    preflight = if (identical(Sys.getenv("ATLAS_RUNTIME_PREFLIGHT", unset = ""), "PASS")) "PASS" else "NOT_RUN",
+    r_version = as.character(R.version.string)
+  )
+}
+
+production_orchestration_assert_runtime_preflight <- function(mode) {
+  if (!mode %in% c("submit", "stage")) return(invisible(TRUE))
+  profile <- Sys.getenv("ATLAS_RUNTIME_PROFILE", unset = "")
+  preflight <- Sys.getenv("ATLAS_RUNTIME_PREFLIGHT", unset = "")
+  if (!identical(profile, "atlas-r44-spatial-v1") || !identical(preflight, "PASS")) {
+    stop(
+      "Atlas runtime preflight is required before ", mode,
+      " execution; use scripts/submit_full_pipeline.sh or scripts/run_pipeline_atlas.sh.",
+      call. = FALSE
+    )
+  }
+  invisible(TRUE)
+}
+
+production_orchestration_stage_wrapper <- function(repo_root) {
+  normalizePath(file.path(repo_root, "scripts", "run_pipeline_atlas.sh"), mustWork = TRUE)
+}
+
+production_orchestration_stage_command <- function(repo_root, stage_args) {
+  production_orchestration_command_text("bash", production_orchestration_stage_wrapper(repo_root), stage_args)
+}
+
 production_orchestration_contract <- function(config_path, repo_root, run_id = NULL, run_root = NULL) {
   cfg <- production_orchestration_read_config(config_path, repo_root)
   stages <- production_orchestration_read_stage_configs(cfg)
@@ -252,6 +292,7 @@ production_orchestration_contract <- function(config_path, repo_root, run_id = N
   list(
     run_id = run_id, run_root = root, chime_execution_id = production_orchestration_environment_chime_execution_id(),
     repository = list(root = normalizePath(repo_root, mustWork = TRUE), branch = production_orchestration_git_branch(repo_root), git_commit = git_commit),
+    runtime = production_orchestration_runtime_identity(),
     config = list(path = normalizePath(config_path, mustWork = TRUE), sha256 = production_orchestration_hash_file(config_path)),
     input = list(observations = normalizePath(cfg$input$observations, mustWork = TRUE), sha256 = production_orchestration_hash_file(cfg$input$observations), rows = nrow(observations), columns = names(observations), coordinate_fields = c("lon", "lat"), crs = "EPSG:4326"),
     submission_timestamp_utc = format(Sys.time(), "%Y-%m-%dT%H:%M:%SZ", tz = "UTC"), horizon = horizon, dynamic_dimensions = NULL,
@@ -324,6 +365,7 @@ production_orchestration_write_final_summary <- function(contract, path = file.p
     run_id = contract$run_id,
     chime_execution_id = contract$chime_execution_id %||% NA_character_,
     stages = list(prepare = contract$prepare_gate_status %||% "NOT_RUN", fit = contract$fit_gate_status %||% "NOT_RUN", postfit = contract$postfit_gate_status %||% "NOT_RUN"),
+    runtime = contract$runtime %||% list(),
     modeled_weeks = contract$dynamic_dimensions$modeled_weeks %||% NA_integer_,
     supported_cells = contract$dynamic_dimensions$supported_cells %||% NA_integer_,
     prediction_rows = contract$dynamic_dimensions$prediction_rows %||% NA_integer_,

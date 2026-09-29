@@ -18,6 +18,7 @@ flag <- function(name) paste0("--", name) %in% args
 eq <- function(name, value) paste0("--", name, "=", value)
 
 mode <- tolower(option("mode", "submit"))
+production_orchestration_assert_runtime_preflight(mode)
 config_path <- option("config")
 if (is.null(config_path)) stop("Usage: run_pipeline.R --mode submit|stage|direct --config PATH [options]", call. = FALSE)
 config_path <- production_orchestration_resolve_path(config_path, getwd())
@@ -37,6 +38,7 @@ print_contract <- function(contract, dry = FALSE) {
   cat("Run ID: ", contract$run_id, "\n", sep = "")
   cat("Config: ", contract$config$path, "\nSHA256: ", contract$config$sha256, "\n", sep = "")
   cat("Git commit: ", contract$repository$git_commit, "\nBranch: ", contract$repository$branch, "\n", sep = "")
+  cat("Runtime: ", contract$runtime$module_profile, "\nRuntime preflight: ", contract$runtime$preflight, "\n", sep = "")
   cat("Input: ", contract$input$observations, "\nSHA256: ", contract$input$sha256, "\n", sep = "")
   cat("Resolved horizon: ", contract$horizon$configured_start_epiweek, " → ", contract$horizon$resolved_final_complete_epiweek,
       " (", contract$horizon$modeled_weeks, " weeks)\n", sep = "")
@@ -283,7 +285,7 @@ if (mode %in% c("submit", "direct", "dry-run")) {
           ", cpus=", profile$cpus, ", mem=", profile$mem, ", time=", profile$time,
           ", dependency=", dependency, "\n", sep = "")
       stage_args <- c("--mode", "stage", "--config", config_path, "--run-id", contract$run_id, "--run-root", contract$run_root, "--stage", stage, "--repo-root", repo_root)
-      cat("  command: ", production_orchestration_command_text(Sys.getenv("RSCRIPT_BIN", unset = "Rscript"), file.path(repo_root, "scripts", "run_pipeline.R"), stage_args), "\n", sep = "")
+      cat("  command: ", production_orchestration_stage_command(repo_root, stage_args), "\n", sep = "")
     }
     quit(save = "no", status = 0L)
   }
@@ -306,7 +308,7 @@ if (mode %in% c("submit", "direct", "dry-run")) {
     dependency <- if (stage == "fit" && !is.null(jobs$prepare)) paste0("afterok:", jobs$prepare) else if (stage == "postfit" && !is.null(jobs$fit)) paste0("afterok:", jobs$fit) else NULL
     stage_args <- c("--mode", "stage", "--config", config_path, "--run-id", contract$run_id, "--run-root", contract$run_root, "--stage", stage, "--repo-root", repo_root)
     if (stage == "postfit") stage_args <- c(stage_args, "--fit-job-id", jobs$fit %||% fit_job_id_arg)
-    wrap <- production_orchestration_command_text(Sys.getenv("RSCRIPT_BIN", unset = "Rscript"), file.path(repo_root, "scripts", "run_pipeline.R"), stage_args)
+    wrap <- production_orchestration_stage_command(repo_root, stage_args)
     sbatch_args <- c("--parsable", paste0("--job-name=hominivorax-", stage), paste0("--account=", contract$scheduler$account),
                      paste0("--partition=", contract$scheduler$partition), paste0("--cpus-per-task=", profile$cpus),
                      paste0("--mem=", profile$mem), paste0("--time=", profile$time),
