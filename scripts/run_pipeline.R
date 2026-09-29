@@ -3,6 +3,7 @@
 script_arg <- commandArgs(trailingOnly = FALSE)[grep("^--file=", commandArgs(trailingOnly = FALSE))][1L]
 repo_root <- normalizePath(file.path(dirname(sub("^--file=", "", script_arg)), ".."), mustWork = TRUE)
 source(file.path(repo_root, "R", "production_orchestration.R"), local = .GlobalEnv)
+source(file.path(repo_root, "R", "cds_upstream_provenance.R"), local = .GlobalEnv)
 source(file.path(repo_root, "R", "production_validation_gates.R"), local = .GlobalEnv)
 
 args <- commandArgs(trailingOnly = TRUE)
@@ -40,6 +41,12 @@ print_contract <- function(contract, dry = FALSE) {
   cat("Resolved horizon: ", contract$horizon$configured_start_epiweek, " → ", contract$horizon$resolved_final_complete_epiweek,
       " (", contract$horizon$modeled_weeks, " weeks)\n", sep = "")
   cat("Output root: ", contract$run_root, "\n", sep = "")
+  if (!is.null(contract$upstream_provenance)) {
+    upstream <- contract$upstream_provenance$cds_datagrab
+    cat("CDS provenance: ", upstream$coverage_certificate$status, " through ", upstream$coverage_certificate$validated_through, "\n", sep = "")
+    cat("CDS portfolio: ", upstream$coverage_certificate$portfolio_run_id, "\n", sep = "")
+    cat("CDS fingerprint: ", upstream$overall_fingerprint, "\n", sep = "")
+  }
 }
 
 run_command <- function(script, command_args) {
@@ -50,6 +57,7 @@ run_command <- function(script, command_args) {
 }
 
 rehydrate_contract <- function(contract) {
+  production_orchestration_assert_resume_repository(contract, repo_root)
   chime_execution <- production_orchestration_rehydrate_chime_execution_id(contract)
   contract <- chime_execution$contract
   cfg <- production_orchestration_read_config(config_path, repo_root)
@@ -86,6 +94,9 @@ prepare_contract <- function(contract, write_files = TRUE) {
     dirs <- unlist(contract$paths, use.names = FALSE)
     invisible(lapply(dirs, dir.create, recursive = TRUE, showWarnings = FALSE))
     if (is.null(contract$generated_configs)) contract <- production_orchestration_write_stage_configs(contract)
+    if (cds_upstream_provenance_configured(contract)) {
+      contract <- production_orchestration_attach_cds_provenance(contract, write_files = TRUE)
+    }
     production_orchestration_write_manifest(contract)
   }
   contract
@@ -249,6 +260,9 @@ contract <- load_or_create_contract()
 if (mode %in% c("submit", "direct", "dry-run")) {
   dry <- identical(mode, "dry-run") || flag("dry-run")
   if (!dry) contract <- prepare_contract(contract, write_files = TRUE)
+  if (dry && cds_upstream_provenance_configured(contract)) {
+    contract <- production_orchestration_attach_cds_provenance(contract, write_files = FALSE)
+  }
   through <- production_orchestration_stage_alias(through_arg)
   resume_statuses <- if (dry && is.null(resume_arg)) list() else status_map(contract)
   from <- production_orchestration_select_resume_stage(resume_statuses, from_arg, through)
