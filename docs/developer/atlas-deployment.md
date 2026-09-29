@@ -64,3 +64,14 @@ provenance.
 Historical or development worktrees, including paths with a suffix such as
 `-prefit-20260926`, are not production checkouts. Use the canonical path above
 for new runs and for resuming existing runs.
+
+## Optional CHIME execution correlation
+
+An external orchestrator such as CHIME may set `CHIME_EXECUTION_ID` before
+starting or resuming a run. Geostat records the trimmed, opaque value as
+`chime_execution_id` in the run manifest and, after successful Post-fit, in the
+production summary. The value has no scientific meaning and is not required
+for standalone execution. A resume that supplies a different value from the
+one already recorded in the manifest is rejected before resumed execution;
+an uncorrelated existing run may be bound to a supplied value through the
+normal resume path.

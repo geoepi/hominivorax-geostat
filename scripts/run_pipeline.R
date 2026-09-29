@@ -50,6 +50,8 @@ run_command <- function(script, command_args) {
 }
 
 rehydrate_contract <- function(contract) {
+  chime_execution <- production_orchestration_rehydrate_chime_execution_id(contract)
+  contract <- chime_execution$contract
   cfg <- production_orchestration_read_config(config_path, repo_root)
   if (!is.null(contract$config$sha256) && !identical(as.character(contract$config$sha256), production_orchestration_hash_file(config_path))) stop("Resume config SHA does not match the run manifest.", call. = FALSE)
   if (!is.null(contract$input$sha256) && !identical(as.character(contract$input$sha256), production_orchestration_hash_file(cfg$input$observations))) stop("Resume observation-source SHA does not match the run manifest.", call. = FALSE)
@@ -63,6 +65,7 @@ rehydrate_contract <- function(contract) {
     if ("joint_inla_fit" %in% names(generated)) names(generated)[names(generated) == "joint_inla_fit"] <- "fit"
     contract$generated_configs <- generated
   }
+  if (isTRUE(chime_execution$bound)) production_orchestration_write_manifest(contract)
   contract
 }
 

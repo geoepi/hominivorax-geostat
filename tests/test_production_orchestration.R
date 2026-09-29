@@ -24,6 +24,38 @@ make_stage2_fixture <- function(path, quarter_groups = 8L, noncontiguous = FALSE
   invisible(path)
 }
 
+with_chime_execution_id <- function(value, code) {
+  previous <- Sys.getenv("CHIME_EXECUTION_ID", unset = NA_character_)
+  on.exit({
+    if (is.na(previous)) Sys.unsetenv("CHIME_EXECUTION_ID") else Sys.setenv(CHIME_EXECUTION_ID = previous)
+  }, add = TRUE)
+  if (is.null(value)) Sys.unsetenv("CHIME_EXECUTION_ID") else Sys.setenv(CHIME_EXECUTION_ID = value)
+  force(code)
+}
+
+make_production_contract_fixture <- function(repo_root) {
+  root <- file.path(tempdir(), paste0("production_orchestration_chime_", as.integer(Sys.time()), "_", sample.int(1000000L, 1L)))
+  dir.create(root, recursive = TRUE, showWarnings = FALSE)
+  observations_path <- file.path(root, "observations.csv")
+  utils::write.csv(data.frame(
+    date = as.character(as.Date(c("2024-01-01", "2024-01-14"))),
+    lon = c(-90, -91), lat = c(30, 31)
+  ), observations_path, row.names = FALSE)
+  config_path <- file.path(root, "production.yml")
+  yaml::write_yaml(list(
+    project = list(output_root = file.path(root, "runs")),
+    input = list(observations = observations_path),
+    temporal = list(start_epiweek = "2024-W01", end_rule = "last_complete_epiweek"),
+    stage_configs = list(
+      preprocessing = file.path(repo_root, "config", "preprocessing.example.yml"),
+      joint_model = file.path(repo_root, "config", "joint_model.example.yml"),
+      joint_inla = file.path(repo_root, "config", "joint_inla.example.yml"),
+      fit = file.path(repo_root, "config", "joint_inla_fit.example.yml")
+    )
+  ), config_path)
+  list(root = root, config_path = config_path)
+}
+
 test_that("horizon resolves the last complete epiweek from current observations", {
   observations <- data.frame(date = as.character(as.Date(c("2024-01-01", "2024-01-14", "2024-01-22"))))
   horizon <- production_orchestration_resolve_horizon(observations, "2024-W01")
@@ -78,6 +110,70 @@ test_that("production config generation preserves source residency and writes ru
   expect_true(any(grepl("DRY RUN", dry_run, fixed = TRUE)))
   expect_true(any(grepl("dependency=afterok:<prepare-job-id>", dry_run, fixed = TRUE)))
   expect_false(file.exists(file.path(root, "runs", "test_run", "observations.csv")))
+})
+
+test_that("CHIME execution correlation is optional and persists in the run manifest", {
+  fixture <- make_production_contract_fixture(repo_root)
+  uncorrelated <- with_chime_execution_id(NULL, production_orchestration_contract(fixture$config_path, repo_root, run_id = "uncorrelated"))
+  expect_true(is.na(uncorrelated$chime_execution_id))
+  dir.create(uncorrelated$paths$metadata, recursive = TRUE, showWarnings = FALSE)
+  production_orchestration_write_manifest(uncorrelated)
+  uncorrelated_manifest <- production_orchestration_read_manifest(file.path(uncorrelated$paths$metadata, "run_manifest.yml"))
+  expect_true(is.null(uncorrelated_manifest$chime_execution_id) || is.na(uncorrelated_manifest$chime_execution_id))
+
+  correlated <- with_chime_execution_id("  test-execution-123  ", production_orchestration_contract(fixture$config_path, repo_root, run_id = "correlated"))
+  expect_identical(correlated$chime_execution_id, "test-execution-123")
+  dir.create(correlated$paths$metadata, recursive = TRUE, showWarnings = FALSE)
+  production_orchestration_write_manifest(correlated)
+  correlated_manifest <- production_orchestration_read_manifest(file.path(correlated$paths$metadata, "run_manifest.yml"))
+  expect_identical(correlated_manifest$chime_execution_id, "test-execution-123")
+})
+
+test_that("CHIME execution correlation survives rehydration and handles resume conflicts", {
+  preserved <- production_orchestration_rehydrate_chime_execution_id(list(chime_execution_id = "stored-id"), NA_character_)
+  expect_identical(preserved$contract$chime_execution_id, "stored-id")
+  expect_false(preserved$bound)
+
+  same <- production_orchestration_rehydrate_chime_execution_id(list(chime_execution_id = "stored-id"), " stored-id ")
+  expect_identical(same$contract$chime_execution_id, "stored-id")
+  expect_false(same$bound)
+
+  added <- production_orchestration_rehydrate_chime_execution_id(list(), " new-id ")
+  expect_identical(added$contract$chime_execution_id, "new-id")
+  expect_true(added$bound)
+
+  expect_error(
+    production_orchestration_rehydrate_chime_execution_id(list(chime_execution_id = "stored-id"), "different-id"),
+    "CHIME execution ID conflict on resume"
+  )
+})
+
+test_that("production summary includes the persisted CHIME execution ID", {
+  fixture <- make_production_contract_fixture(repo_root)
+  contract <- with_chime_execution_id("test-execution-123", production_orchestration_contract(fixture$config_path, repo_root, run_id = "summary"))
+  contract$dynamic_dimensions <- list(modeled_weeks = 2L, supported_cells = 2L, prediction_rows = 4L)
+  dir.create(contract$paths$metadata, recursive = TRUE, showWarnings = FALSE)
+  summary_path <- production_orchestration_write_final_summary(contract)
+  summary <- yaml::read_yaml(summary_path)
+  expect_identical(summary$chime_execution_id, "test-execution-123")
+})
+
+test_that("historical manifests without CHIME execution correlation remain readable", {
+  path <- file.path(tempdir(), paste0("legacy_manifest_", sample.int(1000000L, 1L), ".yml"))
+  yaml::write_yaml(list(run_id = "legacy-run", overall_status = "PASS"), path)
+  manifest <- production_orchestration_read_manifest(path)
+  expect_identical(manifest$run_id, "legacy-run")
+  expect_true(is.null(manifest$chime_execution_id))
+  expect_true(is.na(production_orchestration_resolve_chime_execution_id(manifest$chime_execution_id, NA_character_)$value))
+})
+
+test_that("CHIME execution correlation does not alter scientific or operational contract fields", {
+  fixture <- make_production_contract_fixture(repo_root)
+  baseline <- with_chime_execution_id(NULL, production_orchestration_contract(fixture$config_path, repo_root, run_id = "invariance"))
+  correlated <- with_chime_execution_id("test-execution-123", production_orchestration_contract(fixture$config_path, repo_root, run_id = "invariance"))
+  for (field in c("run_id", "repository", "config", "input", "horizon", "scheduler", "paths")) {
+    expect_identical(correlated[[field]], baseline[[field]])
+  }
 })
 
 test_that("resume selection skips passed stages and supports explicit stage ranges", {
