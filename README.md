@@ -1,13 +1,17 @@
 # hominivorax-geostat
 
-`hominivorax-geostat` is a model-based ecological workflow for understanding
+`hominivorax-geostat` is a model-based workflow for understanding
 where New World screwworm (*Cochliomyia hominivorax*) is reported and how
 modeled occurrence intensity changes across space and time.
 
 The workflow is designed for surveillance and ecological analysis. It combines
-cleaned observations with environmental, land-use, livestock, spatial, and
-temporal information. Because surveillance is uneven, a missing report is not
-treated as proof of biological absence.
+reported observations with environmental, land-use, livestock, spatial, and
+temporal information.
+  
+This repo also provides supporting information for the manuscript:    
+**Disentangling Observation and Ecological Processes to Infer Invasion Dynamics in New World Screwworm** 
+Please see the [flowchart](https://github.com/geoepi/hominivorax-geostat/docs/methods-flowchart.md), [website](https://geoepi.github.io/hominivorax-geostat/), and [archived code](https://osf.io/uvqmw/overview) for manuscript supporting information.    
+
 
 ## Purpose
 
