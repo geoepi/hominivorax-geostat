@@ -10,7 +10,7 @@ temporal information.
   
 This repo also provides supporting information for the manuscript:    
 **Disentangling Observation and Ecological Processes to Infer Invasion Dynamics in New World Screwworm** 
-Please see the [flowchart](https://github.com/geoepi/hominivorax-geostat/docs/methods-flowchart.md), [website](https://geoepi.github.io/hominivorax-geostat/), and [archived code](https://osf.io/uvqmw/overview) for manuscript supporting information.    
+Please see the [flowchart](https://github.com/geoepi/hominivorax-geostat/blob/main/docs/methods-flowchart.md), [website](https://geoepi.github.io/hominivorax-geostat/), and [archived code](https://osf.io/uvqmw/overview) for manuscript supporting information.    
 
 
 ## Purpose
