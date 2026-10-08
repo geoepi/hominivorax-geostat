@@ -98,3 +98,10 @@ checksums, runtime, model mode, and actual dimensions.
 
 No upstream artifact is regenerated during acceptance. A non-empty output
 directory is a hard stop unless an explicit overwrite option is provided.
+
+
+## Guarded CHIME execution
+
+The native launch boundary is scripts/submit_full_pipeline.sh --config PATH. A guarded CHIME approval supplies the opaque CHIME_EXECUTION_ID; the native manifest persists it with the exact repository SHA, configuration SHA, run ID, and the Prepare, Fit, and Post-fit job IDs. The launcher prints the bounded submission summary (Run ID, Prepare job, Fit job, Post-fit job) used for immediate correlation. Native metadata is the source of truth for later reconciliation; CHIME does not scan prediction payloads or infer job identity.
+
+The projection contract defaults to projection.unseen_admin_policy: fail. zero_mean is an explicit, reviewable exception for prediction-only administrative levels. When used, the projection audit records affected levels, rows, cells, and weeks; the post-fit gate reports a nonblocking warning for scientific review. This exception does not relax repository, configuration, runtime, or duplicate-run checks.

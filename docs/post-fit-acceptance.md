@@ -73,3 +73,8 @@ Gate 0. While a fit is running, local workflow changes may be frozen and pushed
 for later use, but the Atlas checkout must not be pulled to a new commit. No
 preprocessing, Stage 2 rebuild, Stage 3A rebuild, refit, projection, or
 rasterization is part of the launch task.
+
+
+## Unseen administrative support
+
+Projection uses fail unless --unseen-admin-policy=zero_mean is explicitly supplied. The compatibility flag --allow-unseen-admin-zero maps to zero_mean but cannot override a conflicting named policy. If unseen administrative levels are actually used, the projection metadata and CSV audit identify the affected levels and support dimensions; the post-fit gate records a warning rather than silently treating them as fitted support.

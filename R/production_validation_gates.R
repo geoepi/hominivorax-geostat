@@ -272,6 +272,15 @@ production_gate_postfit <- function(contract, dims = contract$dynamic_dimensions
   add("same_week_rpi_matching", "BLOCKING", if (same_week_ok) "PASS" else "FAIL", "Same-week observation pairing produced a positive, bounded matched set.", metadata_rds, "same_week_matching=TRUE; 0 < matched <= total", if (same_week_ok) paste(dynamic_threshold$same_week_matching, dynamic_threshold$n_observations_matched, dynamic_threshold$n_observations_total, sep = ";") else "missing or inconsistent")
   add("final_reporting_artifacts", "BLOCKING", if (!is.na(metadata_rds) && production_gate_file_ok(metadata_rds)) "PASS" else "FAIL", "Required final reporting metadata are present.", metadata_rds, "readable reporting metadata", metadata_rds)
   add("provenance_coordinates", "PROVENANCE", "INFO", "Authoritative coordinate source and CRS remain recorded in the post-fit metadata.", contract$input$observations, "lon/lat, EPSG:4326", contract$input$coordinate_fields)
+  support <- contract$administrative_support_summary %||% list()
+  support_used <- isTRUE(support$unseen_support_used)
+  support_severity <- if (support_used) "WARNING" else "PROVENANCE"
+  support_status <- if (support_used) "WARN" else "INFO"
+  add("unseen_administrative_support", support_severity, support_status,
+      if (support_used) "Projection used the explicitly configured zero posterior-mean policy for unseen administrative levels; scientific interpretation requires review." else "No unseen administrative levels required zero posterior-mean support.",
+      support$audit_path %||% NA_character_,
+      if (support_used) "review affected levels and rows" else "no affected prediction support",
+      if (support_used) paste(support$affected_admin_levels, collapse = ",") else "none")
   production_gate_finalize(rows)
 }
 

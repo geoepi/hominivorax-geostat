@@ -181,7 +181,39 @@ production_orchestration_read_config <- function(path, repo_root = getwd()) {
   }
   if (is.null(cfg$temporal$start_epiweek)) stop("Production config requires temporal.start_epiweek.", call. = FALSE)
   if (is.null(cfg$temporal$end_rule)) cfg$temporal$end_rule <- "last_complete_epiweek"
+  policy <- cfg$projection$unseen_admin_policy %||% "fail"
+  policy <- tolower(trimws(as.character(policy[[1L]])))
+  if (!policy %in% c("fail", "zero_mean")) {
+    stop("projection.unseen_admin_policy must be one of: fail, zero_mean.", call. = FALSE)
+  }
+  cfg$projection <- cfg$projection %||% list()
+  cfg$projection$unseen_admin_policy <- policy
   cfg
+}
+
+production_orchestration_administrative_support_summary <- function(audit, policy, audit_path = NA_character_) {
+  policy <- tolower(trimws(as.character(policy[[1L]])))
+  if (!policy %in% c("fail", "zero_mean")) stop("Unsupported unseen administrative support policy: ", policy, call. = FALSE)
+  observed <- function(check, default = 0) {
+    if (!is.data.frame(audit) || !all(c("check", "observed") %in% names(audit))) return(default)
+    value <- audit$observed[match(check, audit$check)]
+    if (!length(value) || is.na(value)) default else value[[1L]]
+  }
+  unseen_levels <- as.character(observed("prediction_only_admin_ids", ""))
+  unseen_levels <- if (!nzchar(unseen_levels)) character() else strsplit(unseen_levels, ",", fixed = TRUE)[[1L]]
+  unseen_levels <- unseen_levels[nzchar(unseen_levels)]
+  unseen_count <- suppressWarnings(as.integer(observed("prediction_only_levels", 0)))
+  list(
+    policy = policy,
+    unseen_support_used = isTRUE(unseen_count > 0L),
+    affected_admin_levels = unseen_levels,
+    affected_admin_level_count = as.integer(unseen_count),
+    affected_prediction_rows = suppressWarnings(as.integer(observed("prediction_rows_affected", 0))),
+    affected_prediction_cells = suppressWarnings(as.integer(observed("prediction_cells_affected", 0))),
+    affected_prediction_weeks = suppressWarnings(as.integer(observed("prediction_weeks_affected", 0))),
+    audit_path = if (is.na(audit_path)) NA_character_ else normalizePath(audit_path, mustWork = FALSE),
+    audit_sha256 = if (is.na(audit_path) || !file.exists(audit_path)) NA_character_ else production_orchestration_hash_file(audit_path)
+  )
 }
 
 production_orchestration_read_stage_configs <- function(cfg) {
@@ -291,6 +323,8 @@ production_orchestration_contract <- function(config_path, repo_root, run_id = N
   root <- normalizePath(root, mustWork = FALSE)
   list(
     run_id = run_id, run_root = root, chime_execution_id = production_orchestration_environment_chime_execution_id(),
+    administrative_support_policy = cfg$projection$unseen_admin_policy,
+    administrative_support_summary = NULL,
     repository = list(root = normalizePath(repo_root, mustWork = TRUE), branch = production_orchestration_git_branch(repo_root), git_commit = git_commit),
     runtime = production_orchestration_runtime_identity(),
     config = list(path = normalizePath(config_path, mustWork = TRUE), sha256 = production_orchestration_hash_file(config_path)),
@@ -364,6 +398,7 @@ production_orchestration_write_final_summary <- function(contract, path = file.p
     status = "PRODUCTION PIPELINE COMPLETE",
     run_id = contract$run_id,
     chime_execution_id = contract$chime_execution_id %||% NA_character_,
+    administrative_support = contract$administrative_support_summary %||% list(policy = contract$administrative_support_policy %||% "fail", unseen_support_used = FALSE),
     stages = list(prepare = contract$prepare_gate_status %||% "NOT_RUN", fit = contract$fit_gate_status %||% "NOT_RUN", postfit = contract$postfit_gate_status %||% "NOT_RUN"),
     runtime = contract$runtime %||% list(),
     modeled_weeks = contract$dynamic_dimensions$modeled_weeks %||% NA_integer_,
