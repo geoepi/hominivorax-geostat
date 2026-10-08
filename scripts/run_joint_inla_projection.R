@@ -9,6 +9,7 @@ option <- function(name, default = NULL) {
 flag <- function(name) paste0("--", name) %in% args
 
 repo_root <- normalizePath(option("repo-root", getwd()), mustWork = TRUE)
+source(file.path(repo_root, "R", "production_orchestration.R"))
 source(file.path(repo_root, "R", "joint_inla_extract.R"))
 source(file.path(repo_root, "R", "joint_inla_project.R"))
 
@@ -22,7 +23,17 @@ expected_groups_arg <- option("expected-groups")
 subset_target <- as.integer(option("diagnostic-subset", "10000"))
 n_worst <- as.integer(option("n-worst", "20"))
 overwrite <- flag("overwrite")
-allow_unseen_admin_zero <- flag("allow-unseen-admin-zero")
+unseen_admin_policy_arg <- option("unseen-admin-policy")
+if (is.null(unseen_admin_policy_arg)) {
+  unseen_admin_policy <- if (flag("allow-unseen-admin-zero")) "zero_mean" else "fail"
+} else {
+  unseen_admin_policy <- tolower(trimws(as.character(unseen_admin_policy_arg)))
+  if (flag("allow-unseen-admin-zero") && !identical(unseen_admin_policy, "zero_mean")) {
+    stop("--allow-unseen-admin-zero conflicts with --unseen-admin-policy=", unseen_admin_policy)
+  }
+}
+if (!unseen_admin_policy %in% c("fail", "zero_mean")) stop("--unseen-admin-policy must be fail or zero_mean")
+allow_unseen_admin_zero <- identical(unseen_admin_policy, "zero_mean")
 
 if (!file.exists(build_path)) stop("Stage 3A build artifact does not exist: ", build_path)
 if (!file.exists(fit_path)) stop("Stage 3B fit artifact does not exist: ", fit_path)
@@ -119,10 +130,16 @@ response_scale_path <- file.path(output_dir, paste0("response_scale_fitted_row_d
 utils::write.csv(response_scale, response_scale_path, row.names = FALSE, na = "")
 metadata <- readRDS(paths$paths[["metadata"]])
 metadata$administrative_support <- prediction_admin_audit
+metadata$administrative_support_summary <- production_orchestration_administrative_support_summary(
+  prediction_admin_audit, unseen_admin_policy, admin_audit_path
+)
 metadata$administrative_support_handling <- if (allow_unseen_admin_zero) {
   "Prediction-only admin_f levels use explicit zero posterior-mean contributions and are flagged as unseen_level_zero_mean."
 } else {
   "No unseen admin_f levels were authorized; projection would stop if any were present."
+}
+if (isTRUE(metadata$administrative_support_summary$unseen_support_used)) {
+  warning("Projection used zero posterior-mean support for unseen administrative levels: ", paste(metadata$administrative_support_summary$affected_admin_levels, collapse = ", "))
 }
 metadata$output_paths$admin_audit <- admin_audit_path
 metadata$output_paths$response_scale_diagnostic <- response_scale_path

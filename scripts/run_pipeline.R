@@ -43,6 +43,7 @@ print_contract <- function(contract, dry = FALSE) {
   cat("Resolved horizon: ", contract$horizon$configured_start_epiweek, " → ", contract$horizon$resolved_final_complete_epiweek,
       " (", contract$horizon$modeled_weeks, " weeks)\n", sep = "")
   cat("Output root: ", contract$run_root, "\n", sep = "")
+  cat("Unseen administrative support policy: ", contract$administrative_support_policy %||% "fail", "\n", sep = "")
   if (!is.null(contract$upstream_provenance)) {
     upstream <- contract$upstream_provenance$cds_datagrab
     cat("CDS provenance: ", upstream$coverage_certificate$status, " through ", upstream$coverage_certificate$validated_through, "\n", sep = "")
@@ -190,8 +191,18 @@ stage_postfit <- function(contract, fit_job_id = "not-under-scheduler") {
       eq("repo-root", repo_root), eq("build", build), eq("fit", fit), eq("stage2", stage2),
       eq("run-id", contract$run_id), eq("output-dir", contract$paths$projection),
       eq("expected-rows", dims$prediction_rows), eq("expected-weeks", dims$modeled_weeks),
-      eq("expected-groups", dims$groups$quarter_groups)
+      eq("expected-groups", dims$groups$quarter_groups),
+      eq("unseen-admin-policy", contract$administrative_support_policy %||% "fail")
     ))
+    projection_metadata_path <- file.path(contract$paths$projection, paste0("prediction_projection_metadata_", contract$run_id, ".rds"))
+    if (!file.exists(projection_metadata_path)) stop("Projection metadata is missing: ", projection_metadata_path)
+    projection_metadata <- readRDS(projection_metadata_path)
+    contract$administrative_support_summary <- production_orchestration_administrative_support_summary(
+      projection_metadata$administrative_support,
+      contract$administrative_support_policy %||% "fail",
+      projection_metadata$output_paths$admin_audit %||% NA_character_
+    )
+    production_orchestration_write_manifest(contract)
     run_command(file.path(repo_root, "scripts", "run_joint_inla_rasterization.R"), c(
       "--repo-root", repo_root, "--phase2-output", contract$paths$projection, "--stage2-artifact", stage2,
       "--output", contract$paths$raster, "--run-id", contract$run_id,

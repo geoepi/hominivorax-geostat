@@ -12,6 +12,13 @@ parse_args <- function(args) {
     key <- args[[i]]
     if (!grepl("^--", key)) stop("Unexpected argument: ", key)
     name <- sub("^--", "", key)
+    if (grepl("=", name, fixed = TRUE)) {
+      parts <- strsplit(name, "=", fixed = TRUE)[[1L]]
+      if (length(parts) != 2L || !nzchar(parts[[1L]])) stop("Malformed inline argument: ", key)
+      values[[parts[[1L]]]] <- parts[[2L]]
+      i <- i + 1L
+      next
+    }
     if (identical(name, "overwrite") || identical(name, "no-diagnostics")) {
       values[[name]] <- TRUE
       i <- i + 1L

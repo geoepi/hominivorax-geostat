@@ -15,7 +15,8 @@ RUN_ID=""
 OUTPUT_ROOT=""
 TEMPLATE=""
 SOURCE_PHASE2_COMMIT=""
-ALLOW_UNSEEN_ADMIN_ZERO=0
+UNSEEN_ADMIN_POLICY="fail"
+UNSEEN_ADMIN_POLICY_SET=0
 OVERWRITE=0
 
 usage() {
@@ -23,7 +24,8 @@ usage() {
 Usage: run_postfit_acceptance_atlas.sh \
   --fit-job-id JOBID --stage2 PATH --build PATH --fit PATH --holdout PATH \
   --run-id ID --output-root PATH [--template PATH] \
-  [--source-phase2-commit COMMIT] [--allow-unseen-admin-zero] [--overwrite]
+  [--source-phase2-commit COMMIT] [--unseen-admin-policy fail|zero_mean] \
+  [--allow-unseen-admin-zero] [--overwrite]
 
 The pipeline is a one-shot post-fit run. It does not create a watcher or a
 SLURM dependency and it refuses non-empty output roots unless --overwrite is
@@ -42,12 +44,21 @@ while (($#)); do
     --output-root) OUTPUT_ROOT="$2"; shift 2 ;;
     --template) TEMPLATE="$2"; shift 2 ;;
     --source-phase2-commit) SOURCE_PHASE2_COMMIT="$2"; shift 2 ;;
-    --allow-unseen-admin-zero) ALLOW_UNSEEN_ADMIN_ZERO=1; shift ;;
+    --unseen-admin-policy) UNSEEN_ADMIN_POLICY="$2"; UNSEEN_ADMIN_POLICY_SET=1; shift 2 ;;
+    --allow-unseen-admin-zero)
+      if [[ "$UNSEEN_ADMIN_POLICY_SET" -eq 1 && "$UNSEEN_ADMIN_POLICY" != "zero_mean" ]]; then
+        echo "--allow-unseen-admin-zero conflicts with --unseen-admin-policy=$UNSEEN_ADMIN_POLICY" >&2; exit 2
+      fi
+      UNSEEN_ADMIN_POLICY="zero_mean"; shift ;;
     --overwrite) OVERWRITE=1; shift ;;
     --help|-h) usage; exit 0 ;;
     *) echo "Unknown argument: $1" >&2; usage >&2; exit 2 ;;
   esac
 done
+
+if [[ "$UNSEEN_ADMIN_POLICY" != "fail" && "$UNSEEN_ADMIN_POLICY" != "zero_mean" ]]; then
+  echo "--unseen-admin-policy must be fail or zero_mean" >&2; exit 2
+fi
 
 for required in FIT_JOB_ID STAGE2 BUILD FIT HOLDOUT RUN_ID OUTPUT_ROOT; do
   if [[ -z "${!required}" ]]; then echo "Missing required argument for ${required}" >&2; usage >&2; exit 2; fi
@@ -123,9 +134,8 @@ Rscript --vanilla "$SCRIPT_DIR/run_joint_inla_validation.R" "${VALIDATION_ARGS[@
 echo "Phase 2: reconstruction and dense-grid projection"
 PROJECTION_ARGS=(
   --repo-root="$REPO_ROOT" --build="$BUILD" --fit="$FIT" --stage2="$STAGE2"
-  --run-id="$RUN_ID" --output-dir="$PROJECTION_DIR"
+  --run-id="$RUN_ID" --output-dir="$PROJECTION_DIR" --unseen-admin-policy="$UNSEEN_ADMIN_POLICY"
 )
-if [[ "$ALLOW_UNSEEN_ADMIN_ZERO" -eq 1 ]]; then PROJECTION_ARGS+=(--allow-unseen-admin-zero); fi
 if [[ "$OVERWRITE" -eq 1 ]]; then PROJECTION_ARGS+=(--overwrite); fi
 Rscript --vanilla "$SCRIPT_DIR/run_joint_inla_projection.R" "${PROJECTION_ARGS[@]}"
 

@@ -11,6 +11,11 @@ temporal:
   start_epiweek: "2024-W01"
   end_rule: last_complete_epiweek
 
+projection:
+  # fail is the safe default; CHIME-controlled production may explicitly use
+  # zero_mean after the guarded readiness contract validates this setting.
+  unseen_admin_policy: fail
+
 # Stage-specific files contain model rules. The orchestrator overrides only
 # run-specific inputs and output directories.
 stage_configs:

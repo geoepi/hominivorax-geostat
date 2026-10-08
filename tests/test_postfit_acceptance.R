@@ -34,7 +34,10 @@ stopifnot(grepl("acceptance_mode", validation_text, fixed = TRUE),
           grepl("module load udunits proj geos/3.12.1 gdal/3.8.5 intel-oneapi-mkl/2023.2.0 r/4.4.3", wrapper_text, fixed = TRUE),
           grepl("--fit-job-id", wrapper_text, fixed = TRUE),
           grepl("run-id", raster_text, fixed = TRUE),
-          grepl("stage2-artifact", raster_text, fixed = TRUE))
+          grepl("stage2-artifact", raster_text, fixed = TRUE),
+          grepl("unseen-admin-policy", projection_text, fixed = TRUE),
+          grepl("unseen-admin-policy", wrapper_text, fixed = TRUE),
+          grepl("grepl(\"=\", name, fixed = TRUE)", raster_text, fixed = TRUE))
 
 stopifnot(grepl("acceptance-mode.*reference", validation_text),
           grepl("historical_metric_regression_applied", validation_text, fixed = TRUE),

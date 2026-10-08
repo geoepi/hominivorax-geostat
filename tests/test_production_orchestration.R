@@ -165,6 +165,18 @@ test_that("resume requires the recorded repository commit to match the current c
   )
 })
 
+test_that("named unseen administrative support policy is summarized without exposing payloads", {
+  audit <- data.frame(check = c("prediction_only_levels", "prediction_rows_affected", "prediction_cells_affected", "prediction_weeks_affected", "prediction_only_admin_ids"), observed = c("2", "10", "3", "4", "admin-a,admin-b"), stringsAsFactors = FALSE)
+  path <- file.path(tempdir(), paste0("admin_support_", sample.int(1000000L, 1L), ".csv"))
+  utils::write.csv(audit, path, row.names = FALSE)
+  summary <- production_orchestration_administrative_support_summary(audit, "zero_mean", path)
+  expect_true(summary$unseen_support_used)
+  expect_identical(summary$affected_admin_level_count, 2L)
+  expect_identical(summary$affected_prediction_rows, 10L)
+  expect_identical(summary$affected_admin_levels, c("admin-a", "admin-b"))
+  expect_error(production_orchestration_administrative_support_summary(audit, "invalid"), "Unsupported")
+})
+
 test_that("production summary includes the persisted CHIME execution ID", {
   fixture <- make_production_contract_fixture(repo_root)
   contract <- with_chime_execution_id("test-execution-123", production_orchestration_contract(fixture$config_path, repo_root, run_id = "summary"))
