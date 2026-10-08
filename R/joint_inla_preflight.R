@@ -119,9 +119,9 @@ joint_inla_preflight_theta_inventory <- function(theta_order = NULL, theta_lengt
   data.frame(
     position = seq_len(theta_length),
     assumed_label = if (verified) labels else paste0(labels, " (semantic label unverified)"),
-    expected_model_components = component_inventory,
-    assumed_order_note = if (verified) "Canonical theta order is reconstructed from the verified Stage 3A model signature." else "Retain the current artifact theta positions as provenance; semantic order is not established from Stage 3A metadata.",
-    order_verified = verified,
+    expected_model_components = rep(component_inventory, theta_length),
+    assumed_order_note = rep(if (verified) "Canonical theta order is reconstructed from the verified Stage 3A model signature." else "Retain the current artifact theta positions as provenance; semantic order is not established from Stage 3A metadata.", theta_length),
+    order_verified = rep(verified, theta_length),
     stringsAsFactors = FALSE
   )
 }
