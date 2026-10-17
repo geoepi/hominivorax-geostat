@@ -31,8 +31,9 @@ make_cds_fixture <- function() {
     product_id = product_id, status = "success", weekly_expected = 2L, weekly_present = 2L, weekly_missing = list()
   )), products)
   jsonlite::write_json(list(
-    run_id = "20260101T000000Z_portfolio", status = "success", requested_through = "2024-01-14",
+    run_id = "20260101T000000Z_portfolio", status = "success", requested_through = "latest-common", effective_requested_end = "2024-01-14",
     product_ids = products, source_workflow_ids = setNames(as.list(products), products), products = product_records,
+    validation = list(status = "success", expected_iso_weeks = weeks),
     completed_at = "2026-01-01T00:00:00Z"
   ), file.path(portfolio_root, "portfolio_manifest.json"), auto_unbox = TRUE, pretty = TRUE)
   contract <- list(
@@ -64,6 +65,14 @@ test_that("CDS provenance resolves all required products and remains determinist
   expect_true(all(nchar(rows$sidecar_sha256) == 64L))
   expect_true(all(rows$source_family_id != ""))
   expect_true(all(grepl("request-", rows$source_request_hashes, fixed = TRUE)))
+})
+
+test_that("CDS/model horizon guard accepts equal or earlier model horizons and rejects unsafe evidence", {
+  expect_identical(cds_upstream_provenance_assert_horizon_alignment("2026-W39", "2026-W39")$alignment_status, "equal")
+  expect_identical(cds_upstream_provenance_assert_horizon_alignment("2026-W38", "2026-W39")$alignment_status, "within_cds_horizon")
+  expect_error(cds_upstream_provenance_assert_horizon_alignment("2026-W40", "2026-W39"), "exceeds validated CDS")
+  expect_error(cds_upstream_provenance_assert_horizon_alignment("2026-W39", NULL), "evidence is missing")
+  expect_error(cds_upstream_provenance_assert_horizon_alignment("2026-W39", "not-a-week"), "evidence is malformed")
 })
 
 test_that("CDS provenance rejects missing, malformed, wrong, and duplicate inputs", {
@@ -115,7 +124,7 @@ test_that("coverage certificate and compact manifest/summary serialization are p
 test_that("an unsuccessful, incomplete, or incomplete-product portfolio cannot certify coverage", {
   cases <- list(
     unsuccessful = function(portfolio) { portfolio$status <- "failed"; portfolio },
-    insufficient = function(portfolio) { portfolio$requested_through <- "2024-01-07"; portfolio },
+    insufficient = function(portfolio) { portfolio$validation$expected_iso_weeks <- "2024-W01"; portfolio },
     missing_product = function(portfolio) { portfolio$products$era5_lai_low <- NULL; portfolio }
   )
   for (name in names(cases)) {
@@ -126,6 +135,62 @@ test_that("an unsuccessful, incomplete, or incomplete-product portfolio cannot c
     jsonlite::write_json(portfolio, manifest_path, auto_unbox = TRUE, pretty = TRUE)
     expect_error(cds_upstream_provenance_build(fixture$contract), "No successful CDS portfolio", info = name)
   }
+})
+
+test_that("CDS horizon alignment failure occurs before sbatch", {
+  fixture <- make_cds_fixture()
+  observations_path <- file.path(fixture$root, "observations.csv")
+  utils::write.csv(
+    data.frame(date = as.character(as.Date(c("2024-01-01", "2024-01-21"))), lon = c(-90, -91), lat = c(30, 31)),
+    observations_path, row.names = FALSE
+  )
+  preprocessing <- yaml::read_yaml(file.path(repo_root, "config", "preprocessing.example.yml"))
+  preprocessing$inputs$observations <- observations_path
+  preprocessing$dynamic_covariates <- as.list(fixture$paths)
+  preprocessing_path <- file.path(fixture$root, "preprocessing.yml")
+  yaml::write_yaml(preprocessing, preprocessing_path)
+  production_path <- file.path(fixture$root, "production.yml")
+  yaml::write_yaml(list(
+    project = list(output_root = file.path(fixture$root, "runs")),
+    input = list(observations = observations_path),
+    temporal = list(start_epiweek = "2024-W01", end_rule = "last_complete_epiweek"),
+    stage_configs = list(
+      preprocessing = preprocessing_path,
+      joint_model = file.path(repo_root, "config", "joint_model.example.yml"),
+      joint_inla = file.path(repo_root, "config", "joint_inla.example.yml"),
+      fit = file.path(repo_root, "config", "joint_inla_fit.example.yml")
+    ),
+    projection = list(unseen_admin_policy = "zero_mean")
+  ), production_path)
+  fake_bin <- file.path(fixture$root, "bin")
+  dir.create(fake_bin, recursive = TRUE, showWarnings = FALSE)
+  marker <- file.path(fixture$root, "sbatch-called")
+  sbatch <- file.path(fake_bin, "sbatch")
+  writeLines(c("#!/usr/bin/env bash", paste0("touch ", shQuote(marker))), sbatch)
+  Sys.chmod(sbatch, mode = "0755")
+  old_path <- Sys.getenv("PATH")
+  old_profile <- Sys.getenv("ATLAS_RUNTIME_PROFILE", unset = NA_character_)
+  old_preflight <- Sys.getenv("ATLAS_RUNTIME_PREFLIGHT", unset = NA_character_)
+  on.exit({
+    Sys.setenv(PATH = old_path)
+    if (is.na(old_profile)) Sys.unsetenv("ATLAS_RUNTIME_PROFILE") else Sys.setenv(ATLAS_RUNTIME_PROFILE = old_profile)
+    if (is.na(old_preflight)) Sys.unsetenv("ATLAS_RUNTIME_PREFLIGHT") else Sys.setenv(ATLAS_RUNTIME_PREFLIGHT = old_preflight)
+  }, add = TRUE)
+  Sys.setenv(
+    PATH = paste(fake_bin, old_path, sep = .Platform$path.sep),
+    ATLAS_RUNTIME_PROFILE = "atlas-r44-spatial-v1",
+    ATLAS_RUNTIME_PREFLIGHT = "PASS"
+  )
+  rscript <- file.path(R.home("bin"), "Rscript")
+  output <- system2(
+    rscript,
+    c("--vanilla", file.path(repo_root, "scripts", "run_pipeline.R"), "--mode", "submit", "--config", production_path),
+    stdout = TRUE,
+    stderr = TRUE
+  )
+  expect_identical(as.integer(attr(output, "status")), 1L)
+  expect_true(any(grepl("No successful CDS portfolio manifest provides complete coverage through 2024-W03", output, fixed = TRUE)))
+  expect_false(file.exists(marker))
 })
 
 cat("CDS upstream provenance tests passed\n")

@@ -143,6 +143,52 @@ cds_upstream_provenance_date <- function(value) {
   if (is.na(parsed)) as.Date(NA) else parsed
 }
 
+cds_upstream_provenance_complete_weeks <- function(portfolio) {
+  validation <- portfolio$validation %||% list()
+  values <- cds_upstream_provenance_values(validation$expected_iso_weeks)
+  if (!length(values)) values <- cds_upstream_provenance_values(portfolio$expected_iso_weeks)
+  if (!length(values)) return(character())
+  parsed <- vapply(values, function(value) production_orchestration_parse_week(value)$label, character(1L))
+  parsed[order(vapply(parsed, cds_upstream_provenance_week_order, numeric(1L)))]
+}
+
+cds_upstream_provenance_portfolio_endpoint <- function(portfolio, fallback_week = NULL) {
+  for (field in c("effective_requested_end", "portfolio_inventory_end", "known_observed_end", "requested_end", "requested_through")) {
+    endpoint <- cds_upstream_provenance_date(portfolio[[field]])
+    if (!is.na(endpoint)) return(endpoint)
+  }
+  if (!is.null(fallback_week) && length(fallback_week) && !is.na(fallback_week[[1L]])) {
+    parsed <- production_orchestration_parse_week(fallback_week[[1L]])
+    return(production_orchestration_week_start(parsed$year, parsed$week) + 6L)
+  }
+  as.Date(NA)
+}
+
+cds_upstream_provenance_assert_horizon_alignment <- function(model_horizon, cds_validated_through) {
+  model <- tryCatch(
+    production_orchestration_parse_week(model_horizon),
+    error = function(error) stop("Model horizon evidence is malformed: ", conditionMessage(error), call. = FALSE)
+  )
+  cds_value <- cds_upstream_provenance_scalar(cds_validated_through)
+  if (is.na(cds_value)) stop("CDS validated-through horizon evidence is missing.", call. = FALSE)
+  cds <- tryCatch(
+    production_orchestration_parse_week(cds_value),
+    error = function(error) stop("CDS validated-through horizon evidence is malformed: ", conditionMessage(error), call. = FALSE)
+  )
+  if (cds_upstream_provenance_week_order(model$label) > cds_upstream_provenance_week_order(cds$label)) {
+    stop(
+      "Geostat horizon ", model$label,
+      " exceeds validated CDS complete-week horizon ", cds$label, ".",
+      call. = FALSE
+    )
+  }
+  list(
+    model_horizon_end = model$label,
+    cds_validated_through = cds$label,
+    alignment_status = if (identical(model$label, cds$label)) "equal" else "within_cds_horizon"
+  )
+}
+
 cds_upstream_provenance_portfolio_product <- function(portfolio, product_id) {
   products <- portfolio$products %||% list()
   product <- products[[product_id]]
@@ -154,22 +200,33 @@ cds_upstream_provenance_validate_portfolio <- function(portfolio, manifest_path,
   if (!identical(tolower(cds_upstream_provenance_scalar(portfolio$status)), "success")) return(NULL)
   products <- portfolio$products %||% list()
   if (!all(required_products %in% names(products))) return(NULL)
+  complete_weeks <- cds_upstream_provenance_complete_weeks(portfolio)
+  if (!length(complete_weeks)) return(NULL)
   for (product_id in required_products) {
     product <- products[[product_id]]
     if (!is.list(product) || !identical(tolower(cds_upstream_provenance_scalar(product$status)), "success")) return(NULL)
     missing <- cds_upstream_provenance_values(product$weekly_missing)
     if (length(missing)) return(NULL)
-    if (!isTRUE(as.numeric(product$weekly_present %||% NA_real_) >= as.numeric(product$weekly_expected %||% Inf))) return(NULL)
+    if (length(cds_upstream_provenance_values(product$weekly_sidecars_missing)) || length(cds_upstream_provenance_values(product$weekly_sidecars_invalid))) return(NULL)
+    if (!is.null(product$weekly_validation_valid) && !isTRUE(as.logical(product$weekly_validation_valid[[1L]]))) return(NULL)
+    weekly_present <- suppressWarnings(as.numeric(cds_upstream_provenance_scalar(product$weekly_present)))
+    weekly_expected <- suppressWarnings(as.numeric(cds_upstream_provenance_scalar(product$weekly_expected)))
+    if (is.na(weekly_present) || is.na(weekly_expected) || weekly_present < weekly_expected || weekly_expected < length(complete_weeks)) return(NULL)
   }
-  endpoint <- cds_upstream_provenance_date(portfolio$requested_through %||% portfolio$effective_requested_end %||% portfolio$portfolio_inventory_end %||% portfolio$known_observed_end)
+  validated_through <- complete_weeks[[length(complete_weeks)]]
+  alignment <- tryCatch(
+    cds_upstream_provenance_assert_horizon_alignment(horizon_end, validated_through),
+    error = function(error) NULL
+  )
+  if (is.null(alignment)) return(NULL)
+  endpoint <- cds_upstream_provenance_portfolio_endpoint(portfolio, validated_through)
   if (is.na(endpoint)) return(NULL)
-  validated_through <- production_orchestration_week_label(endpoint)
-  if (cds_upstream_provenance_week_order(validated_through) < cds_upstream_provenance_week_order(horizon_end)) return(NULL)
   list(
     portfolio = portfolio,
     manifest_path = normalizePath(manifest_path, mustWork = TRUE),
     validated_through = validated_through,
-    endpoint_date = endpoint
+    endpoint_date = endpoint,
+    alignment_status = alignment$alignment_status
   )
 }
 
@@ -318,6 +375,7 @@ cds_upstream_provenance_build <- function(contract) {
 
 production_orchestration_attach_cds_provenance <- function(contract, write_files = TRUE) {
   built <- cds_upstream_provenance_build(contract)
+  alignment <- cds_upstream_provenance_assert_horizon_alignment(contract$horizon$resolved_final_complete_epiweek, built$selected$validated_through)
   metadata <- contract$paths$metadata
   artifact_path <- file.path(metadata, "upstream_cds_provenance.csv")
   certificate_path <- file.path(metadata, "cds_coverage_certificate.yml")
@@ -330,6 +388,9 @@ production_orchestration_attach_cds_provenance <- function(contract, write_files
     horizon_start = built$horizon_start,
     horizon_end = built$horizon_end,
     validated_through = built$selected$validated_through,
+    model_horizon_end = alignment$model_horizon_end,
+    cds_validated_through = alignment$cds_validated_through,
+    alignment_status = alignment$alignment_status,
     required_products = lapply(built$product_summaries, function(summary) summary[c("product_id", "model_covariate", "weeks", "first_epiweek", "last_epiweek", "validated_through")]),
     coverage_result = "all required CDS products cover the geostat horizon"
   )
@@ -337,6 +398,9 @@ production_orchestration_attach_cds_provenance <- function(contract, write_files
     dir.create(metadata, recursive = TRUE, showWarnings = FALSE)
     utils::write.csv(built$rows, artifact_path, row.names = FALSE, na = "", quote = TRUE)
     production_orchestration_write_yaml(certificate, certificate_path)
+    persisted <- yaml::read_yaml(certificate_path)
+    persisted_alignment <- cds_upstream_provenance_assert_horizon_alignment(persisted$model_horizon_end %||% persisted$horizon_end, persisted$cds_validated_through %||% persisted$validated_through)
+    if (!identical(persisted_alignment$alignment_status, alignment$alignment_status)) stop("Persisted CDS coverage certificate alignment status does not match the validated contract.", call. = FALSE)
   }
   artifact_sha <- if (isTRUE(write_files)) production_orchestration_hash_file(artifact_path) else NA_character_
   certificate_sha <- if (isTRUE(write_files)) production_orchestration_hash_file(certificate_path) else NA_character_
@@ -347,7 +411,7 @@ production_orchestration_attach_cds_provenance <- function(contract, write_files
     detail_artifact = list(path = normalizePath(artifact_path, mustWork = FALSE), sha256 = artifact_sha, rows = nrow(built$rows)),
     overall_fingerprint = built$overall_fingerprint,
     product_fingerprints = lapply(built$product_summaries, function(summary) summary[c("product_id", "model_covariate", "weeks", "first_epiweek", "last_epiweek", "fingerprint", "validated_through")]),
-    coverage_certificate = list(path = normalizePath(certificate_path, mustWork = FALSE), sha256 = certificate_sha, portfolio_run_id = certificate$portfolio_run_id, portfolio_manifest_path = certificate$portfolio_manifest_path, portfolio_manifest_sha256 = certificate$portfolio_manifest_sha256, status = certificate$status, validated_through = certificate$validated_through, result = certificate$coverage_result)
+    coverage_certificate = list(path = normalizePath(certificate_path, mustWork = FALSE), sha256 = certificate_sha, portfolio_run_id = certificate$portfolio_run_id, portfolio_manifest_path = certificate$portfolio_manifest_path, portfolio_manifest_sha256 = certificate$portfolio_manifest_sha256, status = certificate$status, validated_through = certificate$validated_through, model_horizon_end = certificate$model_horizon_end, cds_validated_through = certificate$cds_validated_through, alignment_status = certificate$alignment_status, result = certificate$coverage_result)
   )
   contract$upstream_provenance <- list(cds_datagrab = provenance)
   contract
