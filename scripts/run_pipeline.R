@@ -208,7 +208,7 @@ stage_postfit <- function(contract, fit_job_id = "not-under-scheduler") {
       "--output", contract$paths$raster, "--run-id", contract$run_id,
       "--expected-weeks", dims$modeled_weeks, "--expected-rows", dims$prediction_rows, "--no-diagnostics"
     ))
-    temperature_threshold <- contract$settings$cfg$reporting$temperature_mask$threshold_c %||% 14.5
+    temperature_threshold <- contract$settings$cfg$reporting$temperature_mask$threshold_c %||% 16.0
     run_command(file.path(repo_root, "scripts", "run_structural_surface_diagnostics.R"), c(
       "--fit", fit, "--build", build, "--stage2", stage2, "--phase2", contract$paths$projection,
       "--phase3", contract$paths$raster, "--observations", contract$input$observations,
@@ -234,6 +234,7 @@ stage_postfit <- function(contract, fit_job_id = "not-under-scheduler") {
       "--phase3-root", contract$paths$raster, "--observation-input", contract$input$observations,
       "--rpi-observations", contract$input$observations, "--rpi-coordinate-source", "lonlat", "--rpi-coordinate-crs", "EPSG:4326",
       "--structural-root", contract$paths$structural, "--masked-structural-root", contract$paths$masked,
+      "--boundary", contract$settings$stages$preprocessing$inputs$study_boundary,
       "--expected-weeks", dims$modeled_weeks, "--expected-cells", dims$supported_cells,
       "--expected-start-week", dims$horizon_start, "--expected-end-week", dims$horizon_end,
       "--temperature-threshold", temperature_threshold, "--fit-job-id", fit_job_id,

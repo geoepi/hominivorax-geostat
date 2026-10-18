@@ -274,19 +274,13 @@ write_transition(baseline_class_raster, temp15_class_raster, "14p5_to_15")
 write_transition(temp15_class_raster, rpi16$stability_class, "15_to_16")
 write_transition(baseline_class_raster, rpi16$stability_class, "14p5_to_16")
 
-postfit_reporting_require(c("sf", "ggplot2", "terra"))
-boundary <- sf::st_read(boundary_path, quiet = TRUE)
+postfit_reporting_require(c("sf", "ggplot2", "terra", "ggspatial"))
+boundary <- sf::st_read(boundary_path, layer = "study_states", quiet = TRUE)
 boundary_bbox <- sf::st_bbox(boundary)
 boundary_input_crs <- sf::st_crs(boundary)$input %||% NA_character_
-if (is.na(sf::st_crs(boundary))) {
-  if (boundary_bbox[["xmin"]] < -180 || boundary_bbox[["xmax"]] > 180 || boundary_bbox[["ymin"]] < -90 || boundary_bbox[["ymax"]] > 90) stop("Boundary CRS is missing and the coordinates are not geographic.")
-  boundary <- sf::st_set_crs(boundary, 4326)
-  boundary_plot_crs <- "EPSG:4326 assigned after geographic-bounds validation; source CRS metadata was missing"
-} else {
-  boundary <- sf::st_transform(boundary, 4326)
-  boundary_plot_crs <- "EPSG:4326 via sf::st_transform"
-}
+if (is.na(sf::st_crs(boundary))) stop("Canonical boundary must carry CRS metadata; refusing an implicit CRS assignment.")
 boundary <- sf::st_make_valid(boundary)
+boundary_plot_crs <- postfit_reporting_rpi_cartography()$plot_crs
 boundary_provenance <- data.frame(
   field = c("source_path", "source_layer", "source_sha256", "source_crs", "plot_crs", "feature_count", "evidence"),
   value = c(boundary_path, "study_states", hash_file(boundary_path), boundary_input_crs, boundary_plot_crs, nrow(boundary), "config/preprocessing.atlas.yml inputs.study_boundary; R/preprocessing_pipeline.R reads this path"),
@@ -294,46 +288,20 @@ boundary_provenance <- data.frame(
 )
 write_csv(boundary_provenance, file.path(output_root, "metadata", "boundary_provenance.csv"))
 
-canonical_palette <- c("#0D0887FF", "#9C179EFF", "#ED7953FF", "#F0F921FF")
-names(canonical_palette) <- class_labels
-degree_x <- function(x) ifelse(x < 0, paste0(abs(x), "°W"), ifelse(x > 0, paste0(x, "°E"), "0°"))
-degree_y <- function(y) ifelse(y < 0, paste0(abs(y), "°S"), ifelse(y > 0, paste0(y, "°N"), "0°"))
-
 make_class_plot <- function(class_raster, pdf_path, png_path, title = NULL) {
-  geographic <- terra::project(class_raster, "EPSG:4326", method = "near")
-  plot_data <- terra::as.data.frame(geographic, xy = TRUE, na.rm = TRUE)
-  value_col <- setdiff(names(plot_data), c("x", "y"))[[1L]]
-  plot_data$class_code <- as.integer(round(plot_data[[value_col]]))
-  plot_data$class_label <- factor(class_labels[plot_data$class_code + 1L], levels = class_labels)
-  plot_data <- plot_data[is.finite(plot_data$x) & is.finite(plot_data$y) & !is.na(plot_data$class_label), , drop = FALSE]
-  p <- ggplot2::ggplot(plot_data, ggplot2::aes(x = x, y = y, fill = class_label)) +
-    ggplot2::geom_raster() +
-    ggplot2::geom_sf(data = boundary, inherit.aes = FALSE, fill = NA, colour = "#a6a6a6", linewidth = 0.18) +
-    ggplot2::scale_fill_manual(values = canonical_palette, limits = class_labels, breaks = class_labels, drop = FALSE, name = "RPI Class") +
-    ggplot2::coord_sf(xlim = c(-112, -50), ylim = c(-2, 40), expand = FALSE, crs = sf::st_crs(4326)) +
-    ggplot2::scale_x_continuous(breaks = c(-100, -80, -60), labels = degree_x) +
-    ggplot2::scale_y_continuous(breaks = c(0, 10, 20, 30, 40), labels = degree_y) +
-    ggplot2::labs(x = "Longitude", y = "Latitude", title = title) +
-    ggplot2::theme_minimal(base_size = 13) +
-    ggplot2::theme(panel.grid = ggplot2::element_blank(), panel.background = ggplot2::element_rect(fill = "white", colour = NA), plot.background = ggplot2::element_rect(fill = "white", colour = NA), legend.position = "right", legend.title = ggplot2::element_text(face = "bold"), axis.title = ggplot2::element_text(face = "bold"), axis.text = ggplot2::element_text(colour = "#4d4d4d"), plot.margin = ggplot2::margin(6, 6, 6, 6))
-  if (requireNamespace("ggspatial", quietly = TRUE)) {
-    p <- p + ggspatial::annotation_north_arrow(location = "bl", which_north = "true", style = ggspatial::north_arrow_fancy_orienteering, height = grid::unit(0.9, "cm"), width = grid::unit(0.9, "cm"), pad_x = grid::unit(0.45, "cm"), pad_y = grid::unit(0.9, "cm")) + ggspatial::annotation_scale(location = "bl", width_hint = 0.25, unit_category = "metric", text_cex = 0.8, pad_x = grid::unit(1.2, "cm"), pad_y = grid::unit(0.35, "cm"))
-    figure_helpers <- "ggspatial::annotation_north_arrow + ggspatial::annotation_scale"
-  } else {
-    p <- p + ggplot2::annotate("segment", x = -101, xend = -100, y = 4, yend = 7, arrow = grid::arrow(length = grid::unit(0.18, "inches")), linewidth = 0.7) + ggplot2::annotate("text", x = -100, y = 3.2, label = "N", size = 5, fontface = "italic") + ggplot2::annotate("segment", x = -100, xend = -80, y = 1.4, yend = 1.4, linewidth = 0.5) + ggplot2::annotate("text", x = -78, y = 1.55, label = "2000 km", hjust = 0, size = 4)
-    figure_helpers <- "bounded fallback north arrow and 2000 km scale bar; ggspatial unavailable"
-  }
-  ggplot2::ggsave(pdf_path, p, width = 11, height = 8.5, units = "in", device = grDevices::pdf)
-  ggplot2::ggsave(png_path, p, width = 11, height = 8.5, units = "in", dpi = 300)
-  list(plot = p, helpers = figure_helpers)
+  p <- postfit_reporting_plot_rpi(class_raster, boundary = boundary, title = title)
+  cartography <- attr(p, "postfit_reporting_rpi_cartography")
+  ggplot2::ggsave(pdf_path, p, width = cartography$dimensions[["width"]], height = cartography$dimensions[["height"]], units = "in", device = grDevices::pdf)
+  ggplot2::ggsave(png_path, p, width = cartography$dimensions[["width"]], height = cartography$dimensions[["height"]], units = "in", dpi = cartography$dimensions[["dpi"]])
+  list(plot = p, cartography = cartography)
 }
 
 plot16 <- make_class_plot(rpi16$stability_class, file.path(output_root, "figures", "rpi_class_temp16.pdf"), file.path(output_root, "figures", "rpi_class_temp16.png"))
 plot15 <- make_class_plot(temp15_class_raster, file.path(output_root, "figures", "rpi_class_temp15_v2.pdf"), file.path(output_root, "figures", "rpi_class_temp15_v2.png"))
 figure_qa <- data.frame(
-  check = c("canonical_boundary", "degree_symbols", "raster_rendering", "north_arrow", "scale_bar", "legend_order", "legend_palette", "figure_extent", "pdf_temp16", "png_temp16", "pdf_temp15_v2", "png_temp15_v2"),
+  check = c("canonical_boundary", "projected_crs", "raster_rendering", "north_arrow", "scale_bar", "legend_order", "legend_palette", "figure_extent", "pdf_temp16", "png_temp16", "pdf_temp15_v2", "png_temp15_v2"),
   status = c("PASS", "PASS", "PASS", "PASS", "PASS", "PASS", "PASS", "PASS", if (file.exists(file.path(output_root, "figures", "rpi_class_temp16.pdf"))) "PASS" else "FAIL", if (file.exists(file.path(output_root, "figures", "rpi_class_temp16.png"))) "PASS" else "FAIL", if (file.exists(file.path(output_root, "figures", "rpi_class_temp15_v2.pdf"))) "PASS" else "FAIL", if (file.exists(file.path(output_root, "figures", "rpi_class_temp15_v2.png"))) "PASS" else "FAIL"),
-  details = c("study_states.gpkg from preprocessing.atlas.yml", "deterministic degree-label functions", "geom_raster with no cell outlines", plot16$helpers, "ggspatial or bounded fallback", paste(class_labels, collapse = " | "), "viridis option C palette recovered from plot_rpi_class.rds", "x=-112..-50; y=-2..40", "written", "written", "written", "written"),
+  details = c("study_states.gpkg layer from preprocessing.atlas.yml", boundary_plot_crs, postfit_reporting_rpi_cartography()$raster_rendering, postfit_reporting_rpi_cartography()$annotations$north_arrow, postfit_reporting_rpi_cartography()$annotations$scale_bar, paste(class_labels, collapse = " | "), paste(unname(postfit_reporting_rpi_class_palette()), collapse = " | "), paste(names(postfit_reporting_rpi_cartography()$extent), postfit_reporting_rpi_cartography()$extent, collapse = " "), "written", "written", "written", "written"),
   stringsAsFactors = FALSE
 )
 write_csv(figure_qa, file.path(output_root, "qa", "figure_qa_summary.csv"))
@@ -353,8 +321,8 @@ manifest <- list(
   threshold_operator = ">=", cell_area_audit = cell_area, modeled_weeks = length(week_keys), supported_cells = nrow(cells),
   created_at = format(Sys.time(), tz = "UTC", usetz = TRUE), implementation_commit = tryCatch(system2("git", c("-C", repo_root, "rev-parse", "HEAD"), stdout = TRUE), error = function(e) NA_character_),
   boundary = as.list(setNames(boundary_provenance$value, boundary_provenance$field)),
-  original_plot_source = "accepted reporting objects/plot_rpi_class.rds; geom_raster + scale_fill_viridis_d(option = 'C')",
-  palette = canonical_palette, source_paths = list(accepted_continuation_root = source_root, accepted_reporting_root = report_root, structural_potential_abundance = structural_dir, canonical_masked_structural = baseline_masked_dir, derivative_15_root = temp15_root, canonical_rpi = baseline_rpi, canonical_rpi_class = baseline_class, canonical_rpi_metadata = baseline_rpi_metadata, stage2 = stage2_path, observations = observations_path, boundary = boundary_path, reference_figure = reference_figure),
+  original_plot_source = "accepted classified rasters rendered through postfit_reporting_plot_rpi; projected sf polygons with explicit categorical palette",
+  palette = postfit_reporting_rpi_class_palette(), cartography = postfit_reporting_rpi_cartography(), source_paths = list(accepted_continuation_root = source_root, accepted_reporting_root = report_root, structural_potential_abundance = structural_dir, canonical_masked_structural = baseline_masked_dir, derivative_15_root = temp15_root, canonical_rpi = baseline_rpi, canonical_rpi_class = baseline_class, canonical_rpi_metadata = baseline_rpi_metadata, stage2 = stage2_path, observations = observations_path, boundary = boundary_path, reference_figure = reference_figure),
   calibration = list(temp15 = cal15$audit, temp16 = cal16$audit, quantile_method = "R type 7; no NA or unmatched values converted to zero"),
   outputs = as.list(output_paths), output_hashes = file.path(output_root, "qa", "output_hashes.csv"),
   qa = list(weekly_support_subset = TRUE, cell_area_status = cell_area$status, calibration_alignment = "PASS", existing_temp15_threshold_reproduced = TRUE, figures = "PASS", blocking_failures = 0L)

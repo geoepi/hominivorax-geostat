@@ -311,6 +311,24 @@ testthat::test_that("dynamic RPI calibration is same-week, masked-stack, and rep
   testthat::expect_true(all(is.finite(terra::values(rpi$stability_class, mat = FALSE))[1:2]))
 })
 
+testthat::test_that("canonical RPI cartography uses the reference palette and projected boundary", {
+  testthat::skip_if_not_installed("terra")
+  testthat::skip_if_not_installed("sf")
+  testthat::skip_if_not_installed("ggplot2")
+  testthat::skip_if_not_installed("ggspatial")
+  cartography <- postfit_reporting_rpi_cartography()
+  testthat::expect_equal(unname(postfit_reporting_rpi_class_palette()), c("#f0f0f0", "#d4b487", "#fdae61", "#1a9850"))
+  testthat::expect_equal(cartography$plot_crs, "+proj=aea +lat_0=20 +lon_0=-75 +lat_1=10 +lat_2=30 +x_0=0 +y_0=0 +datum=WGS84 +units=km +no_defs")
+  raster <- terra::rast(nrows = 2, ncols = 2, xmin = -100, xmax = -98, ymin = 20, ymax = 22, crs = cartography$plot_crs)
+  terra::values(raster) <- c(0, 1, 2, 3)
+  boundary <- sf::st_sf(id = 1L, geometry = sf::st_sfc(sf::st_polygon(list(matrix(c(-100, 20, -98, 20, -98, 22, -100, 22, -100, 20), ncol = 2, byrow = TRUE))), crs = cartography$plot_crs))
+  plot <- postfit_reporting_plot_rpi(raster, boundary = boundary, title = NULL)
+  testthat::expect_true(inherits(plot, "ggplot"))
+  testthat::expect_false(any(vapply(plot$layers, function(layer) inherits(layer$geom, "GeomRaster"), logical(1L))))
+  testthat::expect_true(any(vapply(plot$layers, function(layer) inherits(layer$geom, "GeomSf"), logical(1L))))
+  testthat::expect_equal(attr(plot, "postfit_reporting_rpi_cartography")$boundary_layer, "study_states")
+})
+
 testthat::test_that("canonical RPI audit requires masked structural semantics and manifest records roles", {
   observed_source <- tempfile(); file.create(observed_source)
   testthat::expect_true(postfit_reporting_rpi_audit("masked_structural_potential_abundance", observed_source, 133L)$enabled)
@@ -328,7 +346,11 @@ testthat::test_that("canonical RPI audit requires masked structural semantics an
   testthat::expect_equal(masked$product_role, "derived physiologically masked ecological potential abundance")
   testthat::expect_false(masked$spde_terms_included)
   testthat::expect_equal(masked$temperature_variable, "mintemp")
+  testthat::expect_equal(masked$temperature_threshold_celsius, 16.0)
   testthat::expect_true(fitted$spde_terms_included)
+  historical_manifest <- postfit_reporting_write_manifest(paths, "run", temperature_threshold_celsius = 15.0)
+  historical_masked <- historical_manifest[historical_manifest$logical_product_name == "structural_potential_abundance_temp_masked", , drop = FALSE]
+  testthat::expect_equal(historical_masked$temperature_threshold_celsius, 15.0)
 })
 
 testthat::test_that("accepted structural and masked products promote with support and week contracts", {

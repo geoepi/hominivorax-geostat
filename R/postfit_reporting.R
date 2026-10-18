@@ -985,7 +985,7 @@ postfit_reporting_geometry_equal <- function(x, y) {
 
 postfit_reporting_prepare_structural_products <- function(structural_root, masked_root, output_spatial,
                                                            expected_weeks = NULL, expected_cells = NULL,
-                                                           threshold_celsius = 14.5, overwrite = FALSE,
+                                                           threshold_celsius = 16.0, overwrite = FALSE,
                                                            expected_start_week = NULL, expected_end_week = NULL) {
   postfit_reporting_require(c("terra", "digest"))
   required <- c(structural_root, masked_root)
@@ -1199,7 +1199,7 @@ postfit_reporting_rpi_audit <- function(count_stack_semantics, observed_source =
       if (identical(as.numeric(class_boundaries), c(3, 8, 15))) "PASS" else "WARNING"
     ),
     details = c(
-      if (identical(count_stack_semantics, "masked_structural_potential_abundance")) "RPI receives the 14.5 C masked structural potential-abundance stack." else "RPI must receive the standardized potential-abundance stack, not raw Tier 2 intensity.",
+      if (identical(count_stack_semantics, "masked_structural_potential_abundance")) "RPI receives the configured temperature-masked structural potential-abundance stack." else "RPI must receive the standardized potential-abundance stack, not raw Tier 2 intensity.",
       "Observation locations are required for threshold calibration.",
       "The supplied Phase 3 stack is evaluated as one ordered continuous stack.",
       if (identical(count_stack_semantics, "masked_structural_potential_abundance")) paste0("Threshold is the lower quantile (p=", cut_quant, ") of same-week observation-paired masked structural values and suitability is value > threshold.") else paste0("Threshold is the lower quantile (p=", cut_quant, ") of values extracted at observation locations and suitability is value > threshold."),
@@ -1266,14 +1266,64 @@ postfit_reporting_rpi_class_area <- function(stability_class, cell_area_info, la
              class_code = 0:3, area = area, area_units = cell_area_info$units, stringsAsFactors = FALSE)
 }
 
-postfit_reporting_plot_rpi <- function(stability_class, labels = c("Transient/Sink", "Seasonal", "Multi-Season", "Endemic Core")) {
-  postfit_reporting_require(c("terra", "ggplot2"))
-  values <- terra::values(stability_class, mat = FALSE)
-  cells <- which(!is.na(values))
-  xy <- terra::xyFromCell(stability_class, cells)
-  data <- data.frame(x = xy[, 1L], y = xy[, 2L], class_code = as.integer(values[cells]), class_label = factor(labels[as.integer(values[cells]) + 1L], levels = labels))
-  ggplot2::ggplot(data, ggplot2::aes(x = x, y = y, fill = class_label)) + ggplot2::geom_raster() + ggplot2::coord_equal(expand = FALSE) +
-    ggplot2::scale_fill_viridis_d(option = "C", name = "RPI class", drop = FALSE) + ggplot2::labs(title = "Reproductive Persistence Index classes", x = NULL, y = NULL) + theme_hominivorax_report() + ggplot2::theme(axis.text = ggplot2::element_blank(), axis.ticks = ggplot2::element_blank())
+postfit_reporting_rpi_class_labels <- function() {
+  c("Transient/Sink", "Seasonal", "Multi-Season", "Endemic Core")
+}
+
+postfit_reporting_rpi_class_palette <- function(labels = postfit_reporting_rpi_class_labels()) {
+  canonical <- c("Transient/Sink" = "#f0f0f0", "Seasonal" = "#d4b487", "Multi-Season" = "#fdae61", "Endemic Core" = "#1a9850")
+  labels <- as.character(labels)
+  if (anyDuplicated(labels) || !setequal(labels, names(canonical))) stop("RPI class labels must be the canonical four classes.")
+  canonical[labels]
+}
+
+postfit_reporting_rpi_cartography <- function() {
+  list(
+    plot_crs = "+proj=aea +lat_0=20 +lon_0=-75 +lat_1=10 +lat_2=30 +x_0=0 +y_0=0 +datum=WGS84 +units=km +no_defs",
+    datum_crs = "EPSG:4326",
+    extent = c(xmin = -5000, xmax = 3500, ymin = -2600, ymax = 3300),
+    axis_breaks = list(longitude = c(-100, -80, -60), latitude = c(0, 10, 20, 30, 40)),
+    boundary_layer = "study_states",
+    dimensions = c(width = 11, height = 8.5, dpi = 300),
+    raster_rendering = "sf polygons from categorical raster; no interpolation or cell outlines",
+    annotations = list(north_arrow = "ggspatial::annotation_north_arrow(which_north = 'grid', location = 'bl')", scale_bar = "ggspatial::annotation_scale(plot_unit = 'km', width_hint = 0.25, location = 'bl')")
+  )
+}
+
+postfit_reporting_plot_rpi <- function(stability_class, labels = postfit_reporting_rpi_class_labels(), boundary = NULL, title = "Reproductive Persistence Index classes") {
+  postfit_reporting_require(c("terra", "sf", "ggplot2"))
+  if (!inherits(stability_class, "SpatRaster")) stability_class <- terra::rast(stability_class)
+  if (terra::nlyr(stability_class) != 1L) stop("RPI class plotting requires a single-layer categorical raster.")
+  cartography <- postfit_reporting_rpi_cartography()
+  polygons <- sf::st_as_sf(terra::as.polygons(stability_class, dissolve = FALSE, na.rm = TRUE))
+  value_col <- setdiff(names(polygons), attr(polygons, "sf_column"))[[1L]]
+  class_code <- suppressWarnings(as.integer(round(polygons[[value_col]])))
+  if (any(!is.finite(class_code) | !class_code %in% 0:3)) stop("RPI class raster contains values outside the canonical 0:3 class codes.")
+  polygons$class_label <- factor(as.character(labels[class_code + 1L]), levels = labels)
+  polygons <- sf::st_transform(polygons, sf::st_crs(cartography$plot_crs))
+  boundary_layer <- NULL
+  if (!is.null(boundary)) {
+    if (is.character(boundary)) {
+      if (length(boundary) != 1L || !file.exists(boundary)) stop("Canonical RPI boundary path does not exist.")
+      boundary <- sf::st_read(boundary, quiet = TRUE)
+    }
+    if (!inherits(boundary, c("sf", "sfc"))) stop("boundary must be an sf object, sfc object, or existing path.")
+    if (is.na(sf::st_crs(boundary))) stop("Canonical RPI boundary must carry CRS metadata; refusing an implicit CRS assignment.")
+    boundary_layer <- sf::st_transform(sf::st_make_valid(boundary), sf::st_crs(cartography$plot_crs))
+  }
+  postfit_reporting_require("ggspatial")
+  p <- ggplot2::ggplot() + ggplot2::geom_sf(data = polygons, ggplot2::aes(fill = class_label), colour = NA)
+  if (!is.null(boundary_layer)) p <- p + ggplot2::geom_sf(data = boundary_layer, inherit.aes = FALSE, fill = NA, colour = "#8a8a8a", linewidth = 0.18)
+  p <- p +
+    ggplot2::scale_fill_manual(values = postfit_reporting_rpi_class_palette(labels), limits = labels, breaks = labels, drop = FALSE, name = "RPI Class") +
+    ggplot2::coord_sf(crs = sf::st_crs(cartography$plot_crs), datum = sf::st_crs(cartography$datum_crs), xlim = cartography$extent[c("xmin", "xmax")], ylim = cartography$extent[c("ymin", "ymax")], expand = FALSE) +
+    ggplot2::labs(title = title, x = "Longitude", y = "Latitude") +
+    ggplot2::theme_bw(base_size = 13) +
+    ggplot2::theme(panel.grid = ggplot2::element_blank(), panel.background = ggplot2::element_rect(fill = "white", colour = NA), plot.background = ggplot2::element_rect(fill = "white", colour = NA), legend.position = "right", legend.title = ggplot2::element_text(face = "bold"), axis.title = ggplot2::element_text(face = "bold"), axis.text = ggplot2::element_text(colour = "#4d4d4d"), plot.margin = ggplot2::margin(6, 6, 6, 6)) +
+    ggspatial::annotation_north_arrow(location = "bl", which_north = "grid", style = ggspatial::north_arrow_orienteering, height = grid::unit(1.0, "cm"), width = grid::unit(1.0, "cm"), pad_x = grid::unit(0.65, "cm"), pad_y = grid::unit(0.85, "cm")) +
+    ggspatial::annotation_scale(location = "bl", plot_unit = "km", width_hint = 0.25, text_cex = 0.8, bar_cols = c("black", "white"), line_width = 0.7, pad_x = grid::unit(1.55, "cm"), pad_y = grid::unit(0.35, "cm"))
+  attr(p, "postfit_reporting_rpi_cartography") <- cartography
+  p
 }
 
 postfit_reporting_model_summary <- function(build, fit_artifact, stage2) {
@@ -1316,7 +1366,7 @@ postfit_reporting_metadata_table <- function(object) {
   }, character(1L)), stringsAsFactors = FALSE)
 }
 
-postfit_reporting_save_plot <- function(plot, object_name, paths, width = 8, height = 5) {
+postfit_reporting_save_plot <- function(plot, object_name, paths, width = 8, height = 5, dpi = 160) {
   postfit_reporting_require("ggplot2")
   rds <- file.path(paths$objects, paste0("plot_", object_name, ".rds")); pdf <- file.path(paths$figures, paste0(object_name, ".pdf")); png <- file.path(paths$figures, paste0(object_name, ".png"))
   saveRDS(plot, rds)
@@ -1333,12 +1383,13 @@ postfit_reporting_save_plot <- function(plot, object_name, paths, width = 8, hei
     draw(pdf, grDevices::pdf); draw(png, grDevices::png)
   } else {
     ggplot2::ggsave(pdf, plot = plot, width = width, height = height, units = "in", device = grDevices::pdf)
-    ggplot2::ggsave(png, plot = plot, width = width, height = height, units = "in", dpi = 160)
+    ggplot2::ggsave(png, plot = plot, width = width, height = height, units = "in", dpi = dpi)
   }
   list(rds = rds, pdf = pdf, png = png)
 }
 
-postfit_reporting_write_manifest <- function(paths, source_run, generated_at = postfit_reporting_iso_timestamp()) {
+postfit_reporting_write_manifest <- function(paths, source_run, generated_at = postfit_reporting_iso_timestamp(), temperature_threshold_celsius = 16.0) {
+  if (length(temperature_threshold_celsius) != 1L || !is.finite(temperature_threshold_celsius)) stop("temperature_threshold_celsius must be one finite number.")
   files <- list.files(paths$root, recursive = TRUE, full.names = TRUE, all.files = FALSE)
   files <- files[!dir.exists(files)]
   files <- files[normalizePath(files, mustWork = FALSE) != normalizePath(paths$manifest, mustWork = FALSE)]
@@ -1359,7 +1410,7 @@ postfit_reporting_write_manifest <- function(paths, source_run, generated_at = p
     role <- if (identical(product_name, "potential_abundance")) "fitted/model-reconstruction product" else if (product_name %in% c("tier2_eta_structural", "tier2_intensity_structural")) "structural ecological prediction" else if (identical(product_name, "structural_potential_abundance")) "derived structural ecological potential abundance" else if (identical(product_name, "structural_potential_abundance_temp_masked")) "derived physiologically masked ecological potential abundance" else if (product_name %in% c("rpi_dynamic_threshold", "rpi", "rpi_class_map", "rpi_class_summary")) "derived RPI product" else NA_character_
     spde_terms <- if (product_name %in% c("potential_abundance")) TRUE else if (product_name %in% c("tier2_eta_structural", "tier2_intensity_structural", "structural_potential_abundance", "structural_potential_abundance_temp_masked")) FALSE else NA
     temperature_variable <- if (identical(product_name, "structural_potential_abundance_temp_masked")) "mintemp" else NA_character_
-    temperature_threshold <- if (identical(product_name, "structural_potential_abundance_temp_masked")) 14.5 else NA_real_
+    temperature_threshold <- if (identical(product_name, "structural_potential_abundance_temp_masked")) as.numeric(temperature_threshold_celsius) else NA_real_
     rpi_calibration <- if (identical(product_name, "rpi")) "same-week observation-paired dynamic threshold" else NA_character_
     object <- if (type == "table") file.path("objects", paste0(stem, ".rds")) else if (type == "figure") file.path("objects", paste0("plot_", stem, ".rds")) else if (type == "object") relative else NA_character_
     data.frame(artifact_type = type, logical_product_name = product_name, product_role = role, spde_terms_included = spde_terms, temperature_variable = temperature_variable, temperature_threshold_celsius = temperature_threshold, rpi_threshold_calibration = rpi_calibration, path = relative, file_format = postfit_reporting_file_format(path), source_object = gsub("\\\\", "/", object), source_run = source_run, checksum_sha256 = postfit_reporting_hash_file(path), generated_at_utc = generated_at, bytes = as.numeric(info$size), stringsAsFactors = FALSE)
