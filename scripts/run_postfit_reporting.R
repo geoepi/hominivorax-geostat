@@ -222,7 +222,12 @@ structural_figure_paths <- postfit_reporting_write_structural_masked_figure(
 )
 generated_figures$selected_structural_vs_masked_potential <- as.list(structural_figure_paths)
 
-cell_area <- postfit_reporting_trace_cell_area(cell_area_template, if (is.null(cell_area_value)) NULL else as.numeric(cell_area_value), cell_area_units)
+cell_area_template_for_audit <- if (!is.null(cell_area_value)) {
+  cell_area_template
+} else {
+  postfit_reporting_resolve_cell_area_template(cell_area_template, structural_products$manifest)
+}
+cell_area <- postfit_reporting_trace_cell_area(cell_area_template_for_audit, if (is.null(cell_area_value)) NULL else as.numeric(cell_area_value), cell_area_units)
 saveRDS(cell_area, file.path(paths$objects, "cell_area_audit.rds")); generated_objects$cell_area_audit <- file.path(paths$objects, "cell_area_audit.rds")
 utils::write.csv(postfit_reporting_metadata_table(cell_area), file.path(paths$metadata, "cell_area_audit.csv"), row.names = FALSE, na = "")
 
