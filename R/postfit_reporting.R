@@ -1054,6 +1054,24 @@ postfit_reporting_prepare_structural_products <- function(structural_root, maske
   )
 }
 
+postfit_reporting_resolve_cell_area_template <- function(explicit_template = NULL, structural_manifest = NULL) {
+  if (!is.null(explicit_template) && length(explicit_template) && !is.na(explicit_template[[1L]]) &&
+      nzchar(as.character(explicit_template[[1L]]))) {
+    path <- normalizePath(as.character(explicit_template[[1L]]), mustWork = TRUE)
+    return(path)
+  }
+  if (!is.data.frame(structural_manifest) ||
+      !"structural_potential_abundance_path" %in% names(structural_manifest)) {
+    stop("Cannot resolve cell-area template without an accepted structural product manifest.")
+  }
+  candidates <- as.character(structural_manifest$structural_potential_abundance_path)
+  candidates <- candidates[!is.na(candidates) & nzchar(candidates)]
+  if (!length(candidates) || !file.exists(candidates[[1L]])) {
+    stop("Accepted structural product manifest does not contain an existing cell-area template.")
+  }
+  normalizePath(candidates[[1L]], mustWork = TRUE)
+}
+
 postfit_reporting_read_rpi_observations <- function(path, target_crs = NULL,
                                                     coordinate_source = NULL,
                                                     source_crs = NULL) {

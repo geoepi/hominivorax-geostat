@@ -208,6 +208,37 @@ testthat::test_that("cell area, potential abundance, and RPI semantic gate are e
   testthat::expect_equal(postfit_reporting_rpi_audit("tier2_intensity", observation_path, 4L)$status, "BLOCKED")
 })
 
+testthat::test_that("cell-area audit resolves the accepted structural grid when no explicit template is supplied", {
+  testthat::skip_if_not_installed("terra")
+  root <- file.path(tempdir(), paste0("postfit-cell-area-fallback-", Sys.getpid()))
+  dir.create(root, recursive = TRUE)
+  template <- terra::rast(nrows = 2, ncols = 2, xmin = 0, xmax = 4, ymin = 0, ymax = 6,
+                          crs = "+proj=aea +lat_1=10 +lat_2=30 +lat_0=20 +lon_0=-75 +datum=WGS84 +units=km")
+  terra::values(template) <- 1
+  template_path <- file.path(root, "structural_potential_abundance_y2026_w39.tif")
+  terra::writeRaster(template, template_path, overwrite = TRUE)
+  manifest <- data.frame(structural_potential_abundance_path = template_path, stringsAsFactors = FALSE)
+  resolved <- postfit_reporting_resolve_cell_area_template(NULL, manifest)
+  testthat::expect_equal(resolved, normalizePath(template_path, mustWork = TRUE))
+  audit <- postfit_reporting_trace_cell_area(resolved)
+  testthat::expect_identical(audit$status, "PASS")
+  testthat::expect_equal(audit$nominal_average_raster_cell_area, 6)
+})
+
+testthat::test_that("cell-area audit remains unresolved for geographic units", {
+  testthat::skip_if_not_installed("terra")
+  root <- file.path(tempdir(), paste0("postfit-cell-area-geographic-", Sys.getpid()))
+  dir.create(root, recursive = TRUE)
+  template <- terra::rast(nrows = 2, ncols = 2, xmin = -1, xmax = 1, ymin = -1, ymax = 1,
+                          crs = "EPSG:4326")
+  terra::values(template) <- 1
+  template_path <- file.path(root, "geographic.tif")
+  terra::writeRaster(template, template_path, overwrite = TRUE)
+  audit <- postfit_reporting_trace_cell_area(template_path)
+  testthat::expect_identical(audit$status, "UNRESOLVED")
+})
+
+
 testthat::test_that("RPI reader projects authoritative lon/lat observations to raster CRS", {
   testthat::skip_if_not_installed("sf")
   root <- file.path(tempdir(), paste0("postfit-rpi-lonlat-", Sys.getpid()))
