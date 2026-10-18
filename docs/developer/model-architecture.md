@@ -16,7 +16,7 @@ two concepts should not be conflated.
 | Projection | Reconstruct posterior-mean linear predictors on the supported grid | Post-fit |
 | Rasterization | Map weekly values back to source cells without interpolation or geometry changes | Post-fit |
 | Structural surface | Remove both fitted SPDE contributions and retain the environmental/temporal structure | Post-fit |
-| Temperature mask | Apply weekly minimum temperature ≥ 14.5 °C to the structural product | Post-fit |
+| Temperature mask | Apply the configured canonical future weekly minimum temperature ≥ 16.0 °C to the structural product | Post-fit |
 | Dynamic RPI and reporting | Calibrate the run-specific threshold, classify persistence potential, and write reports/maps | Post-fit |
 
 ## Fitted and structural products
@@ -27,8 +27,9 @@ contributions. The structural product therefore emphasizes modeled covariate
 and temporal structure rather than the dataset-specific residual spatial
 surface; it remains a model-derived prediction, not an observation.
 
-The temperature-masked structural product applies the current weekly minimum
-temperature rule at 14.5 °C. It is the input to the current RPI reporting
+The temperature-masked structural product applies the canonical future weekly
+minimum temperature rule at 16.0 °C with operator `>=`. It is the input to the
+future canonical RPI reporting
 product. The raw fitted and unmasked structural products remain distinct and
 are not overwritten.
 

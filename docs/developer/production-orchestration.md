@@ -10,7 +10,7 @@ The command creates one run directory and submits three dependent SLURM jobs:
       afterok -> Fit (Stage 3B -> fit-health gate)
                     afterok -> Post-fit (extraction -> validation -> projection
                                     -> rasterization -> structural products
-                                    -> 14.5 C mask -> dynamic RPI -> reporting)
+                                    -> 16.0 C mask -> dynamic RPI -> reporting)
 
 The fit profile is 12 CPUs, 280 GB, and 36 hours. Prepare and Post-fit use
 smaller configurable profiles. Scheduler IDs are recorded in

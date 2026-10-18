@@ -45,8 +45,10 @@ validation summaries, maps, and reporting products
 - **Structural ecological predictions** remove the fitted SPDE spatial
   contributions so that modeled environmental and temporal structure can be
   examined without the dataset-specific residual spatial surface.
-- **Temperature-masked structural potential abundance** applies the current
-  physiological rule based on weekly minimum temperature of at least 14.5 °C.
+- **Temperature-masked structural potential abundance** applies the canonical
+  future physiological rule based on weekly minimum temperature of at least
+  16.0 °C. Accepted 14.5 °C products are historical, and 15.0 °C/16.0 °C
+  threshold-evaluation products remain explicitly versioned derivatives.
   It is a model-derived potential-abundance index, not a direct count of
   animals.
 - **RPI** is a persistence-oriented index derived from the masked structural

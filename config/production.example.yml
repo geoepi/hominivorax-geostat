@@ -28,7 +28,7 @@ reporting:
   temperature_mask:
     enabled: true
     variable: mintemp
-    threshold_c: 14.5
+    threshold_c: 16.0
   rpi:
     calibration: same_week_observation_pairs
     quantile: 0.10

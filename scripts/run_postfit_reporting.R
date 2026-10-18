@@ -62,7 +62,7 @@ expected_weeks_arg <- arg(args, "expected-weeks")
 expected_cells_arg <- arg(args, "expected-cells")
 expected_start_week <- arg(args, "expected-start-week")
 expected_end_week <- arg(args, "expected-end-week")
-temperature_threshold <- as.numeric(arg(args, "temperature-threshold", "14.5"))
+temperature_threshold <- as.numeric(arg(args, "temperature-threshold", "16.0"))
 rpi_quantile <- as.numeric(arg(args, "rpi-quantile", "0.10"))
 if (length(temperature_threshold) != 1L || !is.finite(temperature_threshold)) stop("--temperature-threshold must be one finite numeric value.")
 if (length(rpi_quantile) != 1L || !is.finite(rpi_quantile) || rpi_quantile < 0 || rpi_quantile > 1) stop("--rpi-quantile must be one finite value between 0 and 1.")
@@ -147,8 +147,8 @@ if (!is.null(reference_fit_path)) {
 }
 
 generated_figures <- list()
-save_figure <- function(plot, name, width, height) {
-  result <- postfit_reporting_save_plot(plot, name, paths, width = width, height = height)
+save_figure <- function(plot, name, width, height, dpi = 160) {
+  result <- postfit_reporting_save_plot(plot, name, paths, width = width, height = height, dpi = dpi)
   generated_figures[[name]] <<- result
   generated_objects[[paste0("plot_", name)]] <<- result$rds
 }
@@ -208,6 +208,13 @@ if (!is.null(phase3_root) && dir.exists(phase3_root)) {
   save_figure(selected_map_plot, "selected_week_maps", 12, 10)
   map_audit <- list(status = "PASS", selection_rule = selected$selection_rule[[1L]], selected_weeks = selected$week, source_phase3_root = normalizePath(phase3_root, mustWork = TRUE), boundary_path = boundary_path %||% NA_character_, values_unchanged = TRUE)
   utils::write.csv(selected, file.path(paths$metadata, "selected_map_weeks.csv"), row.names = FALSE, na = "")
+}
+
+rpi_boundary <- if (exists("boundary", inherits = FALSE) && !is.null(boundary)) boundary else NULL
+if (is.null(rpi_boundary) && !is.null(boundary_path)) {
+  postfit_reporting_require("sf")
+  if (!file.exists(boundary_path)) stop("Boundary layer does not exist: ", boundary_path)
+  rpi_boundary <- sf::st_read(boundary_path, quiet = TRUE)
 }
 
 structural_indices <- unique(c(1L, ceiling(structural_products$weeks / 2), structural_products$weeks - 1L, structural_products$weeks))
@@ -298,13 +305,16 @@ if (!isTRUE(args[["no-rpi"]]) && isTRUE(rpi_audit$enabled) && !is.null(rpi_obser
   generated_objects$rpi <- file.path(paths$objects, "rpi.rds"); saveRDS(rpi, generated_objects$rpi)
   class_area <- postfit_reporting_rpi_class_area(rpi$stability_class, cell_area)
   write_table(class_area, "rpi_class_summary")
-  save_figure(postfit_reporting_plot_rpi(rpi$stability_class), "rpi_class", 8, 7)
+  rpi_plot <- postfit_reporting_plot_rpi(rpi$stability_class, boundary = rpi_boundary)
+  save_figure(rpi_plot, "rpi_class", 11, 8.5, dpi = 300)
   rpi_metadata <- list(run_id = run_id, threshold = rpi$calibrated_threshold, parameters = rpi$parameters,
                        canonical = TRUE, source_product = "structural_potential_abundance_temp_masked",
                        threshold_calibration = threshold_artifact, source_observations = rpi_observations$provenance,
                        source_stack = structural_products$manifest$structural_potential_abundance_temp_masked_path,
                        potential_abundance = structural_products$semantics$structural_potential_abundance_temp_masked,
                        output_paths = c(rpi = rpi_continuous_path, rpi_class_map = rpi_class_path),
+                       map_cartography = attr(rpi_plot, "postfit_reporting_rpi_cartography"),
+                       map_boundary = if (is.null(boundary_path)) NULL else list(path = normalizePath(boundary_path, mustWork = TRUE), layer = "study_states", sha256 = postfit_reporting_hash_file(boundary_path)),
                        class_summary = class_area)
   saveRDS(rpi_metadata, file.path(paths$metadata, "rpi_metadata.rds"))
   utils::write.csv(postfit_reporting_metadata_table(rpi_metadata), file.path(paths$metadata, "rpi_metadata.csv"), row.names = FALSE, na = "")
@@ -410,7 +420,7 @@ metadata <- list(
   phase3 = map_audit,
   git_commit = tryCatch(system2("git", c("-C", repo_root, "-c", "safe.directory=*", "rev-parse", "HEAD"), stdout = TRUE, stderr = FALSE)[[1L]], error = function(e) NA_character_),
   generated_at_utc = postfit_reporting_iso_timestamp(),
-  software = list(R = R.version.string, ggplot2 = as.character(utils::packageVersion("ggplot2")), terra = as.character(utils::packageVersion("terra"))),
+  software = list(R = R.version.string, ggplot2 = as.character(utils::packageVersion("ggplot2")), terra = as.character(utils::packageVersion("terra")), sf = as.character(utils::packageVersion("sf")), ggspatial = as.character(utils::packageVersion("ggspatial"))),
   output_root = paths$root,
   generated_objects = generated_objects,
   generated_tables = generated_tables,
@@ -436,5 +446,5 @@ metadata <- list(
   model_summary = model_summary
 )
 postfit_reporting_write_metadata(paths, metadata)
-manifest <- postfit_reporting_write_manifest(paths, run_id, metadata$generated_at_utc)
+manifest <- postfit_reporting_write_manifest(paths, run_id, metadata$generated_at_utc, temperature_threshold_celsius = temperature_threshold)
 cat("Post-fit reporting complete\n", "Output: ", paths$root, "\n", "Objects: ", sum(manifest$artifact_type == "object"), "\n", "Tables: ", sum(manifest$artifact_type == "table"), "\n", "Figures: ", sum(manifest$artifact_type == "figure"), "\n", "RPI: ", rpi_audit$status, "\n", "QA: PASS=", qa$totals$PASS, " WARNING=", qa$totals$WARNING, " FAIL=", qa$totals$FAIL, "\n", sep = "")

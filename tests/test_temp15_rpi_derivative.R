@@ -10,7 +10,7 @@ stopifnot(grepl('temperature-threshold", "15.0', script_text, fixed = TRUE))
 stopifnot(grepl('source-threshold", "14.5', script_text, fixed = TRUE))
 stopifnot(grepl('structural_apply_temperature_mask', script_text, fixed = TRUE))
 stopifnot(grepl('rpi_class_temp15.pdf', script_text, fixed = TRUE), grepl('rpi_class_temp15.png', script_text, fixed = TRUE))
-stopifnot(grepl('ggplot2::map_data("world")', script_text, fixed = TRUE), grepl('ggplot2::scale_fill_manual', script_text, fixed = TRUE))
+stopifnot(grepl('postfit_reporting_plot_rpi', script_text, fixed = TRUE), grepl('postfit_reporting_rpi_class_palette', script_text, fixed = TRUE), grepl('boundary-path', script_text, fixed = TRUE))
 
 values <- c(1, 2, 3, NA_real_)
 temperature <- c(14.5, 15.0, 15.1, 15.1)
