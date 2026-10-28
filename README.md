@@ -1,3 +1,9 @@
+<p align="center">
+  <img src="hom_geostat_hex.png" alt="GeoStat logo" width="320">
+</p>
+
+
+
 # hominivorax-geostat
 
 `hominivorax-geostat` is a model-based workflow for understanding
