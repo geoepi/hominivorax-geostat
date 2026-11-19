@@ -1,0 +1,184 @@
+manifest_schema: hominivorax-geostat-input-manifest/v1
+manifest_version: 1
+audit_date: 2026-11-18
+release:
+  observation_release_id: "2026-11-13"
+  environmental_release_id: "era5land-weekly-through-2026-W44"
+  covariate_registry_version: "unversioned-in-repository"
+  status: "audited-not-registered-for-production"
+repository:
+  canonical_remote: "geoepi/hominivorax-geostat"
+  canonical_branch: "main"
+  audit_base_commit: "cf21c04ef53158b9bcca38dad75e7f75ee9e984a"
+  working_branch: "feature/revised-environmental-inputs"
+  change_classification: "D"
+  classification_reason: "Scientific inputs, temporal coverage, raster support provenance, and production data paths"
+configuration:
+  private_production_config:
+    path: "/project/disease_ecology/hominivorax-geostat-config/production.yml"
+    bytes: 1189
+    sha256: "0667d4ab1c6780da0ce435bd3a7e67fa83a2b90d0c8cc8b4658909d3d4f6ea49"
+  private_preprocessing_config:
+    path: "/project/disease_ecology/hominivorax-geostat-config/preprocessing.yml"
+    bytes: 2607
+    sha256: "8fe922db778f93bdd6e91dfc2904c8ff7b2cbee8be790e93babd91987595c781"
+  production_temporal_rule: "last_complete_epiweek"
+  private_stage_observation_actual_max: "2026-07-31"
+  private_stage_observation_week: "2026-W31"
+input_hash_inventory:
+  path: "input_file_hashes.tsv"
+  sha256: "9a87da06e0c0a103de6af67c6129073456b1e0263d95c3191c8e4400e5528511"
+  records: 511
+  checksum_algorithm: "SHA-256"
+  scope: "Revised sources, comparison observation release, private configuration checksums, configured template, and all new surface-pressure rasters and sidecars. Existing four weekly stacks were checked for coverage and template provenance, but their individual hashes are not enumerated here."
+observations:
+  path: "/project/disease_ecology/NWScrewworm/data/processed_data/case_detections/combined_clean_obs_2026-11-13.csv"
+  release_id: "2026-11-13"
+  bytes: 7304653
+  sha256: "8fd21f9db11db3df20596fe7ad0b4cbbc8b895fbaad6f702c847ed5a05dd19fc"
+  rows: 167078
+  columns: ["date", "host", "lon", "lat"]
+  missing_fields: 0
+  date_min: "2022-02-10"
+  date_max: "2026-11-13"
+  date_max_iso_week: "2026-W46"
+  resolved_last_complete_week: "2026-W45"
+  resolved_week_ending: "2026-11-08"
+  observations_after_environment_endpoint: 300
+  environment_endpoint: "2026-W44"
+  coordinate_crs: "No CRS declared in CSV; current preprocessing assigns EPSG:4326"
+  compatibility: "R read.csv fields and types conform to the existing interface"
+  predecessor:
+    path: "/project/disease_ecology/NWScrewworm/data/processed_data/case_detections/combined_clean_obs_2026-10-17_through_2026-W39.csv"
+    bytes: 8261451
+    sha256: "193245f75d9fe863de852801b8cdc405d4ceb39d25b512f9c52da4f8876f969c"
+    rows: 158739
+    actual_date_max: "2026-09-27"
+    actual_date_max_iso_week: "2026-W39"
+    leading_unnamed_column: true
+    new_release_row_difference: 8339
+static_covariates:
+  clay:
+    path: "/project/disease_ecology/NWScrewworm/data/raw_data/soilgrids_1000m_isric/clay_0-5cm_mean_1000.tif"
+    bytes: 191530251
+    sha256: "20f699cc64686bb5696e395f709232e5957ea3c6a4b39f6676517a502033f424"
+    band_count: 1
+    data_type: "Int16"
+    nodata: -32768
+    scale: null
+    offset: null
+    declared_units: null
+  wv0010:
+    path: "/project/disease_ecology/NWScrewworm/data/raw_data/soilgrids_1000m_isric/wv0010_0-5cm_mean_1000.tif"
+    bytes: 160551981
+    sha256: "0786fa27fa1870b3d7737dca566972adec8a3e0f0a95230f6fec35af0a12d39c"
+    band_count: 1
+    data_type: "Int16"
+    nodata: -32768
+    scale: null
+    offset: null
+    declared_units: "10-3cm3cm-3 (Mapped_units metadata string; uninterpreted)"
+  shared_grid:
+    width: 39812
+    height: 14509
+    resolution_m: [1000, 1000]
+    extent_x: [-19949750, 19862250]
+    extent_y: [-6148000, 8361000]
+    crs: "Homolosine; +proj=igh +lon_0=0 +datum=WGS84 +units=m; no authority declared"
+    alignment: "The two static rasters align with each other; they do not align with the configured template grid or CRS"
+weekly_covariates:
+  configured_existing:
+    - "minimum_temperature"
+    - "soil_moisture"
+    - "leaf_area_low"
+    - "relative_humidity"
+  new:
+    variable_id: "era5land_surface_pressure_mean"
+    path: "/project/disease_ecology/cds-datagrab-output/data/production/era5land_surface_pressure_mean/weekly/"
+    file_pattern: "era5land_surface_pressure_mean_YYYY-Www.tif"
+    sidecar_pattern: "*.tif.json"
+    raster_files: 252
+    sidecars: 252
+    bytes_rasters_total: 13877921
+    bytes_sidecars_total: 629466
+    first_week: "2022-W01"
+    last_week: "2026-W44"
+    missing_weeks: 0
+    duplicate_weeks: 0
+    invalid_filenames: 0
+    unmatched_sidecars: 0
+    sidecar_output_hash_matches: true
+    sidecar_week_id_matches_filename: true
+    selected_daily_dates_per_week: 7
+    calendar: "ISO week; Monday through Sunday"
+    statistic: "mean"
+    aggregation_algorithm_version: "weekly-v3-support-mask"
+    source_family_id: "era5land_daily_mean_utc06"
+    band_count: 1
+    data_type: "Float32"
+    band_description: "mean"
+    nodata: "NaN"
+    declared_units: null
+    scale: null
+    offset: null
+    grid:
+      width: 293
+      height: 202
+      resolution_km_approx: [24.995018926, 24.943655964]
+      extent_x_km: [-4361.4108818, 2962.1296637]
+      extent_y_km: [-2202.9997156, 2835.6187891]
+      crs: "Custom Albers Equal Area; datum WGS84; units km; no EPSG authority declared"
+      compare_geometry_with_configured_template: true
+    coverage_status: "Complete through W44; does not cover observation-resolved W45"
+all_weekly_stacks:
+  weeks_each: 252
+  first_week: "2022-W01"
+  last_week: "2026-W44"
+  gaps_or_duplicates: false
+template_provenance:
+  configured_template:
+    path: "/project/disease_ecology/NWScrewworm/data/processed_data/spatial_domain/study_area_raster.tif"
+    bytes: 15066
+    sha256: "d968ebe17486bde29eb68dcfae3617c8fe0932c5cad256b843c3c2aafc973a66"
+  hash_recorded_by_all_weekly_sidecars: "4be01f0ecaff35216a72eb8f27e791311af90d35b5a4fff1e46a74edb6dc633b"
+  sidecars_checked: 1260
+  mismatch: true
+  interpretation: "Recorded template hash mismatch; geometry equality does not resolve support-mask provenance."
+  resolution: "Identify and verify the historical template or regenerate all environmental stacks against the confirmed canonical template."
+software_environment:
+  execution_site: "Atlas"
+  operating_system: "Linux cluster environment"
+  R: "4.4.3"
+  INLA: "25.9.19"
+  Matrix: "1.7.0"
+  terra: "1.7.78"
+  sf: "1.0.21"
+  yaml: "2.3.8"
+  readr: "2.1.5"
+  dplyr: "1.1.4"
+  stringr: "1.5.1"
+  lubridate: "1.9.3"
+  GDAL: "3.8.5"
+  Python: "3.9.21"
+  runtime_note: "Loaded module report and sf runtime disagree on GEOS and PROJ versions; see repository-input-audit.md."
+validation:
+  focused_atlas_scripts_run: 11
+  production_preprocessing_run: false
+  production_fit_run: false
+  repository_canonical_test_aggregator: "Not documented"
+  manifest_yaml_parse_check: "Not run: no YAML parser available in the local workspace"
+  test_caveats:
+    - "test_postfit_reporting.R returned exit code 0 but printed a deferred_run(env) missing-function error after its pass banner; not treated as fully clean."
+    - "INLA assembly test emitted an inla.mesh.2d deprecation message."
+  git_diff_check: "Passed: git diff --cached --check"
+implementation:
+  source_code_changed: false
+  versioned_runtime_configuration_changed: false
+  private_production_configuration_changed: false
+  production_outputs_changed: false
+  reason: "Temporal coverage, template provenance, and scientific registration decisions remain unresolved."
+decisions_required:
+  - "Refresh environmental stacks through W45 or approve a bounded W44 model horizon."
+  - "Confirm the template provenance source or regenerate environmental products against the canonical template."
+  - "Specify scientific roles, units, scales, transformations, interactions, and missing-data policies for clay, wv0010, and surface pressure."
+  - "Confirm promotion of the 2026-11-13 observation source and correction of the stale private Stage 1 observation path."
