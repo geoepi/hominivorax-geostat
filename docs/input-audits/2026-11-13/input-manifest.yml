@@ -207,7 +207,7 @@ audit_resolution:
     nonzero_epiweeks: 246
     weekly_count_rows: 249
     weekly_counts_path: "observation_weekly_counts.tsv"
-    weekly_counts_sha256: "34cf710666de6a523d1efb7593ccceb44c028f846a4218aec843dc6144536c81d"
+    weekly_counts_sha256: "34cf710666de6a523d1efb7593cceb44c028f846a4218aec843dc6144536c81d"
     missing_required_fields: 0
     invalid_dates: 0
     invalid_coordinates: 0
