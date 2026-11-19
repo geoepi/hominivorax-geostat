@@ -14,8 +14,8 @@
 | `TEMPLATE_PROVENANCE` | `TEMPLATE_PROVENANCE_UNRESOLVED` | All scanned sidecars agree on one historic binary hash. Available current and legacy candidates do not match that hash; their comparison does not identify the historical file. |
 | `TEMPORAL_COVERAGE_VERIFIED` | Verified for observation snapshot `784168081cc1d3206f3537e8731994cbfc34be15be7c515fe06710d4ea9bdaac` | Observation weeks and environmental coverage were independently recounted. The same path has drifted since the prior audit, and the older snapshot remains separately recorded. |
 | `SOURCE_METADATA_VERIFIED` | Partial | Authoritative product units and variable identities are documented. Exact downloaded product revisions and stored-unit transformations are missing for some files, especially surface pressure. |
-| `TEST_HARNESS_VALIDATED` | See validation results below | Tests run through the new isolated-process canonical runner; runner failure cases are exercised by regression tests. |
-| `MANIFEST_VALIDATED` | See validation results below | YAML, required fields, unique registry IDs/paths, SHA formatting, 511-record agreement, and provenance fields are checked by an R test. |
+| `TEST_HARNESS_VALIDATED` | Passed with warnings | All 32 discovered scripts returned zero; 18 were PASS and 14 reported warnings. No test was skipped or failed. |
+| `MANIFEST_VALIDATED` | Passed | The YAML and inventory regression passed against the 511-record inventory, unique registry, and weekly-count table. |
 
 ## Template provenance investigation
 
@@ -77,8 +77,19 @@ Manifest parse and inventory regression is included in `tests/test_input_manifes
 
 ## INLA deprecation assessment
 
-The warning comes from the **`INLA::inla.mesh.2d()` function**, called by the affected `tests/test_joint_inla_assembly.R`; the preprocessing source `R/preprocessing_spatial.R` also calls that function. The Atlas runtime is INLA **25.9.19**. The test completes under the installed version, so the observed warning is informational for this validation run and not a current compatibility failure. Because the API is marked deprecated, removal in a later INLA release could become a compatibility failure. No INLA upgrade or mesh specification change was made. The exact warning text and final test disposition are recorded after the canonical run in the validation results below.
+The Atlas runtime is INLA **25.9.19**. The final suite reported both deprecated functions in `R/preprocessing_spatial.R`:
+
+- `INLA::inla.mesh.2d()` was deprecated in INLA 23.08.18; the warning recommends `fmesher::fm_mesh_2d_inla()`. It appears in `tests/test_joint_inla_assembly.R` and `tests/test_spatial_support.R`.
+- `INLA::inla.sp2segment()` was deprecated in INLA 2023.06.06; the warning recommends `fmesher::fm_as_segm()`. It appears in `tests/test_spatial_support.R`.
+
+Both calls still run in the installed version, so these are informational warnings for this validation and not current compatibility failures. Removal in a later INLA release could cause a compatibility failure. No INLA upgrade or mesh specification change was made.
 
 ## Validation results
 
-The full test suite and manifest checks are run on Atlas through the repository's `scripts/atlas_runtime.sh` bootstrap, using the branch fetched from GitHub into a temporary validation worktree. No production preprocessing, dry-run, fit, geographic prediction, environmental regeneration, or HPC production job is part of this validation. Final per-test counts, warnings, commit SHA, and remote branch status are appended here after that run.
+The full suite was run on Atlas through the repository's `scripts/atlas_runtime.sh` bootstrap in a temporary worktree at commit `e51a99f2bed79de905657fcd4d3335973678e884`. `Rscript tests/run_tests.R` exited 0: 32 scripts executed, 18 PASS, 14 WARN, 0 skipped, and 0 FAIL. Every child process returned exit status 0. The 14 warnings include the INLA deprecations above, expected warning output from negative-path regression checks, and Atlas time-zone/runtime warnings; they were retained in the captured logs and are not test failures.
+
+`tests/test_input_manifest.R` passed. It parsed the v2 YAML, checked required provenance fields, compared all 511 records to the unique-ID registry, checked unique paths and SHA-256 formatting, validated newline-normalized inventory and registry checksums, and verified the 249-row weekly-count table totals 164,767 observations. `tests/test_validation_runner.R` passed; its self-test verified nonzero child statuses for an intentional failed expectation and unexpected error, plus the repository-root working directory.
+
+The runner logs are under `/tmp/validation-input-audit-logs-e51a99f/run-2b4ba4e137562` on Atlas. The Atlas spatial runtime preflight passed. It also reported the previously documented GEOS compile/runtime mismatch (packages compiled with GEOS 3.12.1, runtime GEOS 3.14.0); this environment was not changed.
+
+Validation omitted production preprocessing, production dry-run, model fitting, geographic prediction, environmental regeneration, and HPC submission because they are outside this phase's scope. No model workflow was started. The repository has no package `DESCRIPTION` or package-wide check entry point; no alternate package checker was substituted. `git diff --check` is run on the completed branch diff before the final commit.

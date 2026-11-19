@@ -322,13 +322,25 @@ audit_resolution:
     testthat_version: "3.2.3"
   inla_deprecation:
     installed_version: "25.9.19"
-    deprecated_api: "INLA::inla.mesh.2d()"
-    affected_test: "tests/test_joint_inla_assembly.R"
-    production_source_call: "R/preprocessing_spatial.R"
-    assessment: "Runs in the installed version; informational for this validation, with future compatibility risk if removed."
+    deprecated_apis:
+      - function: "INLA::inla.mesh.2d()"
+        deprecated_since: "INLA 23.08.18"
+        recommended_replacement: "fmesher::fm_mesh_2d_inla()"
+        affected_tests: ["tests/test_joint_inla_assembly.R", "tests/test_spatial_support.R"]
+        production_source: "R/preprocessing_spatial.R"
+      - function: "INLA::inla.sp2segment()"
+        deprecated_since: "INLA 2023.06.06"
+        recommended_replacement: "fmesher::fm_as_segm()"
+        affected_tests: ["tests/test_spatial_support.R"]
+        production_source: "R/preprocessing_spatial.R"
+    assessment: "Both calls run in the installed version and are informational warnings in the passing tests. Removal in a future INLA release could cause a compatibility failure; no upgrade or mesh specification change was made."
   validation_resolution:
-    manifest_parse_and_inventory_test: "pending Atlas validation"
-    canonical_full_test_suite: "pending Atlas validation"
+    tested_commit: "e51a99f2bed79de905657fcd4d3335973678e884"
+    manifest_parse_and_inventory_test: "PASS: tests/test_input_manifest.R on Atlas; 511 inventory records and 249 weekly counts validated."
+    canonical_full_test_suite: "PASS: Rscript tests/run_tests.R exited 0; 32 executed, 18 PASS, 14 WARN, 0 skipped, 0 FAIL."
+    runner_failure_propagation_regression: "PASS: tests/test_validation_runner.R detected intentional assertion failure and unexpected error as nonzero, and confirmed project-root working directory."
+    atlas_runtime_preflight: "PASS: scripts/atlas_runtime.sh profile atlas-r44-spatial-v1; R 4.4.3, testthat 3.2.3, yaml 2.3.8, INLA 25.9.19."
+    logs: "/tmp/validation-input-audit-logs-e51a99f/run-2b4ba4e137562 on Atlas"
     classification: "D — audit resolution changes scientific input metadata/provenance and test validation infrastructure; no production execution pathway changed."
     production_workflows_started: false
     atlas_main_checkout_modified: false
@@ -336,5 +348,5 @@ audit_resolution:
     TEMPLATE_PROVENANCE: "TEMPLATE_PROVENANCE_UNRESOLVED"
     TEMPORAL_COVERAGE_VERIFIED: "verified_for_2026-11-19-observation-snapshot; same-path-source-drift-unresolved"
     SOURCE_METADATA_VERIFIED: "partial"
-    TEST_HARNESS_VALIDATED: "pending Atlas validation"
-    MANIFEST_VALIDATED: "pending Atlas validation"
+    TEST_HARNESS_VALIDATED: "PASS_WITH_WARNINGS"
+    MANIFEST_VALIDATED: "PASS"
