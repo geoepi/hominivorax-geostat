@@ -88,7 +88,7 @@ run_child <- function(file, label, relay = TRUE) {
   stdout_lines <- if (file.exists(stdout_path)) readLines(stdout_path, warn = FALSE) else character()
   stderr_lines <- if (file.exists(stderr_path)) readLines(stderr_path, warn = FALSE) else character()
   all_lines <- c(stdout_lines, stderr_lines)
-  warning_lines <- grep("^Warning([ :]|$)", all_lines, ignore.case = TRUE, value = TRUE)
+  warning_lines <- grep("(^Warning([ :]|$)|Warnings)", all_lines, ignore.case = TRUE, value = TRUE)
   skip_lines <- grep("skip", all_lines, ignore.case = TRUE, value = TRUE)
   result_status <- if (status != 0L) {
     "FAIL"

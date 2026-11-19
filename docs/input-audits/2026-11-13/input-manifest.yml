@@ -28,12 +28,15 @@ configuration:
 input_hash_inventory:
   path: "input_file_hashes.tsv"
   sha256: "9a87da06e0c0a103de6af67c6129073456b1e0263d95c3191c8e4400e5528511"
+  canonical_lf_sha256: "a4be5650ddf9b7b664b7c115687bd14052015d076b8e76eff0837257d2a8d323"
+  hash_note: "sha256 preserves the 2026-11-18 audit worktree byte hash; canonical_lf_sha256 hashes the same TSV after CRLF-to-LF normalization for cross-platform comparison."
   records: 511
   checksum_algorithm: "SHA-256"
   scope: "Revised sources, comparison observation release, private configuration checksums, configured template, and all new surface-pressure rasters and sidecars. Existing four weekly stacks were checked for coverage and template provenance, but their individual hashes are not enumerated here."
 input_registry:
   path: "input_registry.tsv"
-  sha256: "8b34960c23da99b8f9d1a1036fe40db3b90c224f2cb03d64b330a57b58db4994"
+  sha256: "84371ce87123766b963bbc1b92d27b790395125a872f8eeffaa505c5b6d78932"
+  hash_line_endings: "SHA-256 over UTF-8 TSV after CRLF-to-LF normalization."
   records: 511
   columns: ["input_id", "source_id", "path", "bytes", "sha256"]
   identifier_rule: "Unique input_id derived from source_id and inventory path basename; source_id retains the original source grouping."
