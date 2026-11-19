@@ -1,8 +1,10 @@
 # Input audit resolution and validation hardening
 
-**Resolution date:** 2026-11-19  
-**Repository branch:** `feature/revised-environmental-inputs`  
-**Audit commit:** `49fd00fcd9bd0b7d3b2f4873abb1c5ef58452c88`  
+**Resolution date:** 2026-11-19
+
+**Repository branch:** `feature/revised-environmental-inputs`
+
+**Audit commit:** `49fd00fcd9bd0b7d3b2f4873abb1c5ef58452c88`
 **Scope:** source verification, provenance, metadata, and test infrastructure. No source raster, observation CSV, private production configuration, model, or production output was changed.
 
 ## Decision summary
