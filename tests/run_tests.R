@@ -88,7 +88,7 @@ run_child <- function(file, label, relay = TRUE) {
   stdout_lines <- if (file.exists(stdout_path)) readLines(stdout_path, warn = FALSE) else character()
   stderr_lines <- if (file.exists(stderr_path)) readLines(stderr_path, warn = FALSE) else character()
   all_lines <- c(stdout_lines, stderr_lines)
-  warning_lines <- grep("warning", all_lines, ignore.case = TRUE, value = TRUE)
+  warning_lines <- grep("^Warning([ :]|$)", all_lines, ignore.case = TRUE, value = TRUE)
   skip_lines <- grep("skip", all_lines, ignore.case = TRUE, value = TRUE)
   result_status <- if (status != 0L) {
     "FAIL"
@@ -161,6 +161,7 @@ if (config$self_test) {
   }
   assertion_file <- file.path(fixture_dir, "test_intentional_assertion_failure.R")
   error_file <- file.path(fixture_dir, "test_intentional_unexpected_error.R")
+  root_file <- file.path(fixture_dir, "test_project_root_working_directory.R")
   writeLines(c(
     "testthat::test_that('intentional assertion failure is detected', {",
     "  testthat::expect_true(FALSE)",
@@ -171,9 +172,15 @@ if (config$self_test) {
     "  stop('INTENTIONAL_RUNNER_UNEXPECTED_ERROR')",
     "})"
   ), error_file, useBytes = TRUE)
+  writeLines(c(
+    "testthat::test_that('project-root working directory is retained', {",
+    "  testthat::expect_true(file.exists('tests/run_tests.R'))",
+    "})"
+  ), root_file, useBytes = TRUE)
 
   assertion_result <- run_child(assertion_file, "selftest_assertion_failure", relay = FALSE)
   error_result <- run_child(error_file, "selftest_unexpected_error", relay = FALSE)
+  root_result <- run_child(root_file, "selftest_project_root", relay = FALSE)
   assertion_text <- paste(c(assertion_result$stdout, assertion_result$stderr), collapse = "\n")
   error_text <- paste(c(error_result$stdout, error_result$stderr), collapse = "\n")
   if (assertion_result$exit_status == 0L || !grepl("Failure", assertion_text, fixed = TRUE)) {
@@ -182,7 +189,10 @@ if (config$self_test) {
   if (error_result$exit_status == 0L || !grepl("INTENTIONAL_RUNNER_UNEXPECTED_ERROR", error_text, fixed = TRUE)) {
     stop("The runner did not detect the intentional unexpected error; see self-test logs.", call. = FALSE)
   }
-  cat("TEST_RUNNER_SELF_TEST_PASS: assertion failures and unexpected errors return nonzero.\n")
+  if (root_result$exit_status != 0L) {
+    stop("The runner did not retain the repository-root working directory; see self-test logs.", call. = FALSE)
+  }
+  cat("TEST_RUNNER_SELF_TEST_PASS: failure propagation and repository-root context verified.\n")
   cat("Self-test logs: ", run_dir, "\n", sep = "")
   quit(save = "no", status = 0L)
 }

@@ -8,12 +8,14 @@ Rscript tests/run_tests.R
 ```
 
 The runner discovers every `tests/test_*.R` file in sorted order and launches
-each in a separate R process through `testthat::test_file()`. This preserves
-testthat cleanup behavior for files that use `local_edition()` and prevents an
-error in one script from hiding the status of later scripts. The child process
-uses `stop_on_failure = TRUE`; a failed expectation or unhandled error produces
-a nonzero per-test exit status. Top-level success banners have been removed so
-the runner is the only source of a suite-level PASS summary.
+each in a separate R process through `testthat::test_file()`. A temporary
+testthat wrapper in the repository root sources the selected script, retaining
+the project's root working directory while preserving testthat cleanup for
+files that use `local_edition()`. An error in one script cannot hide the status
+of later scripts. The child process uses `stop_on_failure = TRUE`; a failed
+expectation or unhandled error produces a nonzero per-test exit status.
+Top-level success banners have been removed so the runner is the only source of
+a suite-level PASS summary.
 
 Each test's stdout and stderr are captured separately and then relayed to the
 terminal. A run directory contains `summary.tsv` and the per-test logs. By
@@ -31,10 +33,11 @@ Check the failure-propagation regression independently with:
 Rscript tests/run_tests.R --self-test
 ```
 
-This creates temporary tests containing an intentional failed expectation and
-an intentional unexpected error. Both must produce nonzero child exit statuses
-before the self-test reports PASS. `tests/test_validation_runner.R` exercises
-that check through the canonical suite.
+This creates temporary tests containing an intentional failed expectation, an
+intentional unexpected error, and a repository-root path check. Both failures
+must produce nonzero child exit statuses and the root path must pass before the
+self-test reports PASS. `tests/test_validation_runner.R` exercises that check
+through the canonical suite.
 
 The YAML/input inventory regression is `tests/test_input_manifest.R`. It uses
 the existing `yaml` package and the system `sha256sum` utility (or an already

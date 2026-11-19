@@ -8,8 +8,19 @@ if (!requireNamespace("testthat", quietly = TRUE)) {
 }
 
 test_file <- normalizePath(args[[1L]], mustWork = TRUE)
-testthat::test_file(
-  test_file,
-  reporter = "summary",
-  stop_on_failure = TRUE
+repo_root <- normalizePath(getwd(), mustWork = TRUE)
+wrapper_file <- tempfile(pattern = ".test-runner-", tmpdir = repo_root, fileext = ".R")
+writeLines(
+  sprintf("source(%s, local = TRUE)", paste(deparse(test_file), collapse = "")),
+  wrapper_file,
+  useBytes = TRUE
+)
+
+tryCatch(
+  testthat::test_file(
+    wrapper_file,
+    reporter = "summary",
+    stop_on_failure = TRUE
+  ),
+  finally = unlink(wrapper_file)
 )
