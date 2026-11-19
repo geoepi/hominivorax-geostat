@@ -30,5 +30,3 @@ stopifnot(all(is.finite(missing_features$prediction_grid$cattle_q)), all(is.fini
 prediction_reordered <- prediction[c(2, 1), , drop = FALSE]
 reordered_features <- add_livestock_rw2_features(tier2, prediction_reordered, cfg, transformation_spec)
 stopifnot(identical(features$prediction_grid$cattle_q[order(prediction$cattle)], reordered_features$prediction_grid$cattle_q[order(prediction_reordered$cattle)]))
-
-cat("Joint-model feature regression tests passed\n")

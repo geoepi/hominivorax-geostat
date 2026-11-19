@@ -32,5 +32,3 @@ stopifnot(sum(tier2$count) == 3L, max(tier2$count) == 2L, all(tier2$count >= 0),
 bad <- filtered$data
 bad$x[[1]] <- 15000
 stopifnot(inherits(try(build_tier2(bad, support, time), silent = TRUE), "try-error"))
-
-cat("Analysis-domain and detection-conservation regression tests passed\n")

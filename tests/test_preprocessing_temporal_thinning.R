@@ -80,5 +80,3 @@ stopifnot(
   resolved$excluded$exclusion_reason == "after_auto_last_complete_observation_week",
   all(resolved$data$time_index == 1L)
 )
-
-cat("Temporal-horizon and Tier 1 thinning regression tests passed\n")

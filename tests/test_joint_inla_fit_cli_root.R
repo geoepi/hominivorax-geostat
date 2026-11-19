@@ -35,5 +35,4 @@ if (!requireNamespace("INLA", quietly = TRUE)) {
             any(grepl("INLA::inla\\(\\) called: FALSE", output)))
   discovered_root <- normalizePath(file.path(dirname(script), ".."), mustWork = TRUE)
   stopifnot(identical(discovered_root, repo_root), !identical(discovered_root, dirname(dirname(external_config))))
-  cat("Stage 3B CLI repository-root regression test passed\n")
 }

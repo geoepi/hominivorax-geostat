@@ -244,5 +244,4 @@ if (!requireNamespace("INLA", quietly = TRUE)) {
   }, error = function(error) grepl("shared-field structure", conditionMessage(error), fixed = TRUE))
   stopifnot(incompatible)
 
-  cat("Stage 3B contract tests passed\n")
 }

@@ -192,5 +192,3 @@ test_that("CDS horizon alignment failure occurs before sbatch", {
   expect_true(any(grepl("No successful CDS portfolio manifest provides complete coverage through 2024-W03", output, fixed = TRUE)))
   expect_false(file.exists(marker))
 })
-
-cat("CDS upstream provenance tests passed\n")

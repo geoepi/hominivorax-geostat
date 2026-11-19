@@ -1,5 +1,5 @@
-manifest_schema: hominivorax-geostat-input-manifest/v1
-manifest_version: 1
+manifest_schema: hominivorax-geostat-input-manifest/v2
+manifest_version: 2
 audit_date: 2026-11-18
 release:
   observation_release_id: "2026-11-13"
@@ -31,6 +31,12 @@ input_hash_inventory:
   records: 511
   checksum_algorithm: "SHA-256"
   scope: "Revised sources, comparison observation release, private configuration checksums, configured template, and all new surface-pressure rasters and sidecars. Existing four weekly stacks were checked for coverage and template provenance, but their individual hashes are not enumerated here."
+input_registry:
+  path: "input_registry.tsv"
+  sha256: "8b34960c23da99b8f9d1a1036fe40db3b90c224f2cb03d64b330a57b58db4994"
+  records: 511
+  columns: ["input_id", "source_id", "path", "bytes", "sha256"]
+  identifier_rule: "Unique input_id derived from source_id and inventory path basename; source_id retains the original source grouping."
 observations:
   path: "/project/disease_ecology/NWScrewworm/data/processed_data/case_detections/combined_clean_obs_2026-11-13.csv"
   release_id: "2026-11-13"
@@ -144,7 +150,7 @@ template_provenance:
   sidecars_checked: 1260
   mismatch: true
   interpretation: "Recorded template hash mismatch; geometry equality does not resolve support-mask provenance."
-  resolution: "Identify and verify the historical template or regenerate all environmental stacks against the confirmed canonical template."
+  resolution: "The historical file matching the sidecar hash is not available or linked. Available raster comparisons do not resolve historic support-mask provenance; see audit_resolution.template_provenance."
 software_environment:
   execution_site: "Atlas"
   operating_system: "Linux cluster environment"
@@ -165,8 +171,8 @@ validation:
   focused_atlas_scripts_run: 11
   production_preprocessing_run: false
   production_fit_run: false
-  repository_canonical_test_aggregator: "Not documented"
-  manifest_yaml_parse_check: "Not run: no YAML parser available in the local workspace"
+  repository_canonical_test_aggregator: "Not documented at 2026-11-18 audit; added as tests/run_tests.R in the 2026-11-19 resolution."
+  manifest_yaml_parse_check: "Not run during the 2026-11-18 audit; parsed and validated by tests/test_input_manifest.R during the 2026-11-19 resolution."
   test_caveats:
     - "test_postfit_reporting.R returned exit code 0 but printed a deferred_run(env) missing-function error after its pass banner; not treated as fully clean."
     - "INLA assembly test emitted an inla.mesh.2d deprecation message."
@@ -182,3 +188,150 @@ decisions_required:
   - "Confirm the template provenance source or regenerate environmental products against the canonical template."
   - "Specify scientific roles, units, scales, transformations, interactions, and missing-data policies for clay, wv0010, and surface pressure."
   - "Confirm promotion of the 2026-11-13 observation source and correction of the stale private Stage 1 observation path."
+audit_resolution:
+  date: "2026-11-19"
+  report: "resolution-validation-report.md"
+  observation_recheck:
+    path: "/project/disease_ecology/NWScrewworm/data/processed_data/case_detections/combined_clean_obs_2026-11-13.csv"
+    bytes: 7191829
+    sha256: "784168081cc1d3206f3537e8731994cbfc34be15be7c515fe06710d4ea9bdaac"
+    rows: 164767
+    columns: ["date", "lon", "lat", "host"]
+    date_min: "2022-02-10"
+    date_min_iso_week: "2022-W06"
+    date_max: "2026-11-13"
+    date_max_iso_week: "2026-W46"
+    nonzero_epiweeks: 246
+    weekly_count_rows: 249
+    weekly_counts_path: "observation_weekly_counts.tsv"
+    weekly_counts_sha256: "34cf710666de6a523d1efb7593ccceb44c028f846a4218aec843dc6144536c81d"
+    missing_required_fields: 0
+    invalid_dates: 0
+    invalid_coordinates: 0
+    source_drift_from_audit_snapshot:
+      status: "same_path_different_bytes_and_column_order"
+      prior_bytes: 7304653
+      prior_sha256: "8fd21f9db11db3df20596fe7ad0b4cbbc8b895fbaad6f702c847ed5a05dd19fc"
+      prior_rows: 167078
+      row_difference: -2311
+      byte_difference: -112824
+      cause_or_release_authorization: "unresolved"
+    environmental_endpoint_week: "2026-W44"
+    observations_after_environment_endpoint: 968
+    observations_in_endpoint_week: 911
+    observations_in_W45_without_environment: 668
+    observations_in_W46_after_candidate_horizon: 300
+    candidate_last_complete_week: "2026-W45"
+    candidate_week_ending: "2026-11-08"
+    observation_file_modified: false
+  coverage_separation:
+    environmental_stacks:
+      required_stack_count: 5
+      sidecars_checked: 1260
+      first_week: "2022-W01"
+      last_week: "2026-W44"
+      weeks_each: 252
+      missing_or_duplicate_weeks: false
+      filename_sidecar_calendar_consistency: true
+      broader_scan_stack_count: 12
+      broader_scan_sidecars: 3024
+      all_broader_scan_sidecars_share_template_sha256: true
+    current_production:
+      observation_file: "/project/disease_ecology/NWScrewworm/data/processed_data/case_detections/combined_clean_obs_2026-10-17_through_2026-W39.csv"
+      actual_last_week: "2026-W39"
+      configured_coverage: ["2024-W01", "2026-W39"]
+      production_configuration_modified: false
+  template_provenance:
+    classification: "TEMPLATE_PROVENANCE_UNRESOLVED"
+    sidecar_template_sha256: "4be01f0ecaff35216a72eb8f27e791311af90d35b5a4fff1e46a74edb6dc633b"
+    sidecars_scanned: 3024
+    created_utc_sample_range: ["2026-08-28", "2026-11-12"]
+    candidate_comparison:
+      configured_template_sha256: "d968ebe17486bde29eb68dcfae3617c8fe0932c5cad256b843c3c2aafc973a66"
+      local_legacy_and_atlas_checkpoint_sha256: "cb331565767a8f16b385684dbec23cea9247d77927c5c93edbbceb18f04517e5"
+      legacy_candidate_bytes: 14528
+      dimensions: [293, 202]
+      same_numeric_transform_extent_resolution_origin_cell_order: true
+      same_cell_values_and_na_mask: true
+      na_cells: 42427
+      legacy_candidate_crs_available: false
+      historical_hash_candidate_available: false
+    repository_history_identifies_replacement: false
+    environmental_inputs_regenerated: false
+  source_metadata_status: "partial"
+  source_metadata:
+    official_references:
+      soilgrids: "https://docs.isric.org/globaldata/soilgrids/SoilGrids_faqs_01.html"
+      era5land: "https://confluence.ecmwf.int/pages/viewpage.action?pageId=143037634"
+    clay:
+      source_variable_id: "clay"
+      description: "SoilGrids clay mean, 0-5 cm, 1 km product"
+      official_units: "g/kg mapped; divide by 10 for g/100g (%) conventional units"
+      stored_units_status: "No unit, scale, or offset tag; exact stored units not certified for the unversioned source TIFF."
+      scale: "No GeoTIFF scale tag; no audit conversion applied."
+      offset: "No GeoTIFF offset tag."
+      data_type: "Int16"
+      nodata: -32768
+      source_version_status: "Exact product/download revision not recorded."
+      spatial_resolution: "1 km aggregate; ISRIC describes 1 km products as mean predictions aggregated from 250 m products."
+      temporal_resolution: "Static soil property map."
+      provenance_status: "Authoritative product definition verified; exact file revision and local processing chain unavailable."
+    wv0010:
+      source_variable_id: "wv0010"
+      description: "SoilGrids volumetric water content at 10 kPa, mean, 0-5 cm, 1 km product"
+      official_units: "10^-3 cm3 cm-3 mapped; divide by 10 for 10^-2 cm3 cm-3 (%) conventional units"
+      stored_units_status: "Band Mapped_units=10-3cm3cm-3; no scale or offset tag; no conversion applied."
+      scale: "No GeoTIFF scale tag; no audit conversion applied."
+      offset: "No GeoTIFF offset tag."
+      data_type: "Int16"
+      nodata: -32768
+      source_version_status: "Exact product/download revision not recorded."
+      spatial_resolution: "1 km aggregate; ISRIC describes 1 km products as mean predictions aggregated from 250 m products."
+      temporal_resolution: "Static soil property map."
+      provenance_status: "Authoritative product definition and mapped-unit tag verified; exact file revision and local processing chain unavailable."
+    surface_pressure:
+      source_variable_id: "sp / parameter 134"
+      description: "ERA5-Land surface pressure; weekly mean of seven selected daily records"
+      official_units: "Pa at the product level"
+      stored_units_status: "No unit, scale, or offset tag. Stored-unit conversion is unresolved; values are suggestive but not proof."
+      scale: "No GeoTIFF scale tag; upstream scaling operation unresolved."
+      offset: "No GeoTIFF offset tag."
+      data_type: "Float32"
+      nodata: "NaN"
+      source_version_status: "Exact retrieval/product revision is not recorded in sidecars."
+      spatial_resolution: "Output grid approximately 24.995 km by 24.944 km; exact source grid used before weekly processing is unavailable."
+      temporal_resolution: "Hourly ERA5-Land source product; weekly output is a mean of seven selected daily inputs from source family era5land_daily_mean_utc06."
+      first_week_finite_values:
+        count: 16756
+        grid_cells: 59186
+        minimum: 66.876854
+        mean: 94.207401
+        maximum: 102.18423
+        standard_deviation: 7.6890287
+      cached_gdal_mean_and_standard_deviation: "-9999; invalid cached statistics"
+      provenance_status: "Product-level variable identity and units verified; stored units and exact retrieval/scaling revision unavailable."
+  test_harness:
+    original_failure_diagnosis: "Direct Rscript sourcing of a top-level testthat::local_edition(3) file ran deferred cleanup outside testthat file context; testthat::test_file() supplies the expected lifecycle."
+    canonical_command: "Rscript tests/run_tests.R"
+    assertion_and_unexpected_error_self_test: "tests/run_tests.R --self-test"
+    success_banners_removed: true
+    test_files_discovered: 32
+    testthat_version: "3.2.3"
+  inla_deprecation:
+    installed_version: "25.9.19"
+    deprecated_api: "INLA::inla.mesh.2d()"
+    affected_test: "tests/test_joint_inla_assembly.R"
+    production_source_call: "R/preprocessing_spatial.R"
+    assessment: "Runs in the installed version; informational for this validation, with future compatibility risk if removed."
+  validation_resolution:
+    manifest_parse_and_inventory_test: "pending Atlas validation"
+    canonical_full_test_suite: "pending Atlas validation"
+    classification: "D — audit resolution changes scientific input metadata/provenance and test validation infrastructure; no production execution pathway changed."
+    production_workflows_started: false
+    atlas_main_checkout_modified: false
+  completion_decisions:
+    TEMPLATE_PROVENANCE: "TEMPLATE_PROVENANCE_UNRESOLVED"
+    TEMPORAL_COVERAGE_VERIFIED: "verified_for_2026-11-19-observation-snapshot; same-path-source-drift-unresolved"
+    SOURCE_METADATA_VERIFIED: "partial"
+    TEST_HARNESS_VALIDATED: "pending Atlas validation"
+    MANIFEST_VALIDATED: "pending Atlas validation"

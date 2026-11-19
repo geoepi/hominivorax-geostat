@@ -65,5 +65,3 @@ stopifnot(isTRUE(missing$point_inside_raster_extent[[1]]))
 stopifnot(missing$nearest_distance_bin[[1]] == ">75 km")
 stopifnot(missing$nearest_valid_distance_km[[1]] > 75)
 stopifnot(missing$fallback_attempted[[1]])
-
-cat("Covariate diagnostics regression test passed\n")

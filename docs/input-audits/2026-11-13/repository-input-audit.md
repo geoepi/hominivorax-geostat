@@ -1,5 +1,10 @@
 # Hominivorax-geostat input and workflow audit
 
+**Resolution addendum:** The independent 2026-11-19 source recheck, template
+provenance findings, and validation hardening are documented in
+[resolution-validation-report.md](resolution-validation-report.md). The
+historical snapshot and findings below are retained as observed on 2026-11-18.
+
 **Audit date:** 2026-11-18
 **Observation release identifier:** 2026-11-13
 **Reviewed repository commit:** cf21c04ef53158b9bcca38dad75e7f75ee9e984a

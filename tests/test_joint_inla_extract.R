@@ -146,4 +146,3 @@ stopifnot(all(criteria$reconciliation$pass), abs(criteria$reconciliation$differe
 mlik <- joint_inla_extract_marginal_log_likelihood(fit)
 stopifnot(identical(mlik$value[1], -5), identical(joint_inla_fit_marginal_log_likelihood(fit$mlik), -5),
           identical(joint_inla_fit_summary_values(list(mlik = fit$mlik))$marginal_log_likelihood, -5))
-cat("Stage 3B extraction tests passed\n")

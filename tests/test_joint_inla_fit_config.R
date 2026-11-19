@@ -18,5 +18,3 @@ external <- read_joint_inla_fit_config(external_config, repo_root)
 stopifnot(identical(external$repo_root, repo_root))
 stopifnot(identical(external$inputs$stage3a_build,
                     normalizePath(file.path(repo_root, "outputs", "joint_inla", "joint_inla_build.rds"), mustWork = FALSE)))
-
-cat("Stage 3B configuration tests passed\n")

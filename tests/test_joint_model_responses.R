@@ -36,5 +36,3 @@ zero_result <- apply_zero_count_policy(zero, "exclude")
 retain_result <- apply_zero_count_policy(zero, "retain")
 stopifnot(sum(is.na(zero_result$data$response_training)) == 2L, sum(zero_result$data$response_training == 0, na.rm = TRUE) == 0L)
 stopifnot(sum(retain_result$data$response_training == 0, na.rm = TRUE) == 2L)
-
-cat("Joint-model response regression tests passed\n")

@@ -12,5 +12,3 @@ cfg <- read_joint_inla_config(external_config, discovered_root)
 stopifnot(identical(cfg$repo_root, repo_root))
 stopifnot(identical(cfg$inputs$joint_model_inputs, file.path(repo_root, "outputs", "joint_model", "joint_model_inputs.rds")))
 stopifnot(!identical(discovered_root, normalizePath(file.path(dirname(external_config), ".."), mustWork = FALSE)))
-
-cat("Joint-INLA CLI repository-root regression test passed\n")

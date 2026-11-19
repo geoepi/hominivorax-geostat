@@ -56,5 +56,3 @@ missing_livestock_inputs$prediction_grid$cattle[1] <- NA_real_
 missing_holdout <- prepare_joint_model_inputs(missing_livestock_inputs, cfg_holdout)
 stopifnot(identical(baseline_holdout$holdout_metadata$tier1$selected_ids, missing_holdout$holdout_metadata$tier1$selected_ids), identical(baseline_holdout$holdout_metadata$tier2$selected_ids, missing_holdout$holdout_metadata$tier2$selected_ids))
 stopifnot(is.na(missing_livestock_inputs$tier2$cattle[1]), all(is.finite(missing_holdout$prediction_grid$cattle_q)))
-
-cat("Joint-model preparation regression tests passed\n")

@@ -70,5 +70,4 @@ if (!requireNamespace("INLA", quietly = TRUE)) {
   }
   parsed_build <- parse(file.path(repo_root, "R", "joint_inla_build.R"))
   stopifnot(!any(vapply(as.list(parsed_build), contains_fit_call, logical(1L))))
-  cat("Joint-INLA Stage 3A assembly regression tests passed\n")
 }
