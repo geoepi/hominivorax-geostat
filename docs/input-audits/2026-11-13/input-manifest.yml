@@ -419,7 +419,25 @@ audit_resolution:
       run_sidecars_record_template_path: false
     surface_pressure_pipeline:
       source_repository: "/project/disease_ecology/cds-datagrab"
-      source_repository_commit: "a6f2ec6c7742f5b2d79cce589ff207f60966f988"
+      source_repository_commit: "9a07372acec9c69d6f34859ff96ace866c25d633"
+      source_repository_commit_date: "2026-11-11T15:43:03-06:00"
+      inspection_checkout_commit: "a6f2ec6c7742f5b2d79cce589ff207f60966f988"
+      source_commit_evidence:
+        request_registry_path: "/project/disease_ecology/cds-datagrab-output/data/production/_sources/era5land_daily_mean_utc06/requests/request_registry.csv"
+        request_hashes: ["1bfb3896", "40f80aab"]
+        recorded_source_commit_for_both_requests: "9a07372acec9c69d6f34859ff96ace866c25d633"
+        config_checksum: "34cbb9f2e12afc91d3b719af895557df20c1ae3bdc40acb18904a7d3f01fbf7c"
+        config_checksum_matches_source_commit_tree: true
+        cited_pressure_processing_references_match_inspection_checkout: true
+        raw_archives:
+          - request_hash: "1bfb3896"
+            date_range: ["2026-10-02", "2026-10-31"]
+            bytes: 88789675
+            sha256: "ad0ad5f1e0fa86528826c6f6f9413f36090017eb2f64efd1ed430df1e1c829d2"
+          - request_hash: "40f80aab"
+            date_range: ["2026-11-01", "2026-11-03"]
+            bytes: 6861892
+            sha256: "ccef78cc0916501b4e6c7437bf007478c780e77c2ea4f9a43f3796071b5be1b8"
       source_configuration: "config/era5land_daily_mean_utc06_production.yml"
       source_code_references:
         product_spec: "R/variable_registry.R:15"
@@ -514,7 +532,7 @@ audit_resolution:
       change_classification: "C — executable test assertions were added for the additive manifest; all other changes are audit metadata and report text."
       canonical_test_runner: "Rscript tests/run_tests.R"
       focused_test_files: ["test_input_manifest.R", "test_cds_upstream_provenance.R"]
-      source_commit_under_test: "eb740c377f2cbb98c8934579d089d005caa9a45a"
+      validation_environment: "Atlas using scripts/atlas_runtime.sh profile atlas-r44-spatial-v1"
       executed: 2
       skipped: 30
       passed: 1

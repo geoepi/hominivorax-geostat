@@ -79,7 +79,16 @@ testthat::test_that("input manifest and supplemental input registries are machin
   testthat::expect_true(isTRUE(template$historic_and_configured_crs_equivalent))
 
   pressure <- reconciliation$surface_pressure_pipeline
-  testthat::expect_match(pressure$source_repository_commit, "^[0-9a-f]{40}$")
+  testthat::expect_identical(
+    pressure$source_repository_commit,
+    "9a07372acec9c69d6f34859ff96ace866c25d633"
+  )
+  testthat::expect_identical(
+    pressure$source_commit_evidence$recorded_source_commit_for_both_requests,
+    pressure$source_repository_commit
+  )
+  testthat::expect_true(isTRUE(pressure$source_commit_evidence$config_checksum_matches_source_commit_tree))
+  testthat::expect_length(pressure$source_commit_evidence$request_hashes, 2L)
   testthat::expect_identical(as.integer(pressure$stored_source_archive_header_audit$monthly_archives_inspected), 64L)
   testthat::expect_true(isTRUE(pressure$representative_week$seven_daily_sidecars_record_kpa))
   testthat::expect_identical(pressure$weekly_output_metadata$weekly_sidecar_output_units_field, "absent")
