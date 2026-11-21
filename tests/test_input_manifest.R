@@ -60,6 +60,36 @@ testthat::test_that("input manifest and supplemental input registries are machin
   testthat::expect_identical(sum(weekly_counts$observation_count), as.integer(temporal$rows))
   testthat::expect_identical(sha256_file(weekly_counts_path), temporal$weekly_counts_sha256)
 
+  reconciliation <- manifest$audit_resolution$final_reconciliation
+  observation <- reconciliation$observation_release
+  testthat::expect_identical(
+    observation$classification,
+    "OBSERVATION_RELEASE_CHANGED_PROVENANCE_UNRESOLVED"
+  )
+  testthat::expect_identical(observation$sha256_before_read, observation$sha256_after_read)
+  testthat::expect_identical(observation$sha256_after_read, temporal$sha256)
+  testthat::expect_identical(as.integer(observation$rows), 164767L)
+  testthat::expect_identical(as.integer(observation$weekly_count_rows), 249L)
+  testthat::expect_true(isFALSE(observation$change_from_historical_snapshot$original_snapshot_available))
+
+  template <- reconciliation$template_provenance
+  testthat::expect_identical(template$classification, "TEMPLATE_PROVENANCE_RESOLVED")
+  testthat::expect_identical(template$historic_sidecar_sha256, template$historic_template_sha256)
+  testthat::expect_true(isTRUE(template$historic_and_configured_cell_values_identical))
+  testthat::expect_true(isTRUE(template$historic_and_configured_crs_equivalent))
+
+  pressure <- reconciliation$surface_pressure_pipeline
+  testthat::expect_match(pressure$source_repository_commit, "^[0-9a-f]{40}$")
+  testthat::expect_identical(as.integer(pressure$stored_source_archive_header_audit$monthly_archives_inspected), 64L)
+  testthat::expect_true(isTRUE(pressure$representative_week$seven_daily_sidecars_record_kpa))
+  testthat::expect_identical(pressure$weekly_output_metadata$weekly_sidecar_output_units_field, "absent")
+
+  soilgrids <- reconciliation$soilgrids_provenance$files
+  testthat::expect_true(isTRUE(soilgrids$clay$identity_match))
+  testthat::expect_true(isTRUE(soilgrids$wv0010$identity_match))
+  testthat::expect_identical(soilgrids$clay$manifest_expected_sha256, soilgrids$clay$current_sha256)
+  testthat::expect_identical(soilgrids$wv0010$manifest_expected_sha256, soilgrids$wv0010$current_sha256)
+
   source_metadata <- manifest$audit_resolution$source_metadata
   required_sources <- c("clay", "wv0010", "surface_pressure")
   testthat::expect_true(all(required_sources %in% names(source_metadata)))

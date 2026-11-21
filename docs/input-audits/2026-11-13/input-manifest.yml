@@ -350,3 +350,163 @@ audit_resolution:
     SOURCE_METADATA_VERIFIED: "partial"
     TEST_HARNESS_VALIDATED: "PASS_WITH_WARNINGS"
     MANIFEST_VALIDATED: "PASS"
+  final_reconciliation:
+    date: "2026-11-21"
+    observation_release:
+      classification: "OBSERVATION_RELEASE_CHANGED_PROVENANCE_UNRESOLVED"
+      path: "/project/disease_ecology/NWScrewworm/data/processed_data/case_detections/combined_clean_obs_2026-11-13.csv"
+      bytes: 7191829
+      mtime: "2026-11-19T10:06:23.592700507-06:00"
+      sha256_before_read: "784168081cc1d3206f3537e8731994cbfc34be15be7c515fe06710d4ea9bdaac"
+      sha256_after_read: "784168081cc1d3206f3537e8731994cbfc34be15be7c515fe06710d4ea9bdaac"
+      rows: 164767
+      columns: ["date", "lon", "lat", "host"]
+      actual_date_range: ["2022-02-10", "2026-11-13"]
+      iso_week_range: ["2022-W06", "2026-W46"]
+      weekly_count_rows: 249
+      nonzero_weeks: 246
+      zero_weeks: 3
+      missing_cells: 0
+      invalid_dates: 0
+      invalid_coordinates: 0
+      weekly_counts_path: "observation_weekly_counts.tsv"
+      weekly_counts_sha256: "34cf710666de6a523d1efb7593cceb44c028f846a4218aec843dc6144536c81d"
+      weekly_counts_match_prior_record: true
+      historical_audit_snapshot:
+        sha256: "8fd21f9db11db3df20596fe7ad0b4cbbc8b895fbaad6f702c847ed5a05dd19fc"
+        bytes: 7304653
+        rows: 167078
+        columns: ["date", "host", "lon", "lat"]
+      change_from_historical_snapshot:
+        row_difference: -2311
+        byte_difference: -112824
+        column_order_changed: true
+        original_snapshot_available: false
+        aggregate_row_differences_recalculated: false
+        reason: "The exact historical bytes are absent; the original snapshot was not reconstructed."
+      evidence_comparison:
+        original_audit_manifest_hash: "8fd21f9db11db3df20596fe7ad0b4cbbc8b895fbaad6f702c847ed5a05dd19fc"
+        existing_checksum_inventory_hash: "8fd21f9db11db3df20596fe7ad0b4cbbc8b895fbaad6f702c847ed5a05dd19fc"
+        revised_v2_manifest_hash: "784168081cc1d3206f3537e8731994cbfc34be15be7c515fe06710d4ea9bdaac"
+        current_source_matches_revised_v2_manifest: true
+        current_source_matches_historical_inventory: false
+        alternate_named_candidate_count: 6
+        historical_hash_candidate_found: false
+        release_authorization_or_change_record_found: false
+        cause_of_row_and_byte_change: "unknown"
+    template_provenance:
+      classification: "TEMPLATE_PROVENANCE_RESOLVED"
+      previous_2026_11_19_classification: "TEMPLATE_PROVENANCE_UNRESOLVED"
+      historic_sidecar_sha256: "4be01f0ecaff35216a72eb8f27e791311af90d35b5a4fff1e46a74edb6dc633b"
+      sidecars_scanned: 3024
+      historic_source_repository: "/project/disease_ecology/cds-datagrab"
+      historic_template_path: "/project/disease_ecology/cds-datagrab/spatial_domain/study_area_raster.tif"
+      historic_template_sha256: "4be01f0ecaff35216a72eb8f27e791311af90d35b5a4fff1e46a74edb6dc633b"
+      historic_template_git_commit: "334681b2d2b40fb5934df342fb2c7715fb337c37"
+      historic_template_git_commit_date: "2026-07-27T19:45:11-05:00"
+      preceding_template_git_commit: "088d8624323aeabddbe2bd9844cb6086c8151652"
+      preceding_template_sha256: "cb331565767a8f16b385684dbec23cea9247d77927c5c93edbbceb18f04517e5"
+      deployment_checkout_commit: "fb57e3065ac309768b7f77062feffb3915c1465d"
+      deployment_template_sha256: "4be01f0ecaff35216a72eb8f27e791311af90d35b5a4fff1e46a74edb6dc633b"
+      current_configured_template_sha256: "d968ebe17486bde29eb68dcfae3617c8fe0932c5cad256b843c3c2aafc973a66"
+      historic_and_configured_binary_identical: false
+      historic_and_configured_cell_values_identical: true
+      historic_and_configured_na_mask_identical: true
+      historic_and_configured_dimensions_resolution_extent_origin_identical: true
+      historic_and_configured_crs_equivalent: true
+      crs_description: "Custom Albers Equal Area, WGS84 datum, kilometre units; no EPSG authority declared."
+      historic_identity_evidence: "The sidecar hash matches the version-controlled CDS template byte-for-byte; that Git commit predates the sidecar creation interval."
+      run_sidecars_record_template_path: false
+    surface_pressure_pipeline:
+      source_repository: "/project/disease_ecology/cds-datagrab"
+      source_repository_commit: "a6f2ec6c7742f5b2d79cce589ff207f60966f988"
+      source_configuration: "config/era5land_daily_mean_utc06_production.yml"
+      source_code_references:
+        product_spec: "R/variable_registry.R:15"
+        unit_conversion: "R/variable_registry.R:24"
+        family_acquisition_and_mapping: "R/era5land_family.R:194-197; R/era5land_archive.R:74-89"
+        netcdf_attribute_decode: "R/netcdf_processing.R:50-56,95-129"
+        daily_metadata_write: "R/daily_processing.R:199-200"
+        weekly_aggregation_and_sidecar: "R/weekly_aggregation.R:124-143; R/variable_registry.R:46"
+      product_identity:
+        dataset: "derived-era5-land-daily-statistics"
+        source_variable: "surface_pressure"
+        netcdf_alias: "sp"
+        parameter_id: 134
+        documented_original_units: "Pa"
+        official_reference: "https://confluence.ecmwf.int/pages/viewpage.action?pageId=143037634"
+      stored_source_archive_header_audit:
+        monthly_archives_inspected: 64
+        readable_surface_pressure_members: 64
+        all_source_units: "Pa"
+        scale_factor_attribute: "absent in all 64 members"
+        add_offset_attribute: "absent in all 64 members"
+      scale_and_offset_behavior: "ncdf4::ncvar_get is called with raw_datavals=FALSE, which applies NetCDF scale_factor/add_offset; the code then explicitly multiplies by scale_factor and adds add_offset. The inspected archived source members have neither attribute, so no duplicate scaling occurred in the available source releases."
+      numerical_unit_conversion: "The product specification converts Pa to kPa by dividing values by 1000 before daily output."
+      weekly_aggregation: "The weekly raster is the mean of seven daily outputs already converted to kPa."
+      daily_sidecar_units: "Daily sidecars record source_variable=surface_pressure, netcdf_alias=sp, source_units=Pa, output_units=kPa, and unit_conversion=pascal_to_kilopascal."
+      weekly_output_metadata:
+        raster_type: "Float32"
+        band_description: "mean"
+        nodata: "NaN"
+        raster_unit_scale_offset_tags: "absent"
+        weekly_sidecar_output_units_field: "absent"
+        interpretation: "Weekly units are supported by the seven daily sidecars and the processing code; the weekly raster and its sidecar do not declare units."
+      representative_week:
+        week_id: "2026-W44"
+        raster_sha256: "be1cb86204e37830023cae54d0e4c59384e0e0d54d4fd4f981c4975c1fdf69cc"
+        sidecar_sha256: "2a7c5eea0299694282d4fbeab2fa7a7441dc4bd40ff4d3c7a97fbb09a895827e"
+        seven_daily_sidecars_record_kpa: true
+      ncdf4_scale_offset_reference: "https://github.com/cran/ncdf4/blob/master/R/ncdf4_priv_var.R"
+    soilgrids_provenance:
+      provenance_directory: "/project/disease_ecology/NWScrewworm/data/raw_data/soilgrids_1000m_isric/provenance"
+      official_manifest_path: "official_manifest.tsv"
+      official_manifest_sha256: "54cb5e1743c9ac4c8d33d0d67fa65970ff101fd5a93608dc1161287bac52ab15"
+      official_manifest_columns: ["property", "filename", "expected_sha256", "source_url"]
+      acquisition_records_found: true
+      local_processing_log_found: false
+      files:
+        clay:
+          path: "/project/disease_ecology/NWScrewworm/data/raw_data/soilgrids_1000m_isric/clay_0-5cm_mean_1000.tif"
+          product_identity: "SoilGrids clay mean, 0-5 cm, official 1000m aggregated GeoTIFF"
+          official_source_url: "https://files.isric.org/soilgrids/latest/data_aggregated/1000m/clay/clay_0-5cm_mean_1000.tif"
+          manifest_expected_sha256: "20f699cc64686bb5696e395f709232e5957ea3c6a4b39f6676517a502033f424"
+          current_sha256: "20f699cc64686bb5696e395f709232e5957ea3c6a4b39f6676517a502033f424"
+          identity_match: true
+          product_revision: "unknown; source URL uses the mutable latest alias; exact bytes are identified by SHA-256"
+          physical_and_stored_mapped_units: "g/kg"
+          conventional_percent_conversion: "divide by 10; not applied"
+          stored_data_type: "Int16"
+          nodata: -32768
+          scale_factor: "GeoTIFF scale tag absent"
+          offset: "GeoTIFF offset tag absent"
+          official_resampling_history: "The 1000m SoilGrids product is an aggregate of mean predictions from 250m products."
+          local_resampling_history: "No local processing record found; current file is byte-identical to the official-manifest source binary."
+        wv0010:
+          path: "/project/disease_ecology/NWScrewworm/data/raw_data/soilgrids_1000m_isric/wv0010_0-5cm_mean_1000.tif"
+          product_identity: "SoilGrids volumetric water content at 10 kPa, mean, 0-5 cm, official 1000m aggregated GeoTIFF"
+          official_source_url: "https://files.isric.org/soilgrids/latest/data_aggregated/1000m/wv0010/wv0010_0-5cm_mean_1000.tif"
+          manifest_expected_sha256: "0786fa27fa1870b3d7737dca566972adec8a3e0f0a95230f6fec35af0a12d39c"
+          current_sha256: "0786fa27fa1870b3d7737dca566972adec8a3e0f0a95230f6fec35af0a12d39c"
+          identity_match: true
+          product_revision: "unknown; source URL uses the mutable latest alias; exact bytes are identified by SHA-256"
+          physical_and_stored_mapped_units: "10^-3 cm3 cm-3 (Mapped_units tag confirms the stored mapping)"
+          conventional_percent_conversion: "divide by 10; not applied"
+          stored_data_type: "Int16"
+          nodata: -32768
+          scale_factor: "GeoTIFF scale tag absent"
+          offset: "GeoTIFF offset tag absent"
+          official_resampling_history: "The 1000m SoilGrids product is an aggregate of mean predictions from 250m products."
+          local_resampling_history: "No local processing record found; current file is byte-identical to the official-manifest source binary."
+      official_units_reference: "https://docs.isric.org/globaldata/soilgrids/SoilGrids_faqs_01.html"
+    integrity_verification:
+      private_production_config_sha256_matches_prior_manifest: true
+      private_preprocessing_config_sha256_matches_prior_manifest: true
+      representative_existing_pressure_artifact_matches_inventory: true
+      observation_source_hash_unchanged_during_read: true
+      production_artifacts_modified: false
+    unresolved_findings:
+      - "The observation source release change from 167078 to 164767 rows remains unexplained and unauthorized in available records; the original bytes are unavailable."
+      - "The exact named SoilGrids revision and local acquisition timestamp are not recorded; the manifest URL uses latest, although the current exact file bytes match its expected checksums."
+      - "Weekly surface-pressure rasters and their weekly sidecars omit output units; kPa is traceable through the daily sidecars and processing code."
+      - "The CDS source reader would apply nonidentity NetCDF scale/offset attributes twice; none are present in the 64 archived ERA5-Land pressure members inspected."

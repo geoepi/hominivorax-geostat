@@ -95,3 +95,65 @@ After the report and manifest were updated with these outcomes, a focused canoni
 The full-suite logs are under `/tmp/validation-input-audit-logs-e51a99f/run-2b4ba4e137562`; the final focused logs are under `/tmp/validation-input-audit-logs-2b1ad2e/run-2b89472d420efa` on Atlas. The Atlas spatial runtime preflight passed. It also reported the previously documented GEOS compile/runtime mismatch (packages compiled with GEOS 3.12.1, runtime GEOS 3.14.0); this environment was not changed.
 
 Validation omitted production preprocessing, production dry-run, model fitting, geographic prediction, environmental regeneration, and HPC submission because they are outside this phase's scope. No model workflow was started. The repository has no package `DESCRIPTION` or package-wide check entry point; no alternate package checker was substituted. `git diff --check` passed on the completed branch diff.
+
+## Final input identity and metadata reconciliation (2026-11-21)
+
+This section is an additive follow-up to the 2026-11-19 resolution. It preserves the original audit snapshot and the prior unresolved template classification as historical findings. No observation file, environmental raster, sidecar, private production configuration, or other production artifact was changed.
+
+### Starting state and production integrity
+
+The local checkout began on `feature/revised-environmental-inputs` at `8808382a320ed0571db1b044c1834559ed1ccc41`, clean and synchronized with `origin/feature/revised-environmental-inputs`. Atlas HGE remained at `cf21c04ef53158b9bcca38dad75e7f75ee9e984a`. Current hashes for the private production and preprocessing configurations match the manifest values (`0667d4ab…` and `8fe922db…`). The registered W44 surface-pressure GeoTIFF and sidecar still match their existing inventory checksums (`be1cb862…` and `2a7c5eea…`). Observation checksum and modification time were identical before and after reading. All Atlas inspection was read-only; temporary NetCDF members were extracted under `/tmp` and removed.
+
+### Observation release identity
+
+The source at the registered path was hashed immediately before and after reading. Both hashes were `784168081cc1d3206f3537e8731994cbfc34be15be7c515fe06710d4ea9bdaac`; size was 7,191,829 bytes and modification time was 2026-11-19 10:06:23.592700507 -0600. The file has 164,767 rows and columns `date, lon, lat, host`, with dates 2022-02-10 through 2026-11-13. Recalculation found 249 ISO weeks from 2022-W06 through 2026-W46, 246 nonzero weeks, and 3 zero-count weeks. The 249-row weekly-count table sums to 164,767 and retains SHA-256 `34cf710666de6a523d1efb7593cceb44c028f846a4218aec843dc6144536c81d`.
+
+| Record | SHA-256 | Bytes | Rows | Columns |
+|---|---|---:|---:|---|
+| Original 2026-11-18 audit manifest and checksum inventory | `8fd21f9db11db3df20596fe7ad0b4cbbc8b895fbaad6f702c847ed5a05dd19fc` | 7,304,653 | 167,078 | `date, host, lon, lat` |
+| Revised v2 recheck and current source | `784168081cc1d3206f3537e8731994cbfc34be15be7c515fe06710d4ea9bdaac` | 7,191,829 | 164,767 | `date, lon, lat, host` |
+
+The current file agrees with the revised v2 manifest, while the existing checksum inventory still identifies the original snapshot. The original hash was not found among the seven named `combined_clean_obs*` files in the project data tree. Other dated files are distinct releases; no source-release authorization, preprocessing log, or record explaining the 2,311-row and 112,824-byte reduction was found. Since the original bytes are unavailable, no week-by-week or row-level delta was reconstructed. The required classification remains **`OBSERVATION_RELEASE_CHANGED_PROVENANCE_UNRESOLVED`**.
+
+### Template provenance closure
+
+The sidecar hash `4be01f0ecaff35216a72eb8f27e791311af90d35b5a4fff1e46a74edb6dc633b` is now identified as the exact binary at `/project/disease_ecology/cds-datagrab/spatial_domain/study_area_raster.tif`. Git history records that binary at commit `334681b2d2b40fb5934df342fb2c7715fb337c37` (2026-07-27), before the audited sidecars were created; the deployed CDS checkout also contains the same binary. Its preceding tracked template at `088d8624323aeabddbe2bd9844cb6086c8151652` has the earlier `cb331565…` hash. Thus the historic hash is no longer an unidentified raster.
+
+The separate comparisons are:
+
+| Property | Finding |
+|---|---|
+| Binary identity | The historic sidecar SHA-256 exactly matches the tracked CDS template. The currently configured HGE template has a different SHA-256 (`d968ebe1…`). |
+| Numerical equivalence | Historic and current configured templates have exactly equal cell values and NA masks. |
+| Grid geometry | Dimensions, resolution, extent, and origin are exactly equal. |
+| CRS equivalence | CRS definitions compare equal. Both describe the custom Albers Equal Area CRS on WGS84 with kilometre units and no EPSG authority declared. |
+| Historic provenance | The version-controlled CDS raster at the matching hash predates the observed sidecar creation interval. Sidecars record the hash but not the runtime path. |
+
+The CRS5070 candidate retains the same cell values and NA mask but has different numeric grid geometry and a different CRS. No raster was regenerated or replaced. The final classification is **`TEMPLATE_PROVENANCE_RESOLVED`** for the historic binary and its numeric/grid/CRS identity; this follow-up supersedes the prior unresolved classification without erasing that historical result.
+
+### Surface-pressure pipeline and units
+
+The applicable CDS source checkout is commit `a6f2ec6c7742f5b2d79cce589ff207f60966f988`. The production family configuration is `config/era5land_daily_mean_utc06_production.yml`; the family builder and archive mapping enumerate the eight product variables. Supporting code references are `R/variable_registry.R:15,24,46`, `R/era5land_family.R:194-197`, `R/era5land_archive.R:74-89`, `R/netcdf_processing.R:50-56,95-129,147-162`, `R/daily_processing.R:199-200`, and `R/weekly_aggregation.R:124-143`.
+
+ECMWF documents ERA5-Land surface pressure as `sp` / parameter 134 in Pa ([ERA5-Land data documentation](https://confluence.ecmwf.int/pages/viewpage.action?pageId=143037634)). The local `era5land_surface_pressure_mean` specification identifies source variable `surface_pressure`, accepts NetCDF alias `sp`, expects Pa, and sets output units to kPa with `pascal_to_kilopascal`. Its numerical conversion divides by 1,000. The current production source archive headers were checked across 64 stored monthly ZIPs: all 64 readable `sp` variables declare Pa, and none has `scale_factor` or `add_offset` attributes.
+
+There is a source-code edge case: `ncdf4::ncvar_get(..., raw_datavals=FALSE)` applies nonidentity NetCDF scale/offset attributes automatically, and `read_daily_netcdf()` then explicitly multiplies by `scale_factor` and adds `add_offset`. The [ncdf4 source documentation](https://github.com/cran/ncdf4/blob/master/R/ncdf4_priv_var.R) confirms the automatic decode. This did not double-scale any of the 64 stored source archives because their scale and offset attributes are absent. A future source with nonidentity attributes would pass through both steps and needs code review before processing.
+
+The W44 weekly sidecar links seven daily pressure rasters. Each daily sidecar preserves `source_variable=surface_pressure`, `netcdf_alias=sp`, `source_units=Pa`, `output_units=kPa`, and `unit_conversion=pascal_to_kilopascal`. Weekly processing takes the mean of those converted daily rasters. The GeoTIFF itself is Float32, and neither the raster nor the weekly sidecar declares units, scale, or offset; the daily sidecars and code establish the weekly value units as kPa, but the weekly output is not self-describing. This determination uses explicit metadata and code lineage, not numerical value ranges.
+
+### SoilGrids acquisition and stored units
+
+The existing `provenance/official_manifest.tsv` provides property, filename, expected SHA-256, and source URL. Its SHA-256 is `54cb5e1743c9ac4c8d33d0d67fa65970ff101fd5a93608dc1161287bac52ab15`. For both registered files, the current raster checksum exactly matches the manifest entry and the corresponding per-property checksum record:
+
+| File | Product identity and physical/stored mapped units | Revision and processing evidence |
+|---|---|---|
+| `clay_0-5cm_mean_1000.tif` | SoilGrids clay mean, 0–5 cm, 1000m product; mapped and stored units are g/kg. The GeoTIFF has no scale or offset tag. The conventional percent conversion is division by 10 and was not applied. | The exact bytes match the manifest source URL under the mutable `latest` alias. A named product revision and retrieval timestamp are unknown. ISRIC describes its 1000m products as means aggregated from 250m predictions. No local processing log was found; the file is byte-identical to the recorded official source. |
+| `wv0010_0-5cm_mean_1000.tif` | SoilGrids volumetric water content at 10 kPa, mean, 0–5 cm; mapped and stored units are `10^-3 cm3 cm-3`, also confirmed by its `Mapped_units` tag. The GeoTIFF has no scale or offset tag. The conventional percent conversion is division by 10 and was not applied. | The exact bytes match the manifest source URL under the mutable `latest` alias. A named product revision and retrieval timestamp are unknown. The official 1000m product is an aggregate of mean predictions from 250m. No local processing log was found; the file is byte-identical to the recorded official source. |
+
+The [ISRIC SoilGrids layer documentation](https://docs.isric.org/globaldata/soilgrids/SoilGrids_faqs_01.html) supplies the mapped-unit definitions and conversion factors. The registered files are therefore tied to exact official source bytes, although their named revision and local acquisition/processing log remain unknown.
+
+### Validation and remaining findings
+
+The complete diff is category **C** because it adds executable manifest assertions; the other changes are additive audit metadata and report text. No application code, scientific parameters, data paths, or production artifacts changed. The focused canonical validation runs `tests/test_input_manifest.R` and `tests/test_cds_upstream_provenance.R` through `Rscript tests/run_tests.R`, skipping the other 30 test scripts. The full 32-script suite is not repeated because the change is confined to manifest/report content and its focused checks. Validation output and `git diff --check` status will be recorded in the final reconciliation manifest after they run.
+
+Unresolved findings are limited to the missing historical observation snapshot and explanation/authorization for its row change; the absent named SoilGrids revision and local retrieval log; missing unit declarations on weekly pressure outputs; and the conditional duplicate scale/offset application path (no such attributes were present in the stored archives inspected). No model fitting, geographic prediction, environmental regeneration, or production artifact replacement was performed.
