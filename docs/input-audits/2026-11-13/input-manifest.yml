@@ -510,3 +510,19 @@ audit_resolution:
       - "The exact named SoilGrids revision and local acquisition timestamp are not recorded; the manifest URL uses latest, although the current exact file bytes match its expected checksums."
       - "Weekly surface-pressure rasters and their weekly sidecars omit output units; kPa is traceable through the daily sidecars and processing code."
       - "The CDS source reader would apply nonidentity NetCDF scale/offset attributes twice; none are present in the 64 archived ERA5-Land pressure members inspected."
+    validation:
+      change_classification: "C — executable test assertions were added for the additive manifest; all other changes are audit metadata and report text."
+      canonical_test_runner: "Rscript tests/run_tests.R"
+      focused_test_files: ["test_input_manifest.R", "test_cds_upstream_provenance.R"]
+      source_commit_under_test: "eb740c377f2cbb98c8934579d089d005caa9a45a"
+      executed: 2
+      skipped: 30
+      passed: 1
+      warned: 1
+      failed: 0
+      warning_detail: "test_cds_upstream_provenance.R passed with exit 0; its negative-path assertion deliberately expects a child submit command to exit 1 before sbatch, which system2 reports as a warning. Atlas also emitted its RTC/time-zone warning."
+      full_32_script_suite_repeated: false
+      full_suite_omission_reason: "Focused manifest/provenance checks cover this manifest/report/test-only change; no production code or execution pathway changed."
+      git_diff_check: "PASS"
+      model_fit_or_prediction_started: false
+      production_artifacts_modified: false
