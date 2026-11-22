@@ -172,8 +172,22 @@ joint_inla_extract_expected_fixed_effect_count <- function(build) {
 
 joint_inla_extract_validate_fixed_effect_names <- function(build, fit) {
   expected <- build$model_signature$fixed_effect_names
+  if (is.null(expected) || !length(expected)) {
+    if (!inherits(build$formula, "formula")) {
+      return(list(
+        pass = FALSE,
+        expected = character(),
+        observed = if (is.null(rownames(fit$summary.fixed))) character() else rownames(fit$summary.fixed),
+        missing = character(),
+        unexpected = character(),
+        details = "Fixed-effect names cannot be verified because the build has neither a model signature nor a formula."
+      ))
+    }
+    formula_terms <- attr(stats::terms(build$formula), "term.labels")
+    expected <- formula_terms[!grepl("^f\\(", formula_terms)]
+  }
   observed <- rownames(fit$summary.fixed)
-  expected <- if (is.null(expected)) character() else as.character(expected)
+  expected <- as.character(expected)
   observed <- if (is.null(observed)) character() else as.character(observed)
   pass <- length(expected) > 0L &&
     !anyNA(expected) && !anyDuplicated(expected) &&

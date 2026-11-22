@@ -95,6 +95,12 @@ rownames(c1_bad_fit$summary.fixed)[[19L]] <- "unexpected_term"
 c1_bad_names <- joint_inla_extract_validate_fixed_effect_names(c1_build, c1_bad_fit)
 stopifnot(!isTRUE(c1_bad_names$pass), identical(c1_bad_names$missing, "spressure"),
           identical(c1_bad_names$unexpected, "unexpected_term"))
+legacy_build <- build
+legacy_build$formula <- stats::as.formula("Y.1 ~ -1 + a + b + f(admin_f, model = 'iid')")
+legacy_fit <- fit
+legacy_fixed_effect_contract <- joint_inla_extract_validate_fixed_effect_names(legacy_build, legacy_fit)
+stopifnot(isTRUE(legacy_fixed_effect_contract$pass),
+          identical(legacy_fixed_effect_contract$expected, c("a", "b")))
 
 c1_admin_mapping <- data.frame(admin_u = paste0("unit-", seq_len(342L)), admin_f = seq_len(342L))
 c1_admin_effects <- data.frame(
