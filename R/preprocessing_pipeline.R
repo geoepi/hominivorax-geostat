@@ -116,7 +116,9 @@ run_preprocessing <- function(config_path, repo_root = normalizePath(file.path(d
          ". Failed scope/variable pairs: ", paste(paste(failed$scope, failed$covariate, sep = "/"), collapse = ", "))
   }
   transformations <- estimate_transformations(tier2, cfg)
-  tier1 <- add_legacy_model_fields(apply_transformations(tier1, transformations, include_hinge = FALSE))
+  tier1 <- add_legacy_model_fields(apply_transformations(
+    tier1, transformations, include_hinge = FALSE, require_registered_covariates = FALSE
+  ))
   tier2 <- add_legacy_model_fields(apply_transformations(tier2, transformations, include_hinge = TRUE))
   prediction <- add_legacy_model_fields(apply_transformations(prediction, transformations, include_hinge = TRUE))
   admin_t1 <- annotate_admin_units(tier1, admin_geometry, cfg$inputs$admin_column, "tier1")

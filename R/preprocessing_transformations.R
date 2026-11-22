@@ -53,7 +53,7 @@ estimate_transformations <- function(training, cfg) {
   )
 }
 
-apply_transformations <- function(data, spec, include_hinge = TRUE) {
+apply_transformations <- function(data, spec, include_hinge = TRUE, require_registered_covariates = TRUE) {
   for (nm in names(spec$dynamic)) {
     if (!nm %in% names(data)) next
     values <- data[[nm]]
@@ -69,7 +69,10 @@ apply_transformations <- function(data, spec, include_hinge = TRUE) {
   for (nm in names(spec$registered_covariates %||% list())) {
     registered <- spec$registered_covariates[[nm]]
     column <- as.character(registered$output_column)
-    if (!column %in% names(data)) stop("Data lack registered environmental covariate column: ", column)
+    if (!column %in% names(data)) {
+      if (isTRUE(require_registered_covariates)) stop("Data lack registered environmental covariate column: ", column)
+      next
+    }
     if (!identical(as.character(registered$method), "identity")) stop("Unsupported registered environmental transformation for ", nm, ".")
     data[[column]] <- as.numeric(data[[column]])
   }

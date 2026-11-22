@@ -96,6 +96,17 @@ testthat::test_that("new environmental covariates keep source units and identity
   testthat::expect_identical(transformed$clay, training$clay)
   testthat::expect_identical(transformed$wv0010, training$wv0010)
   testthat::expect_identical(transformed$spressure, training$spressure)
+  tier1 <- data.frame(
+    y = c(1, 2, 3), mintemp = c(5, 6, 7), road_density = c(1, 2, 3),
+    night_illumination = c(2, 1, 0)
+  )
+  testthat::expect_error(apply_transformations(tier1, transformations, include_hinge = FALSE),
+    "Data lack registered environmental covariate column: clay")
+  transformed_tier1 <- apply_transformations(
+    tier1, transformations, include_hinge = FALSE, require_registered_covariates = FALSE
+  )
+  testthat::expect_false(any(c("clay", "wv0010", "spressure") %in% names(transformed_tier1)))
+  testthat::expect_true("northing_z" %in% names(transformed_tier1))
   testthat::expect_equal(transformations$registered_covariates$clay$stored_units, "g/kg")
   testthat::expect_equal(transformations$registered_covariates$wv0010$stored_units, "10^-3 cm3 cm-3 (Mapped_units tag)")
   testthat::expect_equal(transformations$registered_covariates$spressure$source_units, "Pa")
