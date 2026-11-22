@@ -75,14 +75,14 @@ make_joint_fixed_effects <- function(data, mapping, names_to_include, integer_na
 
 make_tier1_effects <- function(data, fields, mapping) {
   latent <- c(fields$tier1, list(intercept1 = 1))
-  fixed_names <- setdiff(names(mapping$tier1), c("admin_f", "week_steps"))
+  fixed_names <- names(mapping$tier1)
   fixed <- make_joint_fixed_effects(data, mapping$tier1, fixed_names)
   list(latent = latent, fixed = fixed)
 }
 
 make_tier2_effects <- function(data, fields, mapping) {
   latent <- c(fields$tier2, fields$copy, list(intercept2 = 1))
-  fixed_names <- setdiff(names(mapping$tier2), c("cattle_q", "cattle_mid_log1p", "tier2_week"))
+  fixed_names <- names(mapping$tier2)
   fixed <- make_joint_fixed_effects(data, mapping$tier2, fixed_names)
   list(latent = latent, fixed = fixed)
 }
