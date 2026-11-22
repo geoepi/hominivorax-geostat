@@ -74,6 +74,39 @@ temporal_contract <- joint_inla_extract_validate_temporal_effects(temporal, stag
 stopifnot(isTRUE(temporal_contract$pass), identical(temporal_contract$expected, 1:2))
 admin <- joint_inla_extract_admin_effects(fit, stage2)
 stopifnot(nrow(admin) == 3L, sum(admin$fitted_level) == 2L)
+admin_contract <- joint_inla_extract_validate_admin_support(admin, stage2)
+stopifnot(isTRUE(admin_contract$pass))
+
+c1_fixed_effect_names <- c(
+  "intercept1", "north", "road_dens", "night_illum", "intercept2", "mintemp",
+  "soilmoist", "leafarea", "rhum", "mintemp:soilmoist", "mintemp:leafarea",
+  "cattle", "horses", "pigs", "goats", "sheep", "clay", "wv0010", "spressure"
+)
+c1_build <- build
+c1_build$model_signature <- list(fixed_effect_names = c1_fixed_effect_names)
+c1_fit <- fit
+c1_fit$summary.fixed <- data.frame(mean = seq_along(c1_fixed_effect_names),
+                                   row.names = c1_fixed_effect_names)
+fixed_effect_contract <- joint_inla_extract_validate_fixed_effect_names(c1_build, c1_fit)
+stopifnot(isTRUE(fixed_effect_contract$pass), length(fixed_effect_contract$expected) == 19L,
+          all(c("clay", "wv0010", "spressure") %in% fixed_effect_contract$observed))
+c1_fit$summary.fixed <- c1_fit$summary.fixed[-19L, , drop = FALSE]
+stopifnot(!isTRUE(joint_inla_extract_validate_fixed_effect_names(c1_build, c1_fit)$pass))
+
+c1_admin_mapping <- data.frame(admin_u = paste0("unit-", seq_len(342L)), admin_f = seq_len(342L))
+c1_admin_effects <- data.frame(
+  model_index = seq_len(342L),
+  fitted_level = !(seq_len(342L) %in% c(94L, 224L, 257L)),
+  unused_level = seq_len(342L) %in% c(94L, 224L, 257L)
+)
+c1_admin_stage2 <- stage2
+c1_admin_stage2$admin_mapping <- c1_admin_mapping
+c1_admin_stage2$tier1$admin_f <- c(1L, 94L, 2L)
+c1_admin_contract <- joint_inla_extract_validate_admin_support(c1_admin_effects, c1_admin_stage2)
+stopifnot(isTRUE(c1_admin_contract$pass), grepl("mapped=342; extracted=342; fitted=339", c1_admin_contract$observed))
+c1_admin_effects$fitted_level[[1L]] <- FALSE
+c1_admin_effects$unused_level[[1L]] <- TRUE
+stopifnot(!isTRUE(joint_inla_extract_validate_admin_support(c1_admin_effects, c1_admin_stage2)$pass))
 cattle <- joint_inla_extract_cattle_effects(fit, stage2)
 stopifnot(identical(cattle$model_index, 1:2), cattle$active_count[1] == 1L, cattle$active_count[2] == 1L)
 spde <- joint_inla_extract_spde_fields(build, fit)

@@ -170,6 +170,29 @@ joint_inla_extract_expected_fixed_effect_count <- function(build) {
   as.integer(length(fixed_labels))
 }
 
+joint_inla_extract_validate_fixed_effect_names <- function(build, fit) {
+  expected <- build$model_signature$fixed_effect_names
+  observed <- rownames(fit$summary.fixed)
+  expected <- if (is.null(expected)) character() else as.character(expected)
+  observed <- if (is.null(observed)) character() else as.character(observed)
+  pass <- length(expected) > 0L &&
+    !anyNA(expected) && !anyDuplicated(expected) &&
+    length(observed) == length(expected) && !anyNA(observed) && !anyDuplicated(observed) &&
+    setequal(observed, expected)
+  list(
+    pass = isTRUE(pass),
+    expected = expected,
+    observed = observed,
+    missing = setdiff(expected, observed),
+    unexpected = setdiff(observed, expected),
+    details = if (isTRUE(pass)) {
+      "Fitted fixed-effect summary names match the Stage 3A model signature."
+    } else {
+      "Fitted fixed-effect summary names do not match the Stage 3A model signature."
+    }
+  )
+}
+
 joint_inla_extract_hyperparameters <- function(fit_artifact) {
   out <- joint_inla_extract_summary_table(joint_inla_extract_fit(fit_artifact)$summary.hyperpar, "parameter")
   out$effect_type <- "hyperparameter"
@@ -268,6 +291,53 @@ joint_inla_extract_admin_effects <- function(fit_artifact, stage2) {
   full$fitted_level <- full$model_index %in% random$model_index
   full$unused_level <- !full$fitted_level
   full
+}
+
+joint_inla_extract_validate_admin_support <- function(admin_effects, stage2) {
+  mapping <- stage2$admin_mapping
+  if (!is.data.frame(mapping) || !all(c("admin_u", "admin_f") %in% names(mapping))) {
+    return(list(pass = FALSE, observed = "invalid Stage 2 admin_mapping",
+                expected = "unique Stage 2 mapped administrative indices",
+                details = "Stage 2 admin_mapping must contain admin_u and admin_f."))
+  }
+  if (!is.data.frame(admin_effects) ||
+      !all(c("model_index", "fitted_level", "unused_level") %in% names(admin_effects))) {
+    return(list(pass = FALSE, observed = "invalid extracted administrative effects",
+                expected = "mapped levels with explicit fitted/unused flags",
+                details = "Extracted administrative effects lack the required index or support flags."))
+  }
+  if (!is.data.frame(stage2$tier1) ||
+      !all(c("admin_f", "response_training") %in% names(stage2$tier1))) {
+    return(list(pass = FALSE, observed = "missing Tier 1 administrative likelihood indices",
+                expected = "Stage 2 Tier 1 admin_f and response_training",
+                details = "Direct administrative support cannot be verified without Tier 1 training rows."))
+  }
+
+  expected_ids <- as.integer(mapping$admin_f)
+  observed_ids <- as.integer(admin_effects$model_index)
+  fitted_ids <- as.integer(admin_effects$model_index[admin_effects$fitted_level %in% TRUE])
+  active <- !is.na(stage2$tier1$response_training) & !is.na(stage2$tier1$admin_f)
+  direct_ids <- sort(unique(as.integer(stage2$tier1$admin_f[active])))
+  missing_direct <- setdiff(direct_ids, fitted_ids)
+  mapping_ok <- length(expected_ids) > 0L && !anyNA(expected_ids) && !anyDuplicated(expected_ids) &&
+    nrow(admin_effects) == nrow(mapping) && identical(observed_ids, expected_ids)
+  support_ok <- !anyNA(fitted_ids) && !anyDuplicated(fitted_ids) &&
+    all(fitted_ids %in% expected_ids) && !length(missing_direct)
+  flags_ok <- !anyNA(admin_effects$fitted_level) && !anyNA(admin_effects$unused_level) &&
+    identical(as.logical(admin_effects$unused_level), !as.logical(admin_effects$fitted_level))
+  pass <- mapping_ok && support_ok && flags_ok
+  list(
+    pass = isTRUE(pass),
+    observed = paste0("mapped=", nrow(mapping), "; extracted=", nrow(admin_effects),
+                      "; fitted=", length(fitted_ids), "; direct_tier1_levels=", length(direct_ids),
+                      "; missing_direct=", if (length(missing_direct)) paste(missing_direct, collapse = ",") else "none"),
+    expected = paste0("all ", nrow(mapping), " mapped levels retained; fitted support covers all direct Tier 1 likelihood levels; unused levels explicit"),
+    details = if (isTRUE(pass)) {
+      "Administrative summaries reconcile dynamically to the Stage 2 mapping; every direct Tier 1 likelihood level is fitted and unsupported levels remain explicit."
+    } else {
+      "Administrative summaries do not reconcile to Stage 2 mapping or omit direct Tier 1 likelihood support."
+    }
+  )
 }
 
 joint_inla_extract_cattle_effects <- function(fit_artifact, stage2) {
@@ -472,6 +542,10 @@ joint_inla_extract_audit <- function(build, fit_artifact, stage2 = NULL, toleran
   add("fit", "fixed_effect_count", if (fixed_count_ok) "PASS" else "FAIL", nrow(fit$summary.fixed),
       if (is.na(expected_fixed_count)) "available model signature or formula" else expected_fixed_count,
       "Fixed-effect summary count reconciles with the model formula/signature.")
+  fixed_names <- joint_inla_extract_validate_fixed_effect_names(build, fit)
+  add("fit", "fixed_effect_names", if (isTRUE(fixed_names$pass)) "PASS" else "FAIL",
+      paste(fixed_names$observed, collapse = ","),
+      paste(fixed_names$expected, collapse = ","), fixed_names$details)
   add("fit", "hyperparameter_count", if (nrow(fit$summary.hyperpar) == 10L) "PASS" else "FAIL", nrow(fit$summary.hyperpar), 10, "Hyperparameter summary count.")
   add("fit", "random_component_count", if (length(fit$summary.random) == 7L) "PASS" else "FAIL", length(fit$summary.random), 7, "Random-effect component count.")
   if (!is.null(stage2)) {
@@ -485,7 +559,13 @@ joint_inla_extract_audit <- function(build, fit_artifact, stage2 = NULL, toleran
           temporal_expected, if (inherits(temporal_contract, "error")) "Temporal extraction could not be validated." else component_result$details)
     }
     admin <- tryCatch(joint_inla_extract_admin_effects(fit, stage2), error = function(e) e)
-    add("admin", "full_and_fitted_levels", if (!inherits(admin, "error") && nrow(admin) == 340L && sum(admin$fitted_level) == 319L) "PASS" else "FAIL", if (inherits(admin, "error")) conditionMessage(admin) else paste(nrow(admin), sum(admin$fitted_level), sep = "/"), "340/319 full/fitted admin levels", "Unused full-support admin levels remain explicit.")
+    admin_contract <- if (inherits(admin, "error")) {
+      list(pass = FALSE, observed = conditionMessage(admin), expected = "Stage 2 administrative mapping and direct Tier 1 support", details = "Administrative effects could not be extracted.")
+    } else {
+      joint_inla_extract_validate_admin_support(admin, stage2)
+    }
+    add("admin", "full_and_fitted_levels", if (isTRUE(admin_contract$pass)) "PASS" else "FAIL",
+        admin_contract$observed, admin_contract$expected, admin_contract$details)
     cattle <- tryCatch(joint_inla_extract_cattle_effects(fit, stage2), error = function(e) e)
     zero_bins <- if (inherits(cattle, "error")) character() else as.character(cattle$model_index[cattle$active_count == 0L])
     add("cattle", "full_rw2_support", if (!inherits(cattle, "error") && identical(cattle$model_index, 1:22)) "PASS" else "FAIL", if (inherits(cattle, "error")) conditionMessage(cattle) else paste(nrow(cattle), paste(zero_bins, collapse = ","), sep = "; zero_active_bins="), "22 bins retained; zero-active bins are allowed", "Cattle support is mapped to cattle_q and original/log1p midpoints.")
