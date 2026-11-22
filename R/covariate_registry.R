@@ -139,13 +139,40 @@ validate_covariate_registry <- function(registry, manifest_path = "<unresolved>"
       "Configuration C manifest must record one 64-character hexadecimal observation SHA-256."
     )
   }
-  if (!identical(tolower(as.character(observation$sha256)), "784168081cc1d3206f3537e8731994cbfc34be15be7c515fe06710d4ea9bdaac")) {
+  approved_observation_sha256 <- "784168081cc1d3206f3537b8731994cbfc34be15be7c515fe06710d4ea9bdaac"
+  superseded_observation_sha256 <- "784168081cc1d3206f3537e8731994cbfc34be15be7c515fe06710d4ea9bdaac"
+  if (!identical(tolower(as.character(observation$sha256)), approved_observation_sha256)) {
     covariate_registry_observation_gate_error(
       "MANIFEST_SHA256_NOT_APPROVED", observation$path, observation$sha256,
       "NOT_COMPUTED", manifest_path, manifest_identity,
       "Configuration C observation checksum differs from the approved release specification."
     )
   }
+  approval <- observation$owner_approval
+  approval_valid <- is.list(approval) &&
+    identical(as.character(approval$authority), "project_owner") &&
+    identical(as.character(approval$approval_date), "2026-11-21") &&
+    identical(as.character(approval$configuration), "C-1") &&
+    identical(as.character(approval$supersedes_sha256), superseded_observation_sha256) &&
+    length(approval$approved_release_identifier) == 1L &&
+    nzchar(as.character(approval$approved_release_identifier)) &&
+    length(approval$statement) == 1L &&
+    grepl("manually inspected and explicitly approved", as.character(approval$statement), fixed = TRUE)
+  if (!approval_valid) stop("Configuration C observation release lacks the recorded 2026-11-21 project-owner approval.")
+  history <- observation$checksum_history
+  history_sha256 <- if (is.list(history)) vapply(history, function(entry) as.character(entry$sha256), character(1L)) else character()
+  history_status <- if (is.list(history)) vapply(history, function(entry) as.character(entry$status), character(1L)) else character()
+  history_valid <- length(history_sha256) == length(history_status) &&
+    any(history_sha256 == superseded_observation_sha256 & history_status == "superseded") &&
+    any(history_sha256 == approved_observation_sha256 & history_status == "current_owner_approved")
+  if (!history_valid) stop("Configuration C observation checksum history must retain the superseded checksum and current owner-approved checksum.")
+  provenance_notes <- observation$provenance_notes
+  unverified_duplicate_note <- is.list(provenance_notes) && any(vapply(provenance_notes, function(note) {
+    identical(as.character(note$status), "unverified_possible_explanation") &&
+      identical(note$verified, FALSE) &&
+      grepl("duplicate records", as.character(note$note), ignore.case = TRUE)
+  }, logical(1L)))
+  if (!unverified_duplicate_note) stop("Configuration C observation provenance must preserve duplicate removal only as an unverified possible explanation.")
   effects <- registry$configuration$fixed_effects
   required_effect_sections <- c("tier1_terms", "tier2_terms", "interaction_terms", "formula_order", "reporting_order", "new_additive_linear_terms")
   if (!all(required_effect_sections %in% names(effects))) stop("Configuration C fixed-effect registry is incomplete.")

@@ -33,7 +33,21 @@ testthat::test_that("Configuration C source manifest and stage configs agree", {
   testthat::expect_equal(preprocessing_cfg$inputs$observations,
     "/project/disease_ecology/NWScrewworm/data/processed_data/case_detections/combined_clean_obs_2026-11-13.csv")
   testthat::expect_equal(preprocessing_cfg$covariate_registry$observations$sha256,
+    "784168081cc1d3206f3537b8731994cbfc34be15be7c515fe06710d4ea9bdaac")
+  observation <- preprocessing_cfg$covariate_registry$observations
+  testthat::expect_identical(observation$owner_approval$authority, "project_owner")
+  testthat::expect_identical(observation$owner_approval$approval_date, "2026-11-21")
+  testthat::expect_identical(observation$owner_approval$configuration, "C-1")
+  testthat::expect_identical(observation$owner_approval$supersedes_sha256,
     "784168081cc1d3206f3537e8731994cbfc34be15be7c515fe06710d4ea9bdaac")
+  testthat::expect_match(observation$owner_approval$approved_release_identifier, "2026-11-13-current-content-approved-2026-11-21")
+  testthat::expect_identical(observation$checksum_history[[1L]]$sha256,
+    "784168081cc1d3206f3537e8731994cbfc34be15be7c515fe06710d4ea9bdaac")
+  testthat::expect_identical(observation$checksum_history[[1L]]$status, "superseded")
+  testthat::expect_identical(observation$checksum_history[[2L]]$sha256, observation$sha256)
+  testthat::expect_identical(observation$checksum_history[[2L]]$status, "current_owner_approved")
+  testthat::expect_false(observation$provenance_notes[[1L]]$verified)
+  testthat::expect_match(observation$provenance_notes[[1L]]$note, "may have involved removal of duplicate records")
   testthat::expect_equal(preprocessing_cfg$temporal$start_week, "2022-W01")
   testthat::expect_equal(preprocessing_cfg$temporal$end_week, "2026-W44")
   testthat::expect_equal(preprocessing_cfg$static_covariates$clay,

@@ -43,7 +43,26 @@ configuration:
 observations:
   release_id: "2026-11-13"
   path: "/project/disease_ecology/NWScrewworm/data/processed_data/case_detections/combined_clean_obs_2026-11-13.csv"
-  sha256: "784168081cc1d3206f3537e8731994cbfc34be15be7c515fe06710d4ea9bdaac"
+  sha256: "784168081cc1d3206f3537b8731994cbfc34be15be7c515fe06710d4ea9bdaac"
+  owner_approval:
+    authority: project_owner
+    approval_date: "2026-11-21"
+    configuration: "C-1"
+    approved_release_identifier: "configuration-c1-observations-2026-11-13-current-content-approved-2026-11-21"
+    supersedes_sha256: "784168081cc1d3206f3537e8731994cbfc34be15be7c515fe06710d4ea9bdaac"
+    statement: "The project owner manually inspected and explicitly approved the current source contents for Configuration C-1; this release supersedes the previously approved observation checksum."
+  checksum_history:
+    - sha256: "784168081cc1d3206f3537e8731994cbfc34be15be7c515fe06710d4ea9bdaac"
+      status: superseded
+      superseded_on: "2026-11-21"
+      note: "Previously approved checksum retained for audit history."
+    - sha256: "784168081cc1d3206f3537b8731994cbfc34be15be7c515fe06710d4ea9bdaac"
+      status: current_owner_approved
+      verified_on: "2026-11-21"
+  provenance_notes:
+    - status: unverified_possible_explanation
+      verified: false
+      note: "The project owner notes that earlier modifications may have involved removal of duplicate records. This remains a possible explanation, not a verified historical finding."
   bytes: 7191829
   rows: 164767
   columns: [date, lon, lat, host]
@@ -181,7 +200,7 @@ schema_contract:
     carry_manifest_path_version_checksum: true
     carry_input_source_ids_units_transformations_and_missingness_audit: true
 limitations:
-  - "The cause or authorization for the observation row-count change remains unresolved; this exact release is accepted for Configuration C by the current task specification."
+  - "The historical cause of observation content changes remains unresolved. The project owner approved the current checksum for C-1 on 2026-11-21; possible duplicate-record removal remains an unverified explanation."
   - "The exact SoilGrids named revision and retrieval time are unknown because the source URLs use the mutable latest alias."
   - "Weekly surface-pressure raster values are traceable to kPa through the verified processing code and daily sidecars, but the weekly raster and sidecar omit unit tags."
   - "No Stage 1 execution, model fitting, geographic prediction, or scientific qualification is performed by this configuration change."
