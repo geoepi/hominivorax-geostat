@@ -15,8 +15,8 @@ derive_temporal_mapping <- function(time_index, cfg) {
   mapping$timestep_2wk <- (mapping$timestep + 1L) %/% 2L
   earliest <- min(mapping$week_start)
   month_diff <- (as.integer(format(mapping$week_start, "%Y")) - as.integer(format(earliest, "%Y"))) * 12L + as.integer(format(mapping$week_start, "%m")) - as.integer(format(earliest, "%m"))
-  mapping$quarter_index <- floor(month_diff / 3L) + 1L
-  mapping$sixmo_index <- floor(month_diff / 6L) + 1L
+  mapping$quarter_index <- as.integer(floor(month_diff / 3L) + 1L)
+  mapping$sixmo_index <- as.integer(floor(month_diff / 6L) + 1L)
   years <- sort(unique(as.integer(format(mapping$week_start, "%Y"))))
   mapping$year_index <- match(as.integer(format(mapping$week_start, "%Y")), years)
   mapping
