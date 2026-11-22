@@ -9,8 +9,12 @@ The source and fixed-effect registry is
 [`configuration-c-input-manifest.yml`](input-audits/2026-11-13/configuration-c-input-manifest.yml).
 It fixes the observation checksum, ISO-week analysis window through 2026-W44,
 the two SoilGrids rasters, weekly ERA5-Land pressure coverage, and the ordered
-fixed-effect terms. The observation archive remains the full verified source;
-Stage 1's explicit endpoint filters records after W44 from the analysis.
+fixed-effect terms. It also retains the closed template-provenance comparison:
+the current configured raster and the historical sidecar raster are different
+binary files with equivalent values, NA mask, grid, and CRS; the matched
+historical binary is tracked in the CDS repository. The observation archive
+remains the full verified source; Stage 1's explicit endpoint filters records
+after W44 from the analysis.
 
 `clay`, `wv0010`, and `spressure` enter Tier 2 as additive linear terms. The
 transformation is identity: clay remains in g/kg, `wv0010` remains in mapped

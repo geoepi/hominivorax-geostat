@@ -54,6 +54,26 @@ observations:
   analysis_endpoint_policy: retain_later_rows_in_source_archive_and_exclude_after_2026-W44
   expected_observations_after_endpoint: 968
   checksum_check: verify_sha256_before_and_after_read
+spatial_template:
+  configured:
+    path: "/project/disease_ecology/NWScrewworm/data/processed_data/spatial_domain/study_area_raster.tif"
+    bytes: 15066
+    sha256: "d968ebe17486bde29eb68dcfae3617c8fe0932c5cad256b843c3c2aafc973a66"
+  historic_environmental_sidecar_template:
+    sha256: "4be01f0ecaff35216a72eb8f27e791311af90d35b5a4fff1e46a74edb6dc633b"
+    source_repository: "/project/disease_ecology/cds-datagrab"
+    tracked_source_path: "/project/disease_ecology/cds-datagrab/spatial_domain/study_area_raster.tif"
+    source_git_commit: "334681b2d2b40fb5934df342fb2c7715fb337c37"
+    source_git_commit_date: "2026-07-27T19:45:11-05:00"
+  comparison:
+    binary_identity: distinct
+    numerical_values_and_na_mask_equivalent: true
+    grid_geometry_equivalent: true
+    crs_equivalent: true
+    historic_provenance: tracked_CDS_binary_matches_sidecar_hash_and_predates_sidecars; sidecars_do_not_record_runtime_path
+  classification: TEMPLATE_PROVENANCE_RESOLVED
+  previous_2026_11_19_classification: TEMPLATE_PROVENANCE_UNRESOLVED
+  evidence_report: docs/input-audits/2026-11-13/resolution-validation-report.md
 source_inventory:
   path: docs/input-audits/2026-11-13/input_file_hashes.tsv
   sha256: "9a87da06e0c0a103de6af67c6129073456b1e0263d95c3191c8e4400e5528511"
