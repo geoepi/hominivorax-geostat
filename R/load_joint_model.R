@@ -1,5 +1,5 @@
 load_joint_model <- function(repo_root = getwd()) {
-  files <- c("preprocessing_validation.R", "joint_model_config.R", "joint_model_responses.R", "joint_model_features.R", "joint_model_preparation.R")
+  files <- c("preprocessing_validation.R", "covariate_registry.R", "joint_model_config.R", "joint_model_responses.R", "joint_model_features.R", "joint_model_preparation.R")
   for (file in files) source(file.path(repo_root, "R", file), local = .GlobalEnv)
   invisible(files)
 }

@@ -29,6 +29,36 @@ read_preprocessing_config <- function(path, repo_root = getwd()) {
   if (is.null(names(cfg$static_covariates)) || any(!nzchar(names(cfg$static_covariates)))) {
     names(cfg$static_covariates) <- c("cattle", "horses", "pigs", "sheep", "goats", "road_density", "night_illumination")
   }
+  if (!is.null(cfg$covariate_manifest)) {
+    cfg$covariate_manifest_path <- resolve_preprocessing_path(cfg$covariate_manifest, repo_root)
+  } else {
+    cfg$covariate_manifest_path <- NULL
+  }
+  cfg$covariate_registry <- read_covariate_registry(cfg$covariate_manifest_path, repo_root)
+  if (!is.null(cfg$covariate_registry)) {
+    registered_observation <- as.character(cfg$covariate_registry$observations$path)
+    if (!identical(normalizePath(cfg$inputs$observations, mustWork = FALSE), normalizePath(registered_observation, mustWork = FALSE))) {
+      stop("Configuration C observations path differs from the source manifest.")
+    }
+    for (name in names(cfg$covariate_registry$covariates)) {
+      entry <- cfg$covariate_registry$covariates[[name]]
+      section <- as.character(entry$input_section)
+      path <- as.character(entry$source$path)
+      if (identical(section, "static_covariates")) {
+        if (name %in% names(cfg$static_covariates) && !identical(as.character(cfg$static_covariates[[name]]), path)) {
+          stop("Static covariate path conflicts with the source manifest: ", name)
+        }
+        cfg$static_covariates[[name]] <- path
+      } else if (identical(section, "dynamic_covariates")) {
+        if (name %in% names(cfg$dynamic_covariates) && !identical(as.character(cfg$dynamic_covariates[[name]]), path)) {
+          stop("Dynamic covariate path conflicts with the source manifest: ", name)
+        }
+        cfg$dynamic_covariates[[name]] <- path
+      } else {
+        stop("Unknown input_section for covariate ", name, ": ", section)
+      }
+    }
+  }
   if (is.null(cfg$extraction$search_radius_km) && !is.null(cfg$extraction$search_radius_m)) {
     stop("extraction.search_radius_m is deprecated and ambiguous; use extraction.search_radius_km.")
   }
@@ -46,10 +76,20 @@ validate_preprocessing_config <- function(cfg, require_inputs = TRUE) {
   temporal <- preprocessing_temporal_spec(cfg)
   if (!is.null(temporal$start_week) && length(temporal$start_week) && nzchar(as.character(temporal$start_week[[1L]]))) invisible(preprocessing_epiweek_start(temporal$start_week))
   if (identical(temporal$mode, "explicit") && !grepl("^20[0-9]{2}-W[0-9]{1,2}$", temporal$end_week, ignore.case = TRUE) && is.na(as.Date(temporal$end_week))) stop("temporal.end_week must be auto_last_complete_observation_week, YYYY-Www, or an ISO date.")
+  if (!is.null(cfg$covariate_registry)) {
+    window <- cfg$covariate_registry$configuration$analysis_window
+    if (!identical(as.character(temporal$start_week), as.character(window$start_epiweek)) ||
+        !identical(as.character(temporal$end_week), as.character(window$end_epiweek))) {
+      stop("Stage 1 temporal window differs from the Configuration C source manifest.")
+    }
+    if (!identical(as.character(cfg$transformations$dynamic_missing_policy), "fail")) {
+      stop("Configuration C registered weekly covariates require dynamic_missing_policy: fail.")
+    }
+  }
   thinning <- if (!is.null(cfg$tier1) && !is.null(cfg$tier1$positive_cellweek_thinning)) cfg$tier1$positive_cellweek_thinning else cfg$tier1_thinning
   if (length(thinning$enabled) != 1L || is.na(thinning$enabled) || !is.logical(thinning$enabled)) stop("tier1.positive_cellweek_thinning.enabled must be TRUE or FALSE")
   if (length(thinning$seed) != 1L || is.na(thinning$seed) || !is.finite(as.numeric(thinning$seed))) stop("tier1.positive_cellweek_thinning.seed must be finite")
-  if (isTRUE(require_inputs)) { input_paths <- cfg$inputs[setdiff(names(cfg$inputs), c("observation_mode", "observation_crs", "admin_column"))]; p <- unlist(c(input_paths, cfg$dynamic_covariates, cfg$static_covariates)); p <- p[!vapply(p, file.exists, logical(1))]; if (length(p)) stop("Required input paths are absent: ", paste(p, collapse = ", ")) }
+  if (isTRUE(require_inputs)) { input_paths <- cfg$inputs[setdiff(names(cfg$inputs), c("observation_mode", "observation_crs", "admin_column"))]; p <- unlist(c(input_paths, cfg$dynamic_covariates, cfg$static_covariates)); p <- p[!vapply(p, file.exists, logical(1))]; if (!is.null(cfg$covariate_manifest_path) && !file.exists(cfg$covariate_manifest_path)) p <- c(p, cfg$covariate_manifest_path); if (length(p)) stop("Required input paths are absent: ", paste(p, collapse = ", ")) }
   invisible(TRUE)
 }
 get_observation_source_crs <- function(cfg) {

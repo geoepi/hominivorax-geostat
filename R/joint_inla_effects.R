@@ -4,8 +4,8 @@ joint_first_present <- function(data, candidates, label) {
   found[[1L]]
 }
 
-joint_effect_mapping <- function(tier1, tier2) {
-  list(
+joint_effect_mapping <- function(tier1, tier2, covariate_registry = NULL) {
+  mapping <- list(
     tier1 = c(
       north = joint_first_present(tier1, c("northing_km_s", "northing_z"), "Tier 1 northing"),
       road_dens = joint_first_present(tier1, c("road_dens_s", "road_density_log1p"), "Tier 1 road density"),
@@ -21,6 +21,18 @@ joint_effect_mapping <- function(tier1, tier2) {
       cattle_q = "cattle_q", cattle_mid_log1p = "cattle_mid_log1p", tier2_week = "timestep"
     )
   )
+  if (!is.null(covariate_registry)) {
+    for (name in names(covariate_registry$covariates)) {
+      entry <- covariate_registry$covariates[[name]]
+      term <- as.character(entry$model_term)
+      column <- as.character(entry$transformation$output_column)
+      if (identical(as.character(entry$tier), "tier2")) {
+        if (term %in% names(mapping$tier2)) stop("Registered covariate duplicates an existing Tier 2 effect: ", term)
+        mapping$tier2 <- c(mapping$tier2, stats::setNames(column, term))
+      }
+    }
+  }
+  mapping
 }
 
 validate_joint_effect_columns <- function(data, mapping, active, label) {
@@ -63,12 +75,14 @@ make_joint_fixed_effects <- function(data, mapping, names_to_include, integer_na
 
 make_tier1_effects <- function(data, fields, mapping) {
   latent <- c(fields$tier1, list(intercept1 = 1))
-  fixed <- make_joint_fixed_effects(data, mapping$tier1, c("north", "road_dens", "night_illum", "admin_f", "week_steps"))
+  fixed_names <- setdiff(names(mapping$tier1), c("admin_f", "week_steps"))
+  fixed <- make_joint_fixed_effects(data, mapping$tier1, fixed_names)
   list(latent = latent, fixed = fixed)
 }
 
 make_tier2_effects <- function(data, fields, mapping) {
   latent <- c(fields$tier2, fields$copy, list(intercept2 = 1))
-  fixed <- make_joint_fixed_effects(data, mapping$tier2, c("mintemp", "soilmoist", "leafarea", "rhum", "cattle", "horses", "pigs", "goats", "sheep", "cattle_q", "cattle_mid_log1p", "tier2_week"))
+  fixed_names <- setdiff(names(mapping$tier2), c("cattle_q", "cattle_mid_log1p", "tier2_week"))
+  fixed <- make_joint_fixed_effects(data, mapping$tier2, fixed_names)
   list(latent = latent, fixed = fixed)
 }

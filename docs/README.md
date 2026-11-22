@@ -29,6 +29,8 @@ This directory separates operator guidance from technical contracts.
   — reporting products, metadata, and RPI outputs.
 - [Model specification](model-specification.md) — accepted likelihoods,
   effects, exposure, and preserved model contracts.
+- [Configuration C](configuration-c.md) — versioned revised inputs,
+  covariate registry, fixed-effect additions, and unqualified status.
 
 ## Provenance, maintenance, and release
 

@@ -47,9 +47,10 @@ The runner does not install packages or invoke production workflows.
 
 ## Test inventory
 
-The runner currently discovers these 32 test scripts:
+The runner currently discovers these 33 test scripts:
 
 - `test_analysis_domain_conservation.R`, `test_cds_upstream_provenance.R`,
+  `test_configuration_c_registry.R`,
   `test_compare_spatial_support_help.R`, `test_covariate_diagnostics.R`,
   `test_input_manifest.R`, `test_joint_inla_assembly.R`,
   `test_joint_inla_cli_root.R`, `test_joint_inla_extract.R`,

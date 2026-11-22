@@ -18,6 +18,7 @@ joint_model_defaults <- function() {
   list(
     project = list(output_directory = "outputs/joint_model"),
     inputs = list(model_inputs = "outputs/preprocessing/model_inputs.rds"),
+    covariate_manifest = NULL,
     reporting_censoring = list(enabled = TRUE, cutoff_epiyear = 2025L, cutoff_epiweek = 32L, rule = "stopped_reporting_after_cutoff"),
     holdout = list(seed = 123L, tier1 = list(enabled = TRUE, positive_fraction = 0.10), tier2 = list(enabled = TRUE, positive_fraction = 0.20)),
     tier2 = list(zero_count_policy = "exclude"),
@@ -45,6 +46,8 @@ read_joint_model_config <- function(path, repo_root = getwd()) {
   cfg <- merge_joint_model_config(joint_model_defaults(), yaml::read_yaml(path))
   cfg$project$output_directory <- resolve_joint_model_path(cfg$project$output_directory, repo_root)
   cfg$inputs$model_inputs <- resolve_joint_model_path(cfg$inputs$model_inputs, repo_root)
+  cfg$covariate_manifest_path <- if (is.null(cfg$covariate_manifest)) NULL else resolve_joint_model_path(cfg$covariate_manifest, repo_root)
+  cfg$covariate_registry <- read_covariate_registry(cfg$covariate_manifest_path, repo_root)
   cfg$config_path <- normalizePath(path, mustWork = FALSE)
   cfg$repo_root <- normalizePath(repo_root, mustWork = TRUE)
   cfg
@@ -77,6 +80,11 @@ validate_joint_model_config <- function(cfg, require_inputs = TRUE) {
   scalar_logical(cfg$livestock_rw2$enabled, "livestock_rw2.enabled")
   scalar_integer(cfg$livestock_rw2$bins, "livestock_rw2.bins", 1L)
   if (!length(cfg$livestock_rw2$variables) || any(!nzchar(as.character(cfg$livestock_rw2$variables)))) stop("livestock_rw2.variables must contain at least one variable name.")
+  if (!is.null(cfg$covariate_registry)) {
+    validate_covariate_registry(cfg$covariate_registry)
+    expected <- covariate_registry_signature(cfg$covariate_registry)
+    if (is.null(expected$manifest_sha256) || !grepl("^[[:xdigit:]]{64}$", expected$manifest_sha256)) stop("Joint-model covariate manifest has no verified SHA-256.")
+  }
   if (isTRUE(require_inputs) && !file.exists(cfg$inputs$model_inputs)) stop("Stage 1 model_inputs.rds does not exist: ", cfg$inputs$model_inputs)
   invisible(TRUE)
 }

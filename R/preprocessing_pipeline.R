@@ -10,7 +10,22 @@ run_preprocessing <- function(config_path, repo_root = normalizePath(file.path(d
   }
   admin_geometry <- sf::st_transform(sf::st_make_valid(admin_geometry), cfg$study$projected_crs)
   analysis_domain <- build_analysis_domain(boundary, cfg)
+  observation_sha256_before <- if (!is.null(cfg$covariate_registry)) covariate_registry_sha256(cfg$inputs$observations) else NA_character_
+  observation_expected_sha256 <- if (!is.null(cfg$covariate_registry)) tolower(as.character(cfg$covariate_registry$observations$sha256)) else NA_character_
+  if (!is.na(observation_expected_sha256) && !identical(observation_sha256_before, observation_expected_sha256)) {
+    stop("Observation source SHA-256 differs from the Configuration C manifest.")
+  }
   observations <- read_observations(cfg$inputs$observations)
+  observation_sha256_after <- if (!is.null(cfg$covariate_registry)) covariate_registry_sha256(cfg$inputs$observations) else NA_character_
+  if (!is.na(observation_sha256_before) && !identical(observation_sha256_before, observation_sha256_after)) {
+    stop("Observation source changed while Stage 1 was reading it.")
+  }
+  cfg$source_integrity <- list(
+    observation_expected_sha256 = observation_expected_sha256,
+    observation_sha256_before_read = observation_sha256_before,
+    observation_sha256_after_read = observation_sha256_after,
+    observation_checksum_verified = !is.na(observation_expected_sha256) && identical(observation_sha256_before, observation_expected_sha256)
+  )
   cfg <- preprocessing_prepare_input_temporal_domain(observations, cfg)
   if (identical(cfg$inputs$observation_mode, "standardized")) {
     cleaned <- preprocess_standardized_observations(observations, boundary, cfg)
@@ -49,8 +64,10 @@ run_preprocessing <- function(config_path, repo_root = normalizePath(file.path(d
   conservation$excluded_analysis_domain <- analysis_filter$excluded_count
   prediction <- build_prediction_grid(support, time_index, cfg$inputs$template_raster, cfg$study$projected_crs)
   dynamic_specs <- cfg$dynamic_covariates
-  dynamic_names <- c(minimum_temperature = "mintemp", soil_moisture = "soilmoist", leaf_area_low = "leafarea", relative_humidity = "rhum")
-  names(dynamic_specs) <- unname(dynamic_names[names(dynamic_specs)])
+  dynamic_names <- c(minimum_temperature = "mintemp", soil_moisture = "soilmoist", leaf_area_low = "leafarea", relative_humidity = "rhum", spressure = "spressure")
+  mapped_names <- unname(dynamic_names[names(dynamic_specs)])
+  mapped_names[is.na(mapped_names)] <- names(dynamic_specs)[is.na(mapped_names)]
+  names(dynamic_specs) <- mapped_names
   static_specs <- cfg$static_covariates
   radius_km <- cfg$extraction$search_radius_km
   dynamic_radius_km <- cfg$extraction$dynamic_search_radius_km
@@ -66,7 +83,19 @@ run_preprocessing <- function(config_path, repo_root = normalizePath(file.path(d
   prediction <- join_covariates(pred_dynamic$data, pred_static$data)
   tier1 <- join_covariates(thinning$retained, t1_static$data)
   covariate_audit <- dplyr::bind_rows(t2_dynamic$audit, pred_dynamic$audit, t2_static$audit, pred_static$audit, t1_static$audit)
-  tier2 <- apply_missing_policy(tier2, covariate_audit[covariate_audit$scope == "tier2_dynamic" & covariate_audit$variable %in% c("mintemp", "soilmoist", "leafarea", "rhum"), ], cfg)
+  covariate_audit <- annotate_covariate_audit(covariate_audit, cfg$covariate_registry)
+  tier2 <- apply_missing_policy(tier2, covariate_audit[covariate_audit$scope == "tier2_dynamic" & covariate_audit$variable %in% names(dynamic_specs), ], cfg, required_dynamic = names(dynamic_specs))
+  registered_missingness <- covariate_registry_missingness(
+    list(tier2 = tier2, prediction_grid = prediction),
+    scopes = c("tier2", "prediction_grid"), registry = cfg$covariate_registry
+  )
+  if (nrow(registered_missingness) && any(registered_missingness$status == "FAIL")) {
+    missing_audit_path <- file.path(cfg$project$output_directory, "configuration_c_missingness_audit.csv")
+    utils::write.csv(registered_missingness, missing_audit_path, row.names = FALSE)
+    failed <- registered_missingness[registered_missingness$status == "FAIL", , drop = FALSE]
+    stop("Configuration C required covariates contain missing or non-finite values; audit written to ", missing_audit_path,
+         ". Failed scope/variable pairs: ", paste(paste(failed$scope, failed$covariate, sep = "/"), collapse = ", "))
+  }
   transformations <- estimate_transformations(tier2, cfg)
   tier1 <- add_legacy_model_fields(apply_transformations(tier1, transformations, include_hinge = FALSE))
   tier2 <- add_legacy_model_fields(apply_transformations(tier2, transformations, include_hinge = TRUE))
@@ -77,7 +106,7 @@ run_preprocessing <- function(config_path, repo_root = normalizePath(file.path(d
   tier1 <- admin_t1$data
   tier2 <- admin_t2$data
   prediction <- admin_prediction$data
-  model_inputs <- assemble_model_inputs(tier1, tier2, prediction, support, time_index, transformations, list(observation = cleaned$audit, covariate = covariate_audit, thinning = thinning$audit, temporal = temporal$provenance, admin = dplyr::bind_rows(admin_t1$audit, admin_t2$audit, admin_prediction$audit), conservation = conservation), cfg, cleaned$excluded, thinning$excluded)
+  model_inputs <- assemble_model_inputs(tier1, tier2, prediction, support, time_index, transformations, list(observation = cleaned$audit, covariate = covariate_audit, registered_missingness = registered_missingness, thinning = thinning$audit, temporal = temporal$provenance, admin = dplyr::bind_rows(admin_t1$audit, admin_t2$audit, admin_prediction$audit), conservation = conservation), cfg, cleaned$excluded, thinning$excluded)
   if (isTRUE(write_outputs)) {
     saveRDS(model_inputs, file.path(cfg$project$output_directory, cfg$outputs$model_inputs))
     write.csv(cleaned$audit, file.path(cfg$project$output_directory, cfg$outputs$observation_audit), row.names = FALSE)

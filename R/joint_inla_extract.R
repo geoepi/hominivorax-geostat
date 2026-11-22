@@ -161,6 +161,15 @@ joint_inla_extract_fixed_effects <- function(fit_artifact) {
   out
 }
 
+joint_inla_extract_expected_fixed_effect_count <- function(build) {
+  names <- build$model_signature$fixed_effect_names
+  if (!is.null(names) && length(names)) return(as.integer(length(names)))
+  if (!inherits(build$formula, "formula")) return(NA_integer_)
+  labels <- attr(stats::terms(build$formula), "term.labels")
+  fixed_labels <- labels[!grepl("^f\\(", labels)]
+  as.integer(length(fixed_labels))
+}
+
 joint_inla_extract_hyperparameters <- function(fit_artifact) {
   out <- joint_inla_extract_summary_table(joint_inla_extract_fit(fit_artifact)$summary.hyperpar, "parameter")
   out$effect_type <- "hyperparameter"
@@ -458,7 +467,11 @@ joint_inla_extract_audit <- function(build, fit_artifact, stage2 = NULL, toleran
   tier2_mean <- fitted$fitted_mean[fitted$link == 2L]
   add("fit", "tier1_fitted_probability_range", if (all(tier1_mean >= 0 & tier1_mean <= 1)) "PASS" else "FAIL", paste(range(tier1_mean), collapse = "/"), "within 0/1", "Tier 1 fitted means are on the response probability scale.")
   add("fit", "tier2_fitted_positive", if (all(tier2_mean > 0)) "PASS" else "FAIL", paste(range(tier2_mean), collapse = "/"), "> 0", "Tier 2 fitted means are positive on the count response scale.")
-  add("fit", "fixed_effect_count", if (nrow(fit$summary.fixed) == 16L) "PASS" else "FAIL", nrow(fit$summary.fixed), 16, "Fixed-effect summary count.")
+  expected_fixed_count <- joint_inla_extract_expected_fixed_effect_count(build)
+  fixed_count_ok <- !is.na(expected_fixed_count) && nrow(fit$summary.fixed) == expected_fixed_count
+  add("fit", "fixed_effect_count", if (fixed_count_ok) "PASS" else "FAIL", nrow(fit$summary.fixed),
+      if (is.na(expected_fixed_count)) "available model signature or formula" else expected_fixed_count,
+      "Fixed-effect summary count reconciles with the model formula/signature.")
   add("fit", "hyperparameter_count", if (nrow(fit$summary.hyperpar) == 10L) "PASS" else "FAIL", nrow(fit$summary.hyperpar), 10, "Hyperparameter summary count.")
   add("fit", "random_component_count", if (length(fit$summary.random) == 7L) "PASS" else "FAIL", length(fit$summary.random), 7, "Random-effect component count.")
   if (!is.null(stage2)) {

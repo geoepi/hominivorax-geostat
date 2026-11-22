@@ -168,8 +168,8 @@ annotate_admin_units <- function(data, admin_geometry, configured_column = NULL,
   list(data = out, audit = audit, admin_column = column %||% "Unk", geometry_features = nrow(geometry))
 }
 
-apply_missing_policy <- function(data, audit, cfg) {
-  dynamic <- c("mintemp", "soilmoist", "leafarea", "rhum")
+apply_missing_policy <- function(data, audit, cfg, required_dynamic = c("mintemp", "soilmoist", "leafarea", "rhum")) {
+  dynamic <- as.character(required_dynamic)
   if (cfg$transformations$dynamic_missing_policy == "complete_case") {
     keep <- stats::complete.cases(data[dynamic])
     data <- data[keep, , drop = FALSE]
@@ -191,7 +191,9 @@ assemble_model_inputs <- function(tier1, tier2, prediction_grid, support, time_i
       detection_conservation = audits$conservation,
       temporal_domain = audits$temporal,
       thinning = audits$thinning,
-      admin_column = cfg$inputs$admin_column %||% "inferred"
+      admin_column = cfg$inputs$admin_column %||% "inferred",
+      covariate_registry = covariate_registry_signature(cfg$covariate_registry),
+      registered_covariate_missingness = audits$registered_missingness
     ),
     excluded_detections = excluded_detections,
     excluded_tier1_positives = thinning_exclusions,
@@ -200,6 +202,15 @@ assemble_model_inputs <- function(tier1, tier2, prediction_grid, support, time_i
     thinning_audit = audits$thinning,
     temporal_provenance = audits$temporal,
     configuration = cfg,
-    provenance = list(timestamp = as.character(Sys.time()), git_commit = NA_character_, R = R.version.string, seed = cfg$project$seed)
+    covariate_registry = cfg$covariate_registry,
+    provenance = list(
+      timestamp = as.character(Sys.time()), git_commit = NA_character_, R = R.version.string, seed = cfg$project$seed,
+      observation_path = cfg$inputs$observations,
+      observation_expected_sha256 = cfg$source_integrity$observation_expected_sha256 %||% NA_character_,
+      observation_sha256_before_read = cfg$source_integrity$observation_sha256_before_read %||% NA_character_,
+      observation_sha256_after_read = cfg$source_integrity$observation_sha256_after_read %||% NA_character_,
+      observation_checksum_verified = cfg$source_integrity$observation_checksum_verified %||% FALSE,
+      covariate_manifest = covariate_registry_signature(cfg$covariate_registry)
+    )
   )
 }

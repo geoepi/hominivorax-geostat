@@ -1,0 +1,71 @@
+project:
+  seed: 1976
+  output_directory: outputs/configuration_c/preprocessing
+
+study:
+  start_date: '2022-01-03'
+  end_date: '2026-11-01'
+  projected_crs: 'EPSG:5070'
+
+temporal:
+  start_week: '2022-W01'
+  end_week: '2026-W44'
+
+covariate_manifest: docs/input-audits/2026-11-13/configuration-c-input-manifest.yml
+
+inputs:
+  observation_mode: raw
+  observation_crs: null
+  observations: /project/disease_ecology/NWScrewworm/data/processed_data/case_detections/combined_clean_obs_2026-11-13.csv
+  study_boundary: data/private/study_boundary.gpkg
+  admin_boundary: null
+  admin_column: null
+  template_raster: /project/disease_ecology/NWScrewworm/data/processed_data/spatial_domain/study_area_raster.tif
+
+dynamic_covariates:
+  minimum_temperature: data/private/mintemp_weekly
+  soil_moisture: data/private/soilmoist_weekly
+  leaf_area_low: data/private/leafarea_weekly
+  relative_humidity: data/private/humidity_weekly
+
+static_covariates:
+  cattle: data/private/cattle.tif
+  horses: data/private/horses.tif
+  pigs: data/private/pigs.tif
+  sheep: data/private/sheep.tif
+  goats: data/private/goats.tif
+  road_density: data/private/road_density.tif
+  night_illumination: data/private/night_illumination.tif
+
+mesh:
+  boundary_buffer_km: 20
+  use_observation_locations: false
+  cutoff_km: 25
+  max_edge_km: [50, 200]
+  offset_km: [100, 250]
+  minimum_angle_degrees: 30
+  island_area_threshold_km2: 500
+
+extraction:
+  search_radius_km: 75
+  dynamic_search_radius_km: 75
+
+transformations:
+  temperature_hinge: 12
+  dynamic_missing_policy: fail
+  livestock_missing_policy: impute_zero
+
+tier1:
+  positive_cellweek_thinning:
+    enabled: true
+    seed: 1976
+
+outputs:
+  model_inputs: model_inputs.rds
+  observation_audit: observation_audit.csv
+  covariate_audit: covariate_audit.csv
+  excluded_observations: excluded_observations.csv
+  excluded_tier1_positives: excluded_tier1_positives.csv
+
+# Tracked Configuration C specification. Replace private boundary and baseline
+# covariate placeholders only in an untracked site-specific copy.

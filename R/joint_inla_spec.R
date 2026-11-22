@@ -14,20 +14,29 @@ make_joint_formula <- function(spde_tier1, spde_tier2, priors, cfg) {
   pc_rw_strong <- priors$pc_rw_strong
   pc_rw_cat <- priors$pc_rw_cat
   hyper_copy <- priors$hyper_copy
-  formula <- Y ~ -1 + intercept1 + intercept2 +
-    f(tier1_field, model = spde_tier1, group = tier1_field.group,
-      control.group = list(model = "iid", hyper = pc_rw)) +
-    f(week_steps, model = "rw1", constr = TRUE, scale.model = TRUE, hyper = pc_rw) +
-    f(admin_f, model = "iid", constr = TRUE, hyper = pc_rw_strong) +
-    f(tier2_field, model = spde_tier2, group = tier2_field.group,
-      control.group = list(model = "iid", hyper = pc_rw)) +
-    f(tier2_copy_field, copy = "tier1_field", group = tier2_copy_field.group,
-      fixed = FALSE, hyper = hyper_copy) +
-    f(tier2_week, model = "rw1", constr = TRUE, scale.model = TRUE, hyper = pc_rw) +
-    f(cattle_q, cattle_mid_log1p, model = "rw2", constr = TRUE, scale.model = TRUE, hyper = pc_rw_cat) +
-    north + road_dens + night_illum + mintemp + soilmoist + leafarea + rhum +
-    mintemp:soilmoist + mintemp:leafarea + cattle + horses + pigs + goats + sheep
-  attr(formula, "joint_inla_semantics") <- list(copy = "tier2_copy_field copies tier1_field with an estimated coefficient", group_model = "iid")
+  fixed_terms <- if (is.null(cfg$covariate_registry)) {
+    c("north", "road_dens", "night_illum", "mintemp", "soilmoist", "leafarea", "rhum",
+      "mintemp:soilmoist", "mintemp:leafarea", "cattle", "horses", "pigs", "goats", "sheep")
+  } else {
+    as.character(unlist(cfg$covariate_registry$configuration$fixed_effects$formula_order, use.names = FALSE))
+  }
+  if (anyDuplicated(fixed_terms) || !length(fixed_terms)) stop("The configured fixed-effect formula registry is empty or contains duplicate terms.")
+  random_terms <- c(
+    "f(tier1_field, model = spde_tier1, group = tier1_field.group, control.group = list(model = 'iid', hyper = pc_rw))",
+    "f(week_steps, model = 'rw1', constr = TRUE, scale.model = TRUE, hyper = pc_rw)",
+    "f(admin_f, model = 'iid', constr = TRUE, hyper = pc_rw_strong)",
+    "f(tier2_field, model = spde_tier2, group = tier2_field.group, control.group = list(model = 'iid', hyper = pc_rw))",
+    "f(tier2_copy_field, copy = 'tier1_field', group = tier2_copy_field.group, fixed = FALSE, hyper = hyper_copy)",
+    "f(tier2_week, model = 'rw1', constr = TRUE, scale.model = TRUE, hyper = pc_rw)",
+    "f(cattle_q, cattle_mid_log1p, model = 'rw2', constr = TRUE, scale.model = TRUE, hyper = pc_rw_cat)"
+  )
+  formula_text <- paste("Y ~ -1 + intercept1 + intercept2 +", paste(c(random_terms, fixed_terms), collapse = " + "))
+  formula <- stats::as.formula(formula_text, env = environment())
+  attr(formula, "joint_inla_semantics") <- list(
+    copy = "tier2_copy_field copies tier1_field with an estimated coefficient",
+    group_model = "iid",
+    fixed_effect_registry = covariate_registry_signature(cfg$covariate_registry)
+  )
   formula
 }
 
