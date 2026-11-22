@@ -90,8 +90,11 @@ c1_fit$summary.fixed <- data.frame(mean = seq_along(c1_fixed_effect_names),
 fixed_effect_contract <- joint_inla_extract_validate_fixed_effect_names(c1_build, c1_fit)
 stopifnot(isTRUE(fixed_effect_contract$pass), length(fixed_effect_contract$expected) == 19L,
           all(c("clay", "wv0010", "spressure") %in% fixed_effect_contract$observed))
-c1_fit$summary.fixed <- c1_fit$summary.fixed[-19L, , drop = FALSE]
-stopifnot(!isTRUE(joint_inla_extract_validate_fixed_effect_names(c1_build, c1_fit)$pass))
+c1_bad_fit <- c1_fit
+rownames(c1_bad_fit$summary.fixed)[[19L]] <- "unexpected_term"
+c1_bad_names <- joint_inla_extract_validate_fixed_effect_names(c1_build, c1_bad_fit)
+stopifnot(!isTRUE(c1_bad_names$pass), identical(c1_bad_names$missing, "spressure"),
+          identical(c1_bad_names$unexpected, "unexpected_term"))
 
 c1_admin_mapping <- data.frame(admin_u = paste0("unit-", seq_len(342L)), admin_f = seq_len(342L))
 c1_admin_effects <- data.frame(
