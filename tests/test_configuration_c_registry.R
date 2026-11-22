@@ -21,6 +21,7 @@ testthat::test_that("Configuration C source manifest and stage configs agree", {
   joint_inla_cfg <- read_joint_inla_config(joint_inla_path, repo_root)
 
   testthat::expect_true(validate_preprocessing_config(preprocessing_cfg, require_inputs = FALSE) == TRUE)
+  testthat::expect_identical(preprocessing_cfg$config_path, normalizePath(preprocessing_path, mustWork = FALSE))
   testthat::expect_true(validate_joint_model_config(joint_model_cfg, require_inputs = FALSE) == TRUE)
   testthat::expect_true(validate_joint_inla_config(joint_inla_cfg, require_inputs = FALSE) == TRUE)
   testthat::expect_equal(preprocessing_cfg$covariate_registry$manifest_sha256,

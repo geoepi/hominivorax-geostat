@@ -38,22 +38,28 @@ read_preprocessing_config <- function(path, repo_root = getwd()) {
   if (!is.null(cfg$covariate_registry)) {
     registered_observation <- as.character(cfg$covariate_registry$observations$path)
     if (!identical(normalizePath(cfg$inputs$observations, mustWork = FALSE), normalizePath(registered_observation, mustWork = FALSE))) {
-      stop("Configuration C observations path differs from the source manifest.")
+      covariate_registry_observation_gate_error(
+        "RUNTIME_CONFIGURATION_DEFECT", cfg$inputs$observations,
+        cfg$covariate_registry$observations$sha256, "NOT_COMPUTED",
+        cfg$covariate_registry$manifest_path,
+        covariate_registry_manifest_identity(cfg$covariate_registry),
+        paste0("The resolved observation path differs from the manifest path (manifest source path=", registered_observation, ").")
+      )
     }
     for (name in names(cfg$covariate_registry$covariates)) {
       entry <- cfg$covariate_registry$covariates[[name]]
       section <- as.character(entry$input_section)
-      path <- as.character(entry$source$path)
+      source_path <- as.character(entry$source$path)
       if (identical(section, "static_covariates")) {
-        if (name %in% names(cfg$static_covariates) && !identical(as.character(cfg$static_covariates[[name]]), path)) {
+        if (name %in% names(cfg$static_covariates) && !identical(as.character(cfg$static_covariates[[name]]), source_path)) {
           stop("Static covariate path conflicts with the source manifest: ", name)
         }
-        cfg$static_covariates[[name]] <- path
+        cfg$static_covariates[[name]] <- source_path
       } else if (identical(section, "dynamic_covariates")) {
-        if (name %in% names(cfg$dynamic_covariates) && !identical(as.character(cfg$dynamic_covariates[[name]]), path)) {
+        if (name %in% names(cfg$dynamic_covariates) && !identical(as.character(cfg$dynamic_covariates[[name]]), source_path)) {
           stop("Dynamic covariate path conflicts with the source manifest: ", name)
         }
-        cfg$dynamic_covariates[[name]] <- path
+        cfg$dynamic_covariates[[name]] <- source_path
       } else {
         stop("Unknown input_section for covariate ", name, ": ", section)
       }

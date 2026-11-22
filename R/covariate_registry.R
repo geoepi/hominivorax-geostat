@@ -13,7 +13,99 @@ covariate_registry_sha256 <- function(path) {
   tolower(hash)
 }
 
-validate_covariate_registry <- function(registry) {
+covariate_registry_manifest_identity <- function(registry) {
+  value <- function(x) {
+    if (is.null(x) || !length(x) || is.na(x[[1L]]) || !nzchar(as.character(x[[1L]]))) return("unknown")
+    as.character(x[[1L]])
+  }
+  paste0(
+    "id=", value(registry$configuration$id),
+    "; version=", value(registry$configuration$version),
+    "; schema=", value(registry$manifest_schema),
+    "; manifest_version=", value(registry$manifest_version)
+  )
+}
+
+covariate_registry_observation_gate_error <- function(classification, resolved_source_path,
+                                                      expected_sha256, observed_sha256,
+                                                      manifest_path, manifest_identity,
+                                                      detail) {
+  display <- function(x) {
+    if (is.null(x) || !length(x)) return("<unavailable>")
+    x <- as.character(x)
+    x[is.na(x)] <- "<NA>"
+    paste(x, collapse = ",")
+  }
+  stop(paste0(
+    "Observation checksum gate failed [", display(classification), "]: ",
+    "resolved source path=", display(resolved_source_path), "; ",
+    "expected SHA-256=", display(expected_sha256), "; ",
+    "observed SHA-256=", display(observed_sha256), "; ",
+    "manifest path=", display(manifest_path), "; ",
+    "manifest identity=", display(manifest_identity), "; ",
+    display(detail)
+  ), call. = FALSE)
+}
+
+verify_observation_source_identity <- function(path, expected_sha256,
+                                               manifest_observation_path,
+                                               manifest_path,
+                                               manifest_identity) {
+  resolved_path <- if (length(path) == 1L && !is.na(path) && nzchar(as.character(path))) {
+    normalizePath(as.character(path), winslash = "/", mustWork = FALSE)
+  } else {
+    "<missing>"
+  }
+  registered_path <- if (length(manifest_observation_path) == 1L && !is.na(manifest_observation_path) && nzchar(as.character(manifest_observation_path))) {
+    normalizePath(as.character(manifest_observation_path), winslash = "/", mustWork = FALSE)
+  } else {
+    "<missing>"
+  }
+  expected_values <- as.character(expected_sha256)
+  expected_display <- if (length(expected_values) == 1L) expected_values else paste(expected_values, collapse = ",")
+  checksum_is_valid <- length(expected_values) == 1L && !is.na(expected_values) &&
+    grepl("^[[:xdigit:]]{64}$", expected_values)
+  if (!checksum_is_valid) {
+    covariate_registry_observation_gate_error(
+      "MALFORMED_MANIFEST_SHA256", resolved_path, expected_display,
+      "NOT_COMPUTED", manifest_path, manifest_identity,
+      "The manifest observation checksum must be one 64-character hexadecimal SHA-256 value."
+    )
+  }
+  if (!identical(resolved_path, registered_path)) {
+    covariate_registry_observation_gate_error(
+      "RUNTIME_CONFIGURATION_DEFECT", resolved_path, tolower(expected_values),
+      "NOT_COMPUTED", manifest_path, manifest_identity,
+      paste0("The resolved observation path differs from the manifest path (manifest source path=", registered_path, ").")
+    )
+  }
+  if (!file.exists(resolved_path) || dir.exists(resolved_path)) {
+    covariate_registry_observation_gate_error(
+      "MISSING_OBSERVATION_SOURCE", resolved_path, tolower(expected_values),
+      "NOT_COMPUTED", manifest_path, manifest_identity,
+      "The resolved observation source is not an existing file."
+    )
+  }
+  observed_sha256 <- covariate_registry_sha256(resolved_path)
+  expected_sha256 <- tolower(expected_values)
+  if (!identical(observed_sha256, expected_sha256)) {
+    covariate_registry_observation_gate_error(
+      "OBSERVATION_SOURCE_IDENTITY_MISMATCH", resolved_path, expected_sha256,
+      observed_sha256, manifest_path, manifest_identity,
+      "The source bytes do not match the approved manifest identity; processing stopped."
+    )
+  }
+  list(
+    classification = "OBSERVATION_SOURCE_IDENTITY_VERIFIED",
+    resolved_source_path = resolved_path,
+    expected_sha256 = expected_sha256,
+    observed_sha256 = observed_sha256,
+    manifest_path = normalizePath(manifest_path, winslash = "/", mustWork = FALSE),
+    manifest_identity = manifest_identity
+  )
+}
+
+validate_covariate_registry <- function(registry, manifest_path = "<unresolved>") {
   if (!is.list(registry) || !identical(registry$manifest_schema, "hominivorax-geostat-configuration-c-input-manifest/v1")) {
     stop("Unsupported Configuration C covariate manifest schema.")
   }
@@ -31,11 +123,28 @@ validate_covariate_registry <- function(registry) {
     stop("Configuration C structural contract differs from the approved model architecture.")
   }
   observation <- registry$observations
-  if (is.null(observation$path) || is.null(observation$sha256) || !grepl("^[[:xdigit:]]{64}$", observation$sha256)) {
-    stop("Configuration C manifest must record an observation path and SHA-256.")
+  manifest_identity <- covariate_registry_manifest_identity(registry)
+  if (is.null(observation$path) || length(observation$path) != 1L || is.na(observation$path) || !nzchar(as.character(observation$path))) {
+    covariate_registry_observation_gate_error(
+      "MALFORMED_MANIFEST_OBSERVATION_PATH", "<missing>", observation$sha256,
+      "NOT_COMPUTED", manifest_path, manifest_identity,
+      "Configuration C manifest must record one observation source path."
+    )
   }
-  if (!identical(tolower(observation$sha256), "784168081cc1d3206f3537e8731994cbfc34be15be7c515fe06710d4ea9bdaac")) {
-    stop("Configuration C observation checksum differs from the approved release.")
+  if (is.null(observation$sha256) || length(observation$sha256) != 1L || is.na(observation$sha256) ||
+      !grepl("^[[:xdigit:]]{64}$", as.character(observation$sha256))) {
+    covariate_registry_observation_gate_error(
+      "MALFORMED_MANIFEST_SHA256", observation$path, observation$sha256,
+      "NOT_COMPUTED", manifest_path, manifest_identity,
+      "Configuration C manifest must record one 64-character hexadecimal observation SHA-256."
+    )
+  }
+  if (!identical(tolower(as.character(observation$sha256)), "784168081cc1d3206f3537e8731994cbfc34be15be7c515fe06710d4ea9bdaac")) {
+    covariate_registry_observation_gate_error(
+      "MANIFEST_SHA256_NOT_APPROVED", observation$path, observation$sha256,
+      "NOT_COMPUTED", manifest_path, manifest_identity,
+      "Configuration C observation checksum differs from the approved release specification."
+    )
   }
   effects <- registry$configuration$fixed_effects
   required_effect_sections <- c("tier1_terms", "tier2_terms", "interaction_terms", "formula_order", "reporting_order", "new_additive_linear_terms")
@@ -100,7 +209,7 @@ read_covariate_registry <- function(path, repo_root = getwd()) {
   }
   if (!file.exists(resolved)) stop("Covariate manifest does not exist: ", resolved)
   registry <- yaml::read_yaml(resolved)
-  validate_covariate_registry(registry)
+  validate_covariate_registry(registry, manifest_path = resolved)
   registry$manifest_path <- normalizePath(resolved, mustWork = TRUE)
   registry$manifest_sha256 <- covariate_registry_sha256(resolved)
   registry

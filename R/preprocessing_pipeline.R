@@ -10,17 +10,36 @@ run_preprocessing <- function(config_path, repo_root = normalizePath(file.path(d
   }
   admin_geometry <- sf::st_transform(sf::st_make_valid(admin_geometry), cfg$study$projected_crs)
   analysis_domain <- build_analysis_domain(boundary, cfg)
-  observation_sha256_before <- if (!is.null(cfg$covariate_registry)) covariate_registry_sha256(cfg$inputs$observations) else NA_character_
-  observation_expected_sha256 <- if (!is.null(cfg$covariate_registry)) tolower(as.character(cfg$covariate_registry$observations$sha256)) else NA_character_
-  if (!is.na(observation_expected_sha256) && !identical(observation_sha256_before, observation_expected_sha256)) {
-    stop("Observation source SHA-256 differs from the Configuration C manifest.")
+  observation_identity <- if (!is.null(cfg$covariate_registry)) {
+    verify_observation_source_identity(
+      path = cfg$inputs$observations,
+      expected_sha256 = cfg$covariate_registry$observations$sha256,
+      manifest_observation_path = cfg$covariate_registry$observations$path,
+      manifest_path = cfg$covariate_registry$manifest_path,
+      manifest_identity = covariate_registry_manifest_identity(cfg$covariate_registry)
+    )
+  } else {
+    NULL
   }
+  observation_sha256_before <- if (is.null(observation_identity)) NA_character_ else observation_identity$observed_sha256
+  observation_expected_sha256 <- if (is.null(observation_identity)) NA_character_ else observation_identity$expected_sha256
   observations <- read_observations(cfg$inputs$observations)
   observation_sha256_after <- if (!is.null(cfg$covariate_registry)) covariate_registry_sha256(cfg$inputs$observations) else NA_character_
   if (!is.na(observation_sha256_before) && !identical(observation_sha256_before, observation_sha256_after)) {
-    stop("Observation source changed while Stage 1 was reading it.")
+    covariate_registry_observation_gate_error(
+      "OBSERVATION_SOURCE_CHANGED_DURING_READ", cfg$inputs$observations,
+      observation_expected_sha256,
+      paste0(observation_sha256_before, " -> ", observation_sha256_after),
+      cfg$covariate_registry$manifest_path,
+      covariate_registry_manifest_identity(cfg$covariate_registry),
+      "The source checksum changed across the observation read; processing stopped."
+    )
   }
   cfg$source_integrity <- list(
+    classification = if (is.null(observation_identity)) NA_character_ else observation_identity$classification,
+    resolved_source_path = if (is.null(observation_identity)) NA_character_ else observation_identity$resolved_source_path,
+    manifest_path = if (is.null(observation_identity)) NA_character_ else observation_identity$manifest_path,
+    manifest_identity = if (is.null(observation_identity)) NA_character_ else observation_identity$manifest_identity,
     observation_expected_sha256 = observation_expected_sha256,
     observation_sha256_before_read = observation_sha256_before,
     observation_sha256_after_read = observation_sha256_after,
