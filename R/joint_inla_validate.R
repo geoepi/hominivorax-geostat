@@ -663,7 +663,7 @@ joint_inla_validate_tier1_presence_background <- function(reference_background) 
     joint_inla_validate_metric_row("tier1", "reference_background_rows", nrow(background), "PASS", nrow(background), "Terrestrial quadrature rows; not treated as biological absence."),
     joint_inla_validate_metric_row("tier1", "reference_background_spatial_nodes", reference_background$unique_spatial_nodes, "PASS", reference_background$unique_spatial_nodes, "Unique x/y integration nodes."),
     joint_inla_validate_metric_row("tier1", "reference_background_weeks", reference_background$represented_weeks, "PASS", reference_background$represented_weeks, "Unique year/week/time support."),
-    joint_inla_validate_metric_row("tier1", "reference_background_total_weight", reference_background$total_weight, "PASS", reference_background$total_weight, "Sum of valid positive sc_Exp weights."),
+    joint_inla_validate_metric_row("tier1", "reference_background_total_weight", reference_background$total_weight, "PASS", nrow(background), "Sum of valid positive sc_Exp weights; n is the number of integration rows."),
     joint_inla_validate_metric_row("tier1", "PB_AUC", weighted_auc, "PASS", nrow(occurrence), "Area-weighted presence-background AUC; ties receive half credit."),
     joint_inla_validate_metric_row("tier1", "PB_AUC", unweighted_auc, "PASS", nrow(occurrence), "Unweighted presence-background AUC; ties receive half credit."),
     joint_inla_validate_metric_row("tier1", "continuous_boyce_index", weighted_boyce$cbi, weighted_boyce$status, nrow(occurrence), weighted_boyce$details),
