@@ -63,13 +63,19 @@ row_counts_match <- function(left, right) {
   if (length(left) != 1L || length(right) != 1L || is.na(left) || is.na(right)) return(FALSE)
   isTRUE(unname(left) == unname(right))
 }
+projection_dimensions <- function(projection) {
+  if (isS4(projection) && "Dim" %in% methods::slotNames(projection)) {
+    return(methods::slot(projection, "Dim"))
+  }
+  dim(projection)
+}
 projection_dimension <- function(projection, axis) {
-  dimensions <- dim(projection)
+  dimensions <- projection_dimensions(projection)
   if (length(dimensions) < axis || is.na(dimensions[[axis]])) return(NA_integer_)
   as.integer(dimensions[[axis]])
 }
 projection_summary <- function(projection) {
-  dimensions <- dim(projection)
+  dimensions <- projection_dimensions(projection)
   dimension_text <- if (length(dimensions)) paste(vapply(dimensions, audit_scalar, character(1L)), collapse = " x ") else "<empty>"
   paste0("class=", paste(class(projection), collapse = "/"),
          "; typeof=", typeof(projection), "; length=", length(projection),
