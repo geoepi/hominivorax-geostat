@@ -34,3 +34,8 @@ baseline covariate paths. Create a private copy and complete those paths before
 any future Stage 1 execution. This implementation does not run preprocessing,
 model fitting, or geographic prediction and does not qualify Configuration C
 scientifically.
+
+## Related completed assessments
+
+- [Configuration C-1 fixed-effect assessment](archive/configuration-c-1-2026/configuration-c-1-final-assessment-2026.md)
+- [Original model refresh through 2026-W44](archive/original-refresh-w44-2026/original-refresh-w44-2026.md)

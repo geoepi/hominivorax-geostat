@@ -85,6 +85,16 @@ outputs/preprocessing_demo/
 !/scripts/run_postfit_reporting_atlas.sh
 !/scripts/run_pipeline.R
 !/scripts/submit_full_pipeline.sh
+!/scripts/assess_c1_effects.R
+!/scripts/validate_original_refresh_stage1_reuse.R
+!/scripts/check_original_refresh_stage3a.R
+!/scripts/compare_c1_original_refresh_holdouts.R
+!/scripts/extract_original_refresh_summaries.R
+!/scripts/summarize_original_refresh_predictive_groups.R
+!/scripts/run_original_refresh_preparation_atlas.sh
+!/scripts/run_original_refresh_fit_atlas.sh
+!/scripts/run_original_refresh_postfit_atlas.sh
+!/scripts/run_c1_effect_assessment_atlas.sh
 
 # Jupyter checkpoint files
 .ipynb_checkpoints/
