@@ -37,11 +37,17 @@ if [[ ! -s "$C1_STAGE1_SOURCE" ]]; then
   exit 2
 fi
 if [[ -e "$STAGE1_DEST" ]]; then
-  echo "Refusing to overwrite isolated Stage 1 destination: $STAGE1_DEST" >&2
-  exit 2
+  SOURCE_SHA=$(sha256sum "$C1_STAGE1_SOURCE" | awk '{print $1}')
+  DEST_SHA=$(sha256sum "$STAGE1_DEST" | awk '{print $1}')
+  if [[ "$SOURCE_SHA" != "$DEST_SHA" ]]; then
+    echo "The existing isolated Stage 1 copy differs from its approved C-1 source; refusing to continue." >&2
+    exit 2
+  fi
+  echo "Reusing byte-identical Stage 1 copy after a prior preparation attempt."
+else
+  mkdir -p "$(dirname "$STAGE1_DEST")"
+  cp --preserve=mode,timestamps "$C1_STAGE1_SOURCE" "$STAGE1_DEST"
 fi
-mkdir -p "$(dirname "$STAGE1_DEST")"
-cp --preserve=mode,timestamps "$C1_STAGE1_SOURCE" "$STAGE1_DEST"
 echo "Stage 1 source and copied artifact checksums:"
 sha256sum "$C1_STAGE1_SOURCE" "$STAGE1_DEST"
 
