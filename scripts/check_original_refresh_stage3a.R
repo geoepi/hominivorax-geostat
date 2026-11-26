@@ -63,10 +63,15 @@ row_counts_match <- function(left, right) {
   if (length(left) != 1L || length(right) != 1L || is.na(left) || is.na(right)) return(FALSE)
   isTRUE(unname(left) == unname(right))
 }
+projection_dimension <- function(projection, axis) {
+  dimensions <- dim(projection)
+  if (length(dimensions) < axis || is.na(dimensions[[axis]])) return(NA_integer_)
+  as.integer(dimensions[[axis]])
+}
 row_map <- tryCatch(joint_inla_extract_row_map(build, stage2), error = identity)
-tier1_projection_rows <- nrow(build$A$tier1)
+tier1_projection_rows <- projection_dimension(build$A$tier1, 1L)
 tier1_stage2_rows <- nrow(stage2$tier1)
-tier2_projection_rows <- nrow(build$A$tier2)
+tier2_projection_rows <- projection_dimension(build$A$tier2, 1L)
 tier2_stage2_rows <- nrow(stage2$tier2)
 checks <- rbind(checks,
   add_check("stack_row_map", !inherits(row_map, "error"),
