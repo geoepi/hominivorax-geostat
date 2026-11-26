@@ -50,14 +50,24 @@ checks <- rbind(checks, data.frame(
 
 add_check <- function(name, pass, observed, expected, details) {
   data.frame(check = name, status = if (isTRUE(unname(pass))) "PASS" else "FAIL",
-             observed = as.character(observed), expected = as.character(expected),
+             observed = audit_scalar(observed), expected = audit_scalar(expected),
              details = details, stringsAsFactors = FALSE)
 }
+audit_scalar <- function(value) {
+  if (length(value) == 0L) return("<empty>")
+  if (length(value) != 1L) return(paste0("<length:", length(value), ">"))
+  if (is.na(value)) return("<NA>")
+  as.character(unname(value))
+}
+row_counts_match <- function(left, right) {
+  if (length(left) != 1L || length(right) != 1L || is.na(left) || is.na(right)) return(FALSE)
+  isTRUE(unname(left) == unname(right))
+}
 row_map <- tryCatch(joint_inla_extract_row_map(build, stage2), error = identity)
-tier1_projection_rows <- as.integer(nrow(build$A$tier1))
-tier1_stage2_rows <- as.integer(nrow(stage2$tier1))
-tier2_projection_rows <- as.integer(nrow(build$A$tier2))
-tier2_stage2_rows <- as.integer(nrow(stage2$tier2))
+tier1_projection_rows <- nrow(build$A$tier1)
+tier1_stage2_rows <- nrow(stage2$tier1)
+tier2_projection_rows <- nrow(build$A$tier2)
+tier2_stage2_rows <- nrow(stage2$tier2)
 checks <- rbind(checks,
   add_check("stack_row_map", !inherits(row_map, "error"),
     if (inherits(row_map, "error")) conditionMessage(row_map) else nrow(row_map),
@@ -66,10 +76,10 @@ checks <- rbind(checks,
   add_check("prediction_grid_compatibility", isTRUE(build$prediction_compatibility$compatible),
     build$prediction_compatibility$compatible, "TRUE",
     "Original fixed predictors and temporal indices resolve over the prediction grid."),
-  add_check("tier1_projection_rows", identical(tier1_projection_rows, tier1_stage2_rows),
+  add_check("tier1_projection_rows", row_counts_match(tier1_projection_rows, tier1_stage2_rows),
     tier1_projection_rows, tier1_stage2_rows,
     "Tier 1 projection rows match the authoritative Stage 2 Tier 1 rows."),
-  add_check("tier2_projection_rows", identical(tier2_projection_rows, tier2_stage2_rows),
+  add_check("tier2_projection_rows", row_counts_match(tier2_projection_rows, tier2_stage2_rows),
     tier2_projection_rows, tier2_stage2_rows,
     "Tier 2 projection rows match the authoritative Stage 2 Tier 2 rows."),
   add_check("tier_projection_common_columns", as.integer(ncol(build$A$tier1)) == as.integer(ncol(build$A$tier2)),
