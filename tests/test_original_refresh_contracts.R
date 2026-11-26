@@ -2,6 +2,7 @@ repo_root <- normalizePath(".", mustWork = TRUE)
 source(file.path(repo_root, "R", "original_refresh_contracts.R"))
 source(file.path(repo_root, "R", "c1_effect_assessment.R"))
 source(file.path(repo_root, "R", "original_refresh_comparison.R"))
+source(file.path(repo_root, "R", "covariate_registry.R"))
 testthat::local_edition(3)
 
 testthat::test_that("the refreshed identity and stage configs are versioned and isolated", {

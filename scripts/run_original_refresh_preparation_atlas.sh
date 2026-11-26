@@ -55,7 +55,23 @@ echo "Original refresh preparation job: $SLURM_JOB_ID"
 echo "Repository: $(git rev-parse HEAD)"
 echo "Start UTC: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
 module list 2>&1 | cat
-Rscript tests/run_tests.R --log-dir outputs/original_refresh_w44_2026/validation/test-logs
+FOCUSED_TEST=$(printenv ORIGINAL_REFRESH_FOCUSED_TEST 2>/dev/null || true)
+if [[ -n "$FOCUSED_TEST" ]]; then
+  if [[ ! "$FOCUSED_TEST" =~ ^test_[A-Za-z0-9_.-]+\.R$ || ! -s "$PROJECT_ROOT/tests/$FOCUSED_TEST" ]]; then
+    echo "ORIGINAL_REFRESH_FOCUSED_TEST must name an existing tests/test_*.R file." >&2
+    exit 2
+  fi
+  TEST_SKIP=()
+  for test_path in "$PROJECT_ROOT"/tests/test_*.R; do
+    test_name=$(basename "$test_path")
+    [[ "$test_name" == "$FOCUSED_TEST" ]] || TEST_SKIP+=("$test_name")
+  done
+  skip_csv=$(IFS=,; printf '%s' "${TEST_SKIP[*]}")
+  echo "Running focused validation test after prior full-suite execution: $FOCUSED_TEST"
+  Rscript tests/run_tests.R --log-dir outputs/original_refresh_w44_2026/validation/test-logs --skip "$skip_csv"
+else
+  Rscript tests/run_tests.R --log-dir outputs/original_refresh_w44_2026/validation/test-logs
+fi
 Rscript --vanilla scripts/validate_original_refresh_stage1_reuse.R \
   --config config/original_refresh_w44_2026/stage1_reuse.yml
 Rscript --vanilla scripts/prepare_joint_model.R \
