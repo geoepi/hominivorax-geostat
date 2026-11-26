@@ -82,6 +82,15 @@ original_refresh_formula_audit <- function(build) {
       "binomial,nbinomial",
       "FALSE"
     ),
+    details = c(
+      "The saved model signature contains exactly the established intercepts and fixed predictors.",
+      "Fixed-effect formula order is checked against the frozen original specification.",
+      "Both tier intercepts are included in the count.",
+      "C-1-only environmental terms must be absent.",
+      "The formula uses the manifest-free original specification.",
+      "The joint model retains the established binomial and negative-binomial likelihoods.",
+      "Stage 3A assembly must not execute a fit."
+    ),
     stringsAsFactors = FALSE
   )
   checks
