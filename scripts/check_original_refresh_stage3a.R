@@ -49,7 +49,7 @@ checks <- rbind(checks, data.frame(
 ))
 
 add_check <- function(name, pass, observed, expected, details) {
-  data.frame(check = name, status = if (isTRUE(pass)) "PASS" else "FAIL",
+  data.frame(check = name, status = if (isTRUE(unname(pass))) "PASS" else "FAIL",
              observed = as.character(observed), expected = as.character(expected),
              details = details, stringsAsFactors = FALSE)
 }
