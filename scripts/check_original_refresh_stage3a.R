@@ -54,6 +54,10 @@ add_check <- function(name, pass, observed, expected, details) {
              details = details, stringsAsFactors = FALSE)
 }
 row_map <- tryCatch(joint_inla_extract_row_map(build, stage2), error = identity)
+tier1_projection_rows <- as.integer(nrow(build$A$tier1))
+tier1_stage2_rows <- as.integer(nrow(stage2$tier1))
+tier2_projection_rows <- as.integer(nrow(build$A$tier2))
+tier2_stage2_rows <- as.integer(nrow(stage2$tier2))
 checks <- rbind(checks,
   add_check("stack_row_map", !inherits(row_map, "error"),
     if (inherits(row_map, "error")) conditionMessage(row_map) else nrow(row_map),
@@ -62,11 +66,11 @@ checks <- rbind(checks,
   add_check("prediction_grid_compatibility", isTRUE(build$prediction_compatibility$compatible),
     build$prediction_compatibility$compatible, "TRUE",
     "Original fixed predictors and temporal indices resolve over the prediction grid."),
-  add_check("tier1_projection_rows", as.integer(nrow(build$A$tier1)) == as.integer(nrow(stage2$tier1)),
-    nrow(build$A$tier1), nrow(stage2$tier1),
+  add_check("tier1_projection_rows", identical(tier1_projection_rows, tier1_stage2_rows),
+    tier1_projection_rows, tier1_stage2_rows,
     "Tier 1 projection rows match the authoritative Stage 2 Tier 1 rows."),
-  add_check("tier2_projection_rows", as.integer(nrow(build$A$tier2)) == as.integer(nrow(stage2$tier2)),
-    nrow(build$A$tier2), nrow(stage2$tier2),
+  add_check("tier2_projection_rows", identical(tier2_projection_rows, tier2_stage2_rows),
+    tier2_projection_rows, tier2_stage2_rows,
     "Tier 2 projection rows match the authoritative Stage 2 Tier 2 rows."),
   add_check("tier_projection_common_columns", as.integer(ncol(build$A$tier1)) == as.integer(ncol(build$A$tier2)),
     paste(ncol(build$A$tier1), ncol(build$A$tier2), sep = "/"), "equal Tier 1/Tier 2 mesh/group columns",
