@@ -68,6 +68,15 @@ projection_dimension <- function(projection, axis) {
   if (length(dimensions) < axis || is.na(dimensions[[axis]])) return(NA_integer_)
   as.integer(dimensions[[axis]])
 }
+projection_summary <- function(projection) {
+  dimensions <- dim(projection)
+  dimension_text <- if (length(dimensions)) paste(vapply(dimensions, audit_scalar, character(1L)), collapse = " x ") else "<empty>"
+  paste0("class=", paste(class(projection), collapse = "/"),
+         "; typeof=", typeof(projection), "; length=", length(projection),
+         "; dim=", dimension_text,
+         "; nrow=", audit_scalar(nrow(projection)),
+         "; ncol=", audit_scalar(ncol(projection)))
+}
 row_map <- tryCatch(joint_inla_extract_row_map(build, stage2), error = identity)
 tier1_projection_rows <- projection_dimension(build$A$tier1, 1L)
 tier1_stage2_rows <- nrow(stage2$tier1)
@@ -83,10 +92,10 @@ checks <- rbind(checks,
     "Original fixed predictors and temporal indices resolve over the prediction grid."),
   add_check("tier1_projection_rows", row_counts_match(tier1_projection_rows, tier1_stage2_rows),
     tier1_projection_rows, tier1_stage2_rows,
-    "Tier 1 projection rows match the authoritative Stage 2 Tier 1 rows."),
+    paste("Tier 1 projection rows match Stage 2;", projection_summary(build$A$tier1))),
   add_check("tier2_projection_rows", row_counts_match(tier2_projection_rows, tier2_stage2_rows),
     tier2_projection_rows, tier2_stage2_rows,
-    "Tier 2 projection rows match the authoritative Stage 2 Tier 2 rows."),
+    paste("Tier 2 projection rows match Stage 2;", projection_summary(build$A$tier2))),
   add_check("tier_projection_common_columns", as.integer(ncol(build$A$tier1)) == as.integer(ncol(build$A$tier2)),
     paste(ncol(build$A$tier1), ncol(build$A$tier2), sep = "/"), "equal Tier 1/Tier 2 mesh/group columns",
     "Both tier projections must use a common spatial and temporal field dimension."),
