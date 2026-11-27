@@ -3,11 +3,6 @@
   "supersedes": {"path": "docs/archive/original-refresh-w44-2026/original_refresh_w44_2026_production_manifest.json", "sha256": "eed2d7cda3d8aa562f545b9d9e423e8d3495481d4e2f39626cd92a3da17c9786"},
   "decision_status": "W44_PRODUCTION_PROMOTION_BLOCKED",
   "review_date": "2026-11-27",
-  "historical_model_preservation": {},
-  "active_production_snapshot": {},
-  "deployment_manifest_reconciliation": {},
-  "activation": {},
-  "integration": {},
   "candidate_model": {
     "model_id": "ORIGINAL_REFRESH_W44_2026",
     "qualification_status": "ORIGINAL_REFRESH_W44_QUALIFIED_WITH_LIMITATIONS",
