@@ -102,6 +102,8 @@ Fit job `21355414` completed with exit `0:0` after 10:40:50, using 12 CPUs and
 commit was `1f9924e7c1a3b459b9302e298b08c1d6d8cac999`. The report generator
 script blob at that report commit matches the candidate branch blob
 `48f7391e7bde39c139f24bde6c1a0a252825f41f`.
+The single `squeue` snapshot during this review showed no active job for the
+user; W44 and historical fit jobs were complete.
 
 The preserved historical frozen fit at
 `/project/disease_ecology/nws-geostat-output/joint_inla_fit/production_stage3b_20260924/joint_model_fit.rds`
@@ -192,6 +194,7 @@ reported. No reviewer approval, merge, release tag, or Atlas synchronization
 has occurred.
 
 The follow-on promotion record, JSON manifest, and copied test summary are
-documentation/evidence changes (Category A). The JSON parsed successfully;
-`git diff --check` is the focused whitespace check. No second test-suite run
-was needed because these additions do not change executable behavior.
+documentation/evidence changes (Category A). The JSON parsed successfully,
+and a local whitespace scan found no trailing whitespace in these three
+files. No second test-suite run was needed because these additions do not
+change executable behavior.
