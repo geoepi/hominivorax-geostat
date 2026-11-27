@@ -394,13 +394,13 @@ test_that("versioned qualification JSON is strict, complete, checksummed, and pr
   missing_status$candidate_model$qualification_status <- NULL
   missing_status_path <- file.path(fixture$root, "missing-status.json")
   jsonlite::write_json(missing_status, missing_status_path, auto_unbox = TRUE, pretty = TRUE, digits = NA, null = "null")
-  expect_error(production_release_read_qualification_manifest(missing_status_path, fixture$root), "qualification_status is missing")
+  expect_error(production_release_read_qualification_manifest(missing_status_path, fixture$root), "missing required fields: qualification_status")
 
   missing_evidence <- jsonlite::fromJSON(fixture$qualification_path, simplifyVector = FALSE)
   missing_evidence$candidate_model$qualification_evidence <- NULL
   missing_evidence_path <- file.path(fixture$root, "missing-evidence.json")
   jsonlite::write_json(missing_evidence, missing_evidence_path, auto_unbox = TRUE, pretty = TRUE, digits = NA, null = "null")
-  expect_error(production_release_read_qualification_manifest(missing_evidence_path, fixture$root), "qualification_evidence is missing")
+  expect_error(production_release_read_qualification_manifest(missing_evidence_path, fixture$root), "missing required fields: qualification_evidence")
 
   historical_path <- file.path(repo_root, "docs", "archive", "original-refresh-w44-2026", "original_refresh_w44_2026_production_manifest.json")
   expect_identical(fixture_hash(historical_path), "eed2d7cda3d8aa562f545b9d9e423e8d3495481d4e2f39626cd92a3da17c9786")
