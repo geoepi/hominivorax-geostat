@@ -23,6 +23,77 @@ production_release_assert_fields <- function(value, required, allowed, label) {
   invisible(TRUE)
 }
 
+production_release_read_json_strict <- function(path, label = "JSON document") {
+  production_orchestration_require("jsonlite")
+  production_orchestration_require("yaml")
+  if (!file.exists(path)) stop(label, " does not exist: ", path, call. = FALSE)
+  parsed <- tryCatch(jsonlite::fromJSON(path, simplifyVector = FALSE), error = function(error) {
+    stop(label, " is not valid JSON: ", conditionMessage(error), call. = FALSE)
+  })
+  if (!is.list(parsed) || is.null(names(parsed))) stop(label, " must contain a JSON object.", call. = FALSE)
+
+  # yaml rejects duplicate mapping keys; jsonlite enforces JSON syntax and preserves large integers.
+  tryCatch(
+    withCallingHandlers(yaml::read_yaml(path), warning = function(warning) {
+      if (grepl("NAs introduced by coercion: [0-9]+ is out of integer range", conditionMessage(warning))) {
+        invokeRestart("muffleWarning")
+      }
+    }),
+    error = function(error) stop(label, " has duplicate or invalid mapping keys: ", conditionMessage(error), call. = FALSE)
+  )
+  parsed
+}
+
+production_release_read_qualification_manifest <- function(path, repo_root) {
+  evidence <- production_release_read_json_strict(path, "Qualification evidence")
+  root_fields <- c("evidence_schema_version", "supersedes", "decision_status", "review_date", "candidate_model",
+                   "canonical_tests", "historical_model_preservation", "active_production_snapshot",
+                   "deployment_manifest_reconciliation", "activation", "integration")
+  production_release_assert_fields(evidence, root_fields, root_fields, "qualification evidence")
+  if (!identical(as.integer(evidence$evidence_schema_version), 2L)) stop("Unsupported qualification evidence schema version.", call. = FALSE)
+  if (length(evidence$decision_status) != 1L || is.na(evidence$decision_status) || !nzchar(evidence$decision_status)) {
+    stop("Qualification evidence decision_status is missing.", call. = FALSE)
+  }
+  production_release_assert_fields(evidence$supersedes, c("path", "sha256"), c("path", "sha256"), "qualification evidence.supersedes")
+  if (!production_release_is_sha256(evidence$supersedes$sha256)) stop("Qualification evidence supersedes.sha256 is invalid.", call. = FALSE)
+  superseded_path <- production_release_resolve_path(evidence$supersedes$path, repo_root)
+  if (!file.exists(superseded_path) || !identical(production_release_sha256(superseded_path), tolower(evidence$supersedes$sha256))) {
+    stop("Superseded historical qualification evidence is missing or has changed.", call. = FALSE)
+  }
+
+  candidate_fields <- c("model_id", "qualification_status", "proposed_production_id", "active_in_production",
+                        "formula_identity", "formula_reference", "data_release", "repository", "runtime", "fit",
+                        "stages", "supporting_records", "supporting_record_checksums", "qualification_evidence")
+  production_release_assert_fields(evidence$candidate_model, candidate_fields, candidate_fields, "qualification evidence.candidate_model")
+  candidate <- evidence$candidate_model
+  if (length(candidate$qualification_status) != 1L || is.na(candidate$qualification_status) || !nzchar(candidate$qualification_status)) {
+    stop("Qualification evidence candidate_model.qualification_status is missing.", call. = FALSE)
+  }
+  qualification_fields <- c(
+    "fit_health_pass", "fit_health_fail", "extraction_pass", "extraction_fail", "validation_pass",
+    "validation_warning", "validation_fail", "tier1_holdouts", "tier2_holdouts", "holdout_identity_match_with_c1",
+    "tier1_area_weighted_pb_auc", "tier1_area_weighted_cbi", "tier2_mae", "tier2_rmse", "tier2_pearson",
+    "tier2_spearman", "tier2_calibration_mean_ratio", "tier2_mae_difference_refreshed_minus_c1",
+    "tier2_mae_difference_interpretation", "limitations", "fit_stderr_inla_experimental_vb_warning_occurrences",
+    "fit_stderr_unclassified_warning_lines", "rasters_generated", "posterior_sampling_performed")
+  production_release_assert_fields(candidate$qualification_evidence, qualification_fields, qualification_fields,
+                                   "qualification evidence.candidate_model.qualification_evidence")
+  for (key in setdiff(qualification_fields, c("holdout_identity_match_with_c1", "tier2_mae_difference_interpretation", "limitations", "rasters_generated", "posterior_sampling_performed"))) {
+    value <- candidate$qualification_evidence[[key]]
+    if (!is.numeric(value) || length(value) != 1L || !is.finite(value)) {
+      stop("Qualification evidence has an invalid numeric field: ", key, call. = FALSE)
+    }
+  }
+  limitations <- unlist(candidate$qualification_evidence$limitations, use.names = FALSE)
+  if (!is.logical(candidate$qualification_evidence$holdout_identity_match_with_c1) ||
+      !is.logical(candidate$qualification_evidence$rasters_generated) ||
+      !is.logical(candidate$qualification_evidence$posterior_sampling_performed) ||
+      !is.character(limitations) || !length(limitations) || any(!nzchar(limitations))) {
+    stop("Qualification evidence is missing required logical or limitation records.", call. = FALSE)
+  }
+  evidence
+}
+
 production_release_validate_request <- function(request) {
   top <- c("schema_version", "request_id", "operation", "configuration", "model", "data",
            "environmental_data", "covariate_registry", "analysis", "output", "qualification",
@@ -108,7 +179,7 @@ production_release_validate_request <- function(request) {
     if (!is.null(request$resume)) stop("Adopt requests may not contain resume fields.", call. = FALSE)
     production_release_assert_fields(request$adoption,
       c("artifact_manifest", "artifact_manifest_sha256", "source_fit_job_id", "fit_sha256", "fit_source_commit", "report_generation_commit", "lineage"),
-      c("artifact_manifest", "artifact_manifest_sha256", "source_fit_job_id", "fit_sha256", "fit_source_commit", "report_generation_commit", "lineage"), "adoption")
+      c("artifact_manifest", "artifact_manifest_sha256", "source_fit_job_id", "fit_sha256", "fit_source_commit", "report_generation_commit", "lineage", "provenance_reconciliation"), "adoption")
     for (key in c("artifact_manifest_sha256", "fit_sha256")) if (!production_release_is_sha256(request$adoption[[key]])) stop("adoption.", key, " must be a SHA-256 digest.", call. = FALSE)
     for (key in c("fit_source_commit", "report_generation_commit")) {
       if (length(request$adoption[[key]]) != 1L || is.na(request$adoption[[key]]) ||
@@ -120,6 +191,10 @@ production_release_validate_request <- function(request) {
       c("stage1_to_stage2_sha256", "stage2_to_stage3a_sha256", "stage3a_to_fit_sha256"),
       c("stage1_to_stage2_sha256", "stage2_to_stage3a_sha256", "stage3a_to_fit_sha256"), "adoption.lineage")
     for (key in names(request$adoption$lineage)) if (!production_release_is_sha256(request$adoption$lineage[[key]])) stop("adoption.lineage.", key, " must be a SHA-256 digest.", call. = FALSE)
+    if (!is.null(request$adoption$provenance_reconciliation)) {
+      production_release_assert_fields(request$adoption$provenance_reconciliation, c("path", "sha256"), c("path", "sha256"), "adoption.provenance_reconciliation")
+      if (!production_release_is_sha256(request$adoption$provenance_reconciliation$sha256)) stop("adoption.provenance_reconciliation.sha256 must be a SHA-256 digest.", call. = FALSE)
+    }
   } else if (!is.null(request$adoption)) stop("Only adopt requests may contain adoption fields.", call. = FALSE)
   invisible(mode)
 }
@@ -144,6 +219,9 @@ production_release_read_request <- function(path, repo_root) {
   if (identical(request$operation$mode, "adopt")) {
     resolved <- attr(request, "resolved")
     resolved$artifact_manifest <- production_release_resolve_path(request$adoption$artifact_manifest, repo_root)
+    if (!is.null(request$adoption$provenance_reconciliation)) {
+      resolved$provenance_reconciliation <- production_release_resolve_path(request$adoption$provenance_reconciliation$path, repo_root)
+    }
     attr(request, "resolved") <- resolved
   }
   request
@@ -262,6 +340,7 @@ production_release_refresh_contract <- function(request, config_path, repo_root,
       contract$refresh_request$source_execution <- list(type = "independent_fit_adoption", fit_source_commit = request$adoption$fit_source_commit,
         report_generation_commit = request$adoption$report_generation_commit, source_fit_job_id = as.character(request$adoption$source_fit_job_id),
         metadata_runtime_commit = fit_provenance$metadata_runtime_commit %||% NA_character_,
+        provenance_reconciliation = fit_provenance$provenance_reconciliation %||% NULL,
         stage1_metadata_reference_recorded = fit_provenance$stage1_metadata_reference_recorded %||% FALSE,
         provenance_completeness = if (inherits(adoption, "error")) "blocked_validation" else if (isTRUE(fit_provenance$stage1_metadata_reference_recorded)) "complete" else "legacy_partial_stage1_resolved_by_config")
     }
@@ -321,7 +400,108 @@ production_release_require_audit_checks <- function(inventory, role, required_ch
   invisible(audit)
 }
 
-production_release_validate_fit_metadata <- function(inventory, request) {
+production_release_validate_source_reconciliation <- function(reference, repo_root, source_fit_job_id,
+                                                              launch_commit, metadata_runtime_commit,
+                                                              audit_start_utc, audit_end_utc) {
+  if (is.null(reference)) stop("Fit source commit mismatch: Slurm launch log records ", launch_commit,
+    "; fit metadata records ", metadata_runtime_commit,
+    ". A checksummed provenance reconciliation is required.", call. = FALSE)
+  production_release_assert_fields(reference, c("path", "sha256"), c("path", "sha256"), "adoption.provenance_reconciliation")
+  if (!production_release_is_sha256(reference$sha256)) stop("Provenance reconciliation checksum is invalid.", call. = FALSE)
+  path <- production_release_resolve_path(reference$path, repo_root)
+  production_release_verify_file(path, reference$sha256, label = "fit source provenance reconciliation")
+  reconciliation <- production_release_read_json_strict(path, "Fit source provenance reconciliation")
+  fields <- c("schema_version", "record_id", "fit", "comparison", "metadata_discrepancy", "decision")
+  production_release_assert_fields(reconciliation, fields, fields, "fit source provenance reconciliation")
+  if (!identical(as.integer(reconciliation$schema_version), 1L)) stop("Unsupported fit source provenance reconciliation schema version.", call. = FALSE)
+  production_release_assert_fields(reconciliation$fit,
+    c("job_id", "launch_commit", "metadata_runtime_commit", "metadata_audit_commit", "launch_commit_recorded_at",
+      "metadata_commit_recorded_at", "audit_start_utc", "audit_end_utc"),
+    c("job_id", "launch_commit", "metadata_runtime_commit", "metadata_audit_commit", "launch_commit_recorded_at",
+      "metadata_commit_recorded_at", "audit_start_utc", "audit_end_utc"),
+    "fit source provenance reconciliation.fit")
+  if (!identical(as.character(reconciliation$fit$job_id), as.character(source_fit_job_id)) ||
+      !identical(as.character(reconciliation$fit$launch_commit), launch_commit) ||
+      !identical(as.character(reconciliation$fit$metadata_runtime_commit), metadata_runtime_commit) ||
+      !identical(as.character(reconciliation$fit$metadata_audit_commit), metadata_runtime_commit)) {
+    stop("Fit source provenance reconciliation does not match the observed job and commit identities.", call. = FALSE)
+  }
+  timestamp_names <- c("launch_commit_recorded_at", "metadata_commit_recorded_at", "audit_start_utc", "audit_end_utc")
+  timestamps <- vapply(timestamp_names, function(key) as.character(reconciliation$fit[[key]]), character(1L))
+  if (anyNA(timestamps) || any(!nzchar(timestamps))) stop("Fit source provenance reconciliation has incomplete timestamps.", call. = FALSE)
+  if (!identical(timestamps[[3L]], as.character(audit_start_utc)) ||
+      !identical(timestamps[[4L]], as.character(audit_end_utc))) {
+    stop("Fit source provenance reconciliation audit timestamps do not match the fit metadata.", call. = FALSE)
+  }
+  parsed_timestamps <- as.POSIXct(timestamps, format = "%Y-%m-%dT%H:%M:%OSZ", tz = "UTC")
+  if (anyNA(parsed_timestamps) || parsed_timestamps[[1L]] > parsed_timestamps[[3L]] ||
+      parsed_timestamps[[2L]] < parsed_timestamps[[3L]] || parsed_timestamps[[2L]] > parsed_timestamps[[4L]] ||
+      parsed_timestamps[[3L]] > parsed_timestamps[[4L]]) {
+    stop("Fit source provenance reconciliation timestamps do not place the metadata commit within the fit audit window.", call. = FALSE)
+  }
+  comparison_fields <- c("changed_paths", "documentation_paths", "archived_scientific_evidence_paths", "test_only_paths",
+                         "executable_paths", "model_specification_paths", "configuration_paths", "runtime_setting_paths",
+                         "launch_tree_ids", "metadata_tree_ids", "fit_relevant_trees_identical", "model_behavior_changed",
+                         "executable_source_changes", "test_file_changes", "configuration_file_changes",
+                         "model_definition_changes", "likelihood_or_runtime_setting_changes", "classification")
+  production_release_assert_fields(reconciliation$comparison, comparison_fields, comparison_fields,
+                                   "fit source provenance reconciliation.comparison")
+  paths <- unlist(reconciliation$comparison$changed_paths, use.names = FALSE)
+  if (!length(paths) || any(!grepl("^docs/archive/configuration-c-1-2026/[^.].*", paths)) || any(grepl("(^|/)\\.\\.(/|$)", paths))) {
+    stop("Fit source provenance reconciliation lists an unsupported changed path.", call. = FALSE)
+  }
+  documentation_paths <- unlist(reconciliation$comparison$documentation_paths, use.names = FALSE)
+  evidence_paths <- unlist(reconciliation$comparison$archived_scientific_evidence_paths, use.names = FALSE)
+  if (!identical(sort(c(documentation_paths, evidence_paths)), sort(paths)) ||
+      length(unlist(reconciliation$comparison$test_only_paths, use.names = FALSE)) != 0L ||
+      length(unlist(reconciliation$comparison$executable_paths, use.names = FALSE)) != 0L ||
+      length(unlist(reconciliation$comparison$model_specification_paths, use.names = FALSE)) != 0L ||
+      length(unlist(reconciliation$comparison$configuration_paths, use.names = FALSE)) != 0L ||
+      length(unlist(reconciliation$comparison$runtime_setting_paths, use.names = FALSE)) != 0L) {
+    stop("Fit source provenance reconciliation has inconsistent change classifications.", call. = FALSE)
+  }
+  tree_names <- c("R", "scripts", "config", "tests")
+  production_release_assert_fields(reconciliation$comparison$launch_tree_ids, tree_names, tree_names,
+                                   "fit source provenance reconciliation.comparison.launch_tree_ids")
+  production_release_assert_fields(reconciliation$comparison$metadata_tree_ids, tree_names, tree_names,
+                                   "fit source provenance reconciliation.comparison.metadata_tree_ids")
+  for (tree in tree_names) {
+    launch_tree <- as.character(reconciliation$comparison$launch_tree_ids[[tree]])
+    metadata_tree <- as.character(reconciliation$comparison$metadata_tree_ids[[tree]])
+    if (!grepl("^[[:xdigit:]]{40}$", launch_tree) || !identical(launch_tree, metadata_tree)) {
+      stop("Fit source provenance reconciliation has a non-identical fit-relevant tree: ", tree, call. = FALSE)
+    }
+  }
+  if (!isTRUE(reconciliation$comparison$fit_relevant_trees_identical) ||
+      !identical(reconciliation$comparison$model_behavior_changed, FALSE) ||
+      !identical(as.integer(reconciliation$comparison$executable_source_changes), 0L) ||
+      !identical(as.integer(reconciliation$comparison$test_file_changes), 0L) ||
+      !identical(as.integer(reconciliation$comparison$configuration_file_changes), 0L) ||
+      !identical(as.integer(reconciliation$comparison$model_definition_changes), 0L) ||
+      !identical(as.integer(reconciliation$comparison$likelihood_or_runtime_setting_changes), 0L) ||
+      !identical(as.character(reconciliation$comparison$classification), "NON_EXECUTABLE_C1_ARCHIVE_ONLY")) {
+    stop("Fit source provenance reconciliation does not establish executable and scientific compatibility.", call. = FALSE)
+  }
+  if (length(reconciliation$metadata_discrepancy) != 1L || is.na(reconciliation$metadata_discrepancy) ||
+      !nzchar(as.character(reconciliation$metadata_discrepancy))) {
+    stop("Fit source provenance reconciliation does not explain the metadata discrepancy.", call. = FALSE)
+  }
+  decision_fields <- c("status", "source_identity", "governance_mode", "authorization_basis", "production_activation_authorized")
+  production_release_assert_fields(reconciliation$decision, decision_fields, decision_fields,
+                                   "fit source provenance reconciliation.decision")
+  if (!identical(as.character(reconciliation$decision$status), "RECONCILED_NON_EXECUTABLE_METADATA_DRIFT") ||
+      !identical(as.character(reconciliation$decision$source_identity), "launch_commit") ||
+      !identical(as.character(reconciliation$decision$governance_mode), "HGE") ||
+      !identical(as.character(reconciliation$decision$authorization_basis), "USER_TASK_CONDITIONAL_PROVENANCE_RECONCILIATION") ||
+      !identical(reconciliation$decision$production_activation_authorized, FALSE)) {
+    stop("Fit source provenance reconciliation has no applicable authorized governance decision.", call. = FALSE)
+  }
+  list(path = path, sha256 = tolower(reference$sha256), status = as.character(reconciliation$decision$status),
+       source_identity = launch_commit, launch_commit = launch_commit, metadata_runtime_commit = metadata_runtime_commit,
+       changed_paths = paths, fit_relevant_trees_identical = TRUE, production_activation_authorized = FALSE)
+}
+
+production_release_validate_fit_metadata <- function(inventory, request, repo_root) {
   metadata_row <- production_release_role(inventory, "fit_metadata")
   metadata_path <- metadata_row$resolved_path[[1L]]
   metadata_size <- unname(file.info(metadata_path)$size)
@@ -381,15 +561,24 @@ production_release_validate_fit_metadata <- function(inventory, request) {
   runtime_commit <- as.character(provenance[["runtime"]][["git_commit"]])
   if (length(audit_commit) != 1L || length(runtime_commit) != 1L || is.na(audit_commit) || is.na(runtime_commit) ||
       !identical(audit_commit, runtime_commit)) stop("Fit metadata audit and runtime commits are missing or inconsistent.", call. = FALSE)
+  reconciliation <- NULL
+  audit_start <- as.character(audit[["start_timestamp"]] %||% NA_character_)
+  audit_end <- as.character(audit[["end_timestamp"]] %||% NA_character_)
   if (!identical(runtime_commit, launch_commit)) {
-    audit_start <- as.character(audit[["start_timestamp"]] %||% NA_character_)
-    audit_end <- as.character(audit[["end_timestamp"]] %||% NA_character_)
+    reconciliation <- production_release_validate_source_reconciliation(request$adoption$provenance_reconciliation,
+      repo_root, request$adoption$source_fit_job_id, launch_commit, runtime_commit, audit_start, audit_end)
+  } else if (!is.null(request$adoption$provenance_reconciliation)) {
+    reconciliation <- production_release_validate_source_reconciliation(request$adoption$provenance_reconciliation,
+      repo_root, request$adoption$source_fit_job_id, launch_commit, runtime_commit, audit_start, audit_end)
+  }
+  if (!identical(runtime_commit, launch_commit) && is.null(reconciliation)) {
     stop("Fit source commit mismatch: Slurm launch log records ", launch_commit,
          "; fit metadata records ", runtime_commit,
          " (audit window ", audit_start, " to ", audit_end,
          "). A later completion-time checkout cannot be substituted for launch-time source without an approved provenance resolution.", call. = FALSE)
   }
   list(launch_commit = launch_commit, metadata_runtime_commit = runtime_commit,
+       provenance_reconciliation = reconciliation,
        source_fit_job_id = launch_job_id, metadata_path = metadata_path,
        stage1_metadata_path = stage1_metadata_path, stage1_audit_path = stage1_audit_path,
        stage1_metadata_reference_recorded = !is.na(stage1_metadata_path),
@@ -413,10 +602,11 @@ production_release_validate_adoption <- function(request, repo_root, verify_file
   if (!file.exists(resolved$artifact_manifest) || !identical(production_release_sha256(resolved$artifact_manifest), tolower(req$adoption$artifact_manifest_sha256))) stop("Artifact inventory is missing or has a different SHA-256.", call. = FALSE)
 
   production_orchestration_require("yaml")
-  qualification <- yaml::read_yaml(resolved$qualification_manifest)
+  qualification <- production_release_read_qualification_manifest(resolved$qualification_manifest, repo_root)
   candidate <- qualification$candidate_model
   if (!identical(as.character(candidate$model_id), as.character(req$model$candidate_id))) stop("Candidate model identifier does not match the qualification evidence.", call. = FALSE)
   if (!identical(as.character(candidate$proposed_production_id), as.character(req$model$production_id))) stop("Production candidate identifier does not match the qualification evidence.", call. = FALSE)
+  if (!identical(as.character(candidate$qualification_status), as.character(req$qualification$status))) stop("Candidate model qualification status does not match the refresh request.", call. = FALSE)
   if (!identical(as.character(candidate$formula_identity), as.character(req$model$formula_identity))) stop("Formula identity does not match the qualification evidence.", call. = FALSE)
   if (!identical(as.character(candidate$data_release$observations_sha256), tolower(req$data$observations_sha256))) stop("Observation identity does not match the qualification evidence.", call. = FALSE)
   if (!identical(as.character(candidate$data_release$analysis_start_epiweek), as.character(req$analysis$start_epiweek)) ||
@@ -495,6 +685,15 @@ production_release_validate_adoption <- function(request, repo_root, verify_file
     evidence_path <- production_release_resolve_path(supporting_records[[key]], repo_root)
     evidence_verified[[key]] <- production_release_verify_file(evidence_path, supporting_checksums[[checksum_key]], label = paste0("qualification evidence ", key))
   }
+  if (!is.null(req$adoption$provenance_reconciliation)) {
+    reconciliation_evidence <- evidence_verified$source_provenance_reconciliation
+    requested_reconciliation_path <- production_release_resolve_path(req$adoption$provenance_reconciliation$path, repo_root)
+    if (is.null(reconciliation_evidence) ||
+        !identical(normalizePath(reconciliation_evidence$path, mustWork = TRUE), normalizePath(requested_reconciliation_path, mustWork = TRUE)) ||
+        !identical(tolower(reconciliation_evidence$sha256), tolower(req$adoption$provenance_reconciliation$sha256))) {
+      stop("Adoption request and qualification evidence reference different source-provenance reconciliation records.", call. = FALSE)
+    }
+  }
   qualification_report <- evidence_verified$qualification_report
   if (is.null(qualification_report)) stop("Qualification evidence does not include a checksummed qualification report.", call. = FALSE)
   qualification_lines <- readLines(qualification_report$path, warn = FALSE)
@@ -539,14 +738,18 @@ production_release_validate_adoption <- function(request, repo_root, verify_file
     validation_fail = count_status(audit_results$validation, "FAIL")
   )
   for (key in names(qualification_counts)) {
-    if (!identical(as.integer(qualification_counts[[key]]), as.integer(candidate$qualification[[key]]))) {
+    if (!identical(as.integer(qualification_counts[[key]]), as.integer(candidate$qualification_evidence[[key]]))) {
       stop("Qualification count ", key, " does not match the supporting audit record.", call. = FALSE)
     }
   }
   if (count_status(audit_results$extraction, "FAIL") != 0L || count_status(audit_results$validation, "FAIL") != 0L ||
       count_status(audit_results$fit_health, "FAIL") != 0L) stop("A fit-health, extraction, or predictive-validation audit records a failure.", call. = FALSE)
 
-  metadata_provenance <- production_release_validate_fit_metadata(inventory, req)
+  metadata_provenance <- production_release_validate_fit_metadata(inventory, req, repo_root)
+  if (!identical(as.character(candidate$repository$metadata_runtime_commit),
+                 as.character(metadata_provenance$metadata_runtime_commit))) {
+    stop("Qualification evidence metadata runtime commit does not match fit metadata.", call. = FALSE)
+  }
   fit_verified <- inventory_verified$fit %||% production_release_verify_file(fit_row$resolved_path[[1L]], req$adoption$fit_sha256, fit_row$bytes[[1L]], "fit")
   artifact_inputs <- list()
   for (role in inventory$role) {
@@ -559,7 +762,8 @@ production_release_validate_adoption <- function(request, repo_root, verify_file
     mode = "adopt", source_fit_job_id = as.character(req$adoption$source_fit_job_id),
     fit = fit_verified, artifact_inputs = artifact_inputs,
      imported_artifacts = inventory_verified, evidence = evidence_verified, canonical_test_summary = canonical_test_summary,
-     audit_results = audit_results, fit_provenance = metadata_provenance,
+    audit_results = audit_results, fit_provenance = metadata_provenance,
+    provenance_reconciliation = metadata_provenance$provenance_reconciliation,
     lineage = list(stage1 = stage_rows$stage1[1L, c("path", "sha256"), drop = FALSE], stage2 = stage_rows$stage2[1L, c("path", "sha256"), drop = FALSE], stage3a = stage_rows$stage3a[1L, c("path", "sha256"), drop = FALSE], fit = fit_row[1L, c("path", "sha256"), drop = FALSE]),
     qualification_status = as.character(req$qualification$status),
     configuration_role = as.character(req$configuration$role),
