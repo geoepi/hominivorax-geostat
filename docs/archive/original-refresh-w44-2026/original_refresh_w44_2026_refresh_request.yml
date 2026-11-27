@@ -42,7 +42,7 @@ qualification:
     - adoption
     - postfit
   evidence_manifest: docs/archive/original-refresh-w44-2026/original_refresh_w44_2026_production_manifest_v2.json
-  evidence_manifest_sha256: a0f69570e5247bd8a588a2f98e3ef79e9c1429348d08a1495b15c566d82dd2f2
+  evidence_manifest_sha256: a7dba798cb566030db154733947661b697bdf40c5d261b7a298d89050e985d35
 reporting:
   temperature_mask_threshold_c: 16.0
   rpi_calibration: same_week_observation_pairs
