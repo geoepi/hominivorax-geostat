@@ -47,9 +47,10 @@ The runner does not install packages or invoke production workflows.
 
 ## Test inventory
 
-The runner currently discovers these 33 test scripts:
+The runner currently discovers these 36 test scripts:
 
-- `test_analysis_domain_conservation.R`, `test_cds_upstream_provenance.R`,
+- `test_analysis_domain_conservation.R`, `test_c1_predictive_qualification.R`,
+  `test_cds_upstream_provenance.R`,
   `test_configuration_c_registry.R`,
   `test_compare_spatial_support_help.R`, `test_covariate_diagnostics.R`,
   `test_input_manifest.R`, `test_joint_inla_assembly.R`,
@@ -60,6 +61,7 @@ The runner currently discovers these 33 test scripts:
   `test_joint_inla_rasterize.R`, `test_joint_inla_validate.R`,
   `test_joint_model_cli_root.R`, `test_joint_model_features.R`,
   `test_joint_model_preparation.R`, `test_joint_model_responses.R`,
+  `test_observation_checksum_gate.R`, `test_original_refresh_contracts.R`,
   `test_postfit_acceptance.R`, `test_postfit_reporting.R`,
   `test_prepare_joint_model_help.R`, `test_preprocessing_temporal_thinning.R`,
   `test_production_orchestration.R`, `test_reporting_baseline_repairs.R`,
