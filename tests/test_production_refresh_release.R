@@ -232,8 +232,8 @@ test_that("versioned refresh request modes are strict and full runs preserve Pre
   full <- request
   full$operation$mode <- "full"
   full$operation$requested_stages <- c("prepare", "fit", "postfit")
-  full$adoption <- NULL
-  full$resume <- NULL
+  full["adoption"] <- list(NULL)
+  full["resume"] <- list(NULL)
   expect_identical(production_release_validate_request(full), "full")
   full_plan <- production_release_plan(full)
   expect_identical(full_plan$scheduler_stages, c("prepare", "fit", "postfit"))
@@ -253,7 +253,7 @@ test_that("resume starts at each first incomplete stage and reuses accepted upst
   request <- fixture$request
   request$operation$mode <- "resume"
   request$operation$requested_stages <- c("prepare", "fit", "postfit")
-  request$adoption <- NULL
+  request["adoption"] <- list(NULL)
   request$resume <- list(run_id = "existing-run", manifest_path = "run_manifest.yml", manifest_sha256 = paste(rep("c", 64L), collapse = ""))
   expect_identical(production_release_validate_request(request), "resume")
   expect_identical(production_release_plan(request, list())$scheduler_stages, c("prepare", "fit", "postfit"))

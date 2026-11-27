@@ -455,7 +455,11 @@ production_release_validate_adoption <- function(request, repo_root, verify_file
   fit_cfg <- yaml::read_yaml(config_path_for_role("config_fit"))
   if (identical(as.character(req$covariate_registry$mode), "manifest_free_original") && !is.null(stage2_cfg$covariate_manifest)) stop("The requested original model identity conflicts with a configured covariate manifest.", call. = FALSE)
   source_root <- dirname(dirname(dirname(config_path_for_role("config_identity"))))
-  resolve_source_config_path <- function(path) normalizePath(production_release_resolve_path(path, source_root), mustWork = TRUE)
+  resolve_source_config_path <- function(path) {
+    resolved_path <- production_release_resolve_path(path, source_root)
+    if (is.na(resolved_path) || !file.exists(resolved_path)) stop("Stage configuration lineage source is missing: ", path, call. = FALSE)
+    normalizePath(resolved_path, mustWork = TRUE)
+  }
   parent1 <- resolve_source_config_path(stage2_cfg$inputs$model_inputs)
   parent2 <- resolve_source_config_path(stage3a_cfg$inputs$joint_model_inputs)
   parent3 <- resolve_source_config_path(fit_cfg$inputs$stage3a_build)
@@ -674,7 +678,7 @@ production_release_copy_bundle <- function(artifact_paths, registry_dir) {
   committed <- TRUE
   manifest_path <- file.path(registry_dir, "registry-manifest.yml")
   list(path = normalizePath(registry_dir, mustWork = TRUE), manifest = normalizePath(manifest_path, mustWork = TRUE),
-       manifest_sha256 = production_release_sha256(manifest_path), artifacts = copied)
+       manifest_sha256 = production_release_sha256(manifest_path), artifacts = copied, reused = FALSE)
 }
 
 production_release_register_adoption <- function(contract, request, repo_root) {
