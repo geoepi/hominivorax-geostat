@@ -53,3 +53,33 @@ Each major stage writes metadata/status_<stage>.yml. The run manifest is the
 primary provenance entry point and records source/config hashes, dynamic
 dimensions, scheduler IDs, artifact paths, and final status.
 
+## Versioned refresh operations
+
+The optional `--refresh-request PATH` argument adds a schema-versioned request
+contract without replacing this Prepare → Fit → Post-fit scheduler pipeline.
+It supports three operation modes:
+
+- `full` requests Prepare, Fit, and Post-fit in canonical order.
+- `resume` binds a compatible existing run ID and run-manifest SHA-256; accepted
+  stages are reused only after their inputs and outputs are rehashed.
+- `adopt` validates a separately completed fit, imports it as historical
+  provenance, and plans Post-fit with no dependency on the historical Slurm
+  job ID. Prepare and Fit are prohibited for this mode.
+
+Run planning with `--mode dry-run`. For an adoption request, the dry-run
+prints the source artifacts and checksums, deployment-configuration
+compatibility, intended stable registry destination, and Post-fit output root.
+It submits no jobs, registers no artifacts, and writes no production run
+directory. A blocked provenance check yields no Post-fit job. The request
+document is archived by hash with an actual run; the request is rehashed before
+dispatch. See [refresh and release framework](refresh-release-framework.md)
+for the request schema, adoption rules, and release controls.
+
+The `scripts/manage_model_release_atlas.sh` interface exposes read-only
+`reconcile` and `verify-active` actions, plus separately invoked `activate` and
+`rollback` actions. Activation is independent of Git merge and scheduler
+completion. It requires a complete, checksummed release manifest, an existing
+active-state pointer, and caller-supplied compare-and-swap generation and
+state SHA-256. No active-state pointer is bootstrapped from the current config
+alone because the current W39 fit identity has not been established.
+

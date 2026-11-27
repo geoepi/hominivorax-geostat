@@ -20,6 +20,16 @@ recalibration.
    synchronize Atlas, and verify clean checkouts.
 8. Create and push the repository-consistent annotated release tag.
 
+Framework work that depends on an open qualification-review PR is delivered
+through a separate draft PR with an explicit dependency; it does not change or
+merge that qualification PR. A Git merge only integrates reviewed software.
+Production model activation remains a separate operation through
+`scripts/manage_model_release_atlas.sh --action activate` after the versioned
+release manifest, configuration identity, model qualification, upstream
+artifacts and post-fit products have all been independently verified. Never
+infer model activation from branch synchronization, a successful fit job, or
+creation of a release tag.
+
 The release baseline deliberately leaves thermal-mask sensitivity analyses,
 future Stage 1/2 data minimization, future model-input updates, and scientific
 recalibration beyond the current dynamic rules for later work. Historical

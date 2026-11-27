@@ -80,6 +80,59 @@ Historical or development worktrees, including paths with a suffix such as
 `-prefit-20260926`, are not production checkouts. Use the canonical path above
 for new runs and for resuming existing runs.
 
+## Refresh requests and release controls
+
+The versioned request is passed with `--refresh-request`; it does not replace
+the secure configuration. Use a `candidate_execution` configuration for an
+approved full or resumed run. An adoption dry-run may use the active secure
+configuration with `dispatch_authorized: false` to compare the candidate with
+the observed deployment.
+
+```bash
+cd /project/disease_ecology/hominivorax-geostat
+./scripts/run_pipeline_atlas.sh \
+  --mode dry-run \
+  --config /project/disease_ecology/hominivorax-geostat-config/production.yml \
+  --refresh-request docs/archive/original-refresh-w44-2026/original_refresh_w44_2026_refresh_request.yml
+```
+
+For an explicitly reviewed adoption request using a candidate execution
+configuration, submit through the existing pipeline wrapper. It registers a
+one-time, checksum-verified version under
+`/project/disease_ecology/nws-geostat-output/production_runs/model_registry/`
+before submitting Post-fit. The staging directory and final registry share a
+filesystem, publication refuses to overwrite a version, and source files
+remain unchanged. The W44 source is a development output tree, so its fit and
+upstream stages must be copied once for stable production retention; no copy
+or job is performed by the current planning-only W44 request. The copy is
+limited to the inventoried artifacts and supporting records for that version.
+
+Reconcile the observed production config and deployment record without
+changing them:
+
+```bash
+./scripts/manage_model_release_atlas.sh \
+  --action reconcile \
+  --config /project/disease_ecology/hominivorax-geostat-config/production.yml \
+  --deployment-manifest /project/disease_ecology/hominivorax-geostat-config/deployment-manifest.yml \
+  --repo-root /project/disease_ecology/hominivorax-geostat
+```
+
+Verify the active release with:
+
+```bash
+./scripts/manage_model_release_atlas.sh \
+  --action verify-active \
+  --active-state /project/disease_ecology/hominivorax-geostat-config/active-release.yml
+```
+
+The active-state file is intentionally not initialized from the current W39
+configuration: the previous active fit identity is not yet known. Therefore,
+the verifier reports an absent pointer until that identity is reconciled and
+an authorized initial state is supplied. Activation and rollback use explicit
+compare-and-swap values and append-only events; details are in the
+[refresh and release framework guide](refresh-release-framework.md).
+
 ## Optional CHIME execution correlation
 
 An external orchestrator such as CHIME may set `CHIME_EXECUTION_ID` before

@@ -37,3 +37,34 @@ The run manifest records `prepare_gate_status`, `fit_gate_status`, `postfit_gate
 Atlas production expects an intentionally untracked `config/production.yml` supplied by the governed deployment environment or copied into the checkout by the operator. It must reference authorized input and output locations and must never be committed. `config/production.example.yml` is tracked for parser and dry-run verification only; it is not a substitute for private production credentials or paths.
 
 Historical comparisons belong in separate diagnostic reports and are not required acceptance criteria.
+
+## Existing-fit adoption gate
+
+The `adopt` operation adds an evidence gate before Post-fit. It verifies the
+refresh-request SHA, fit and upstream byte counts and SHA-256 values, Stage 1
+→ Stage 2 → Stage 3A → fit configuration links, formula/model identity,
+source-data release, fit-health, extraction and predictive-validation audits,
+and the historical Slurm launch record. It reads only the small fit metadata
+RDS; it never loads the large fit object or calls `INLA::inla()`.
+
+Imported Prepare and Fit stages are recorded as
+`NOT_EXECUTED_BY_THIS_RUN`, with a separate adoption result. The historical
+fit job ID is provenance only and is never a scheduler dependency. Legacy
+partial metadata can pass only when the missing Stage 1 edge is independently
+recoverable from the checksummed Stage 2 configuration and Stage 1 audit; that
+limitation is retained in the run manifest.
+
+Any mismatch between the Slurm launch commit and fit metadata runtime commit
+blocks adoption. A completion-time Git revision does not replace the source
+revision recorded at launch. A blocking validation result leaves Post-fit
+unsubmitted, even if Slurm reports a successful historical fit.
+
+## Release-product verification
+
+Before a model release can be activated, its separate run and product
+manifests are rehashed and every product path, byte count and SHA-256 is
+verified. Required reporting products must be present, including the
+`mintemp` mask at exactly 16.0 °C and the same-week observation-paired dynamic
+RPI contract. This release gate preserves the existing Post-fit scientific
+definitions and does not add a new acceptance cutoff to historical predictive
+metrics.

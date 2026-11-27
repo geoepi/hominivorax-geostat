@@ -311,8 +311,17 @@ production_orchestration_stage_command <- function(repo_root, stage_args) {
   production_orchestration_command_text("bash", production_orchestration_stage_wrapper(repo_root), stage_args)
 }
 
-production_orchestration_contract <- function(config_path, repo_root, run_id = NULL, run_root = NULL) {
+production_orchestration_contract <- function(config_path, repo_root, run_id = NULL, run_root = NULL, config_overrides = NULL) {
   cfg <- production_orchestration_read_config(config_path, repo_root)
+  if (!is.null(config_overrides)) {
+    allowed_overrides <- c("observations", "start_epiweek", "end_rule", "output_root")
+    extra_overrides <- setdiff(names(config_overrides), allowed_overrides)
+    if (length(extra_overrides)) stop("Unsupported production configuration overrides: ", paste(extra_overrides, collapse = ", "), call. = FALSE)
+    if (!is.null(config_overrides$observations)) cfg$input$observations <- production_orchestration_resolve_path(config_overrides$observations, repo_root)
+    if (!is.null(config_overrides$start_epiweek)) cfg$temporal$start_epiweek <- as.character(config_overrides$start_epiweek)
+    if (!is.null(config_overrides$end_rule)) cfg$temporal$end_rule <- as.character(config_overrides$end_rule)
+    if (!is.null(config_overrides$output_root)) cfg$project$output_root <- production_orchestration_resolve_path(config_overrides$output_root, repo_root)
+  }
   stages <- production_orchestration_read_stage_configs(cfg)
   observations <- utils::read.csv(cfg$input$observations, stringsAsFactors = FALSE, check.names = FALSE)
   git_commit <- production_orchestration_git_commit(repo_root)
@@ -332,11 +341,23 @@ production_orchestration_contract <- function(config_path, repo_root, run_id = N
     submission_timestamp_utc = format(Sys.time(), "%Y-%m-%dT%H:%M:%SZ", tz = "UTC"), horizon = horizon, dynamic_dimensions = NULL,
     dynamic_rpi_threshold = NA_real_, final_reporting_path = NA_character_, final_summary_path = NA_character_, overall_status = "SUBMITTED",
     prepare_gate_status = "NOT_RUN", fit_gate_status = "NOT_RUN", postfit_gate_status = "NOT_RUN",
-    warning_count = 0L, gate_results = list(),
+    warning_count = 0L, gate_results = list(), operation_mode = "full", execution_state = "CREATED", refresh_request = NULL,
+    artifact_inputs = list(), adoption_validation = NULL, artifact_storage = NULL,
     stage_configs = cfg$stage_configs, settings = list(cfg = cfg, stages = stages), scheduler = production_orchestration_scheduler_config(cfg),
     job_ids = list(prepare = NA_character_, fit = NA_character_, postfit = NA_character_),
     paths = list(stage1 = file.path(root, "stage1"), stage2 = file.path(root, "stage2"), stage3a = file.path(root, "stage3a"), preflight = file.path(root, "preflight"), stage3b = file.path(root, "stage3b"), fit_health = file.path(root, "fit_health"), extraction = file.path(root, "extraction"), validation = file.path(root, "validation"), projection = file.path(root, "projection"), raster = file.path(root, "raster"), structural = file.path(root, "structural"), masked = file.path(root, "masked_structural_rpi"), reporting = file.path(root, "reporting"), metadata = file.path(root, "metadata"), logs = file.path(root, "logs"))
   )
+}
+
+production_orchestration_artifact_path <- function(contract, role) {
+  if (!is.null(contract$artifact_inputs[[role]]$path)) return(as.character(contract$artifact_inputs[[role]]$path))
+  defaults <- list(stage1 = file.path(contract$paths$stage1, "model_inputs.rds"),
+                   stage2 = file.path(contract$paths$stage2, "joint_model_inputs.rds"),
+                   stage3a = file.path(contract$paths$stage3a, "joint_inla_build.rds"),
+                   fit = file.path(contract$paths$stage3b, "joint_model_fit.rds"),
+                   fit_metadata = file.path(contract$paths$stage3b, "joint_model_fit_metadata.rds"))
+  if (is.null(defaults[[role]])) stop("Unknown pipeline artifact role: ", role, call. = FALSE)
+  defaults[[role]]
 }
 
 production_orchestration_write_yaml <- function(object, path) {
@@ -395,11 +416,16 @@ production_orchestration_write_manifest <- function(contract, path = file.path(c
 
 production_orchestration_write_final_summary <- function(contract, path = file.path(contract$paths$metadata, "production_summary.yml")) {
   summary <- list(
-    status = "PRODUCTION PIPELINE COMPLETE",
+    status = if (identical(contract$operation_mode, "adopt")) "ADOPTED MODEL POST-FIT COMPLETE" else "PRODUCTION PIPELINE COMPLETE",
     run_id = contract$run_id,
+    operation_mode = contract$operation_mode %||% "full",
+    execution_state = contract$execution_state %||% "UNKNOWN",
     chime_execution_id = contract$chime_execution_id %||% NA_character_,
     administrative_support = contract$administrative_support_summary %||% list(policy = contract$administrative_support_policy %||% "fail", unseen_support_used = FALSE),
-    stages = list(prepare = contract$prepare_gate_status %||% "NOT_RUN", fit = contract$fit_gate_status %||% "NOT_RUN", postfit = contract$postfit_gate_status %||% "NOT_RUN"),
+    stages = if (identical(contract$operation_mode, "adopt")) {
+      list(prepare = "NOT_EXECUTED_BY_THIS_RUN", fit = "NOT_EXECUTED_BY_THIS_RUN",
+           adoption = contract$adoption_validation$outcome %||% "NOT_RUN", postfit = contract$postfit_gate_status %||% "NOT_RUN")
+    } else list(prepare = contract$prepare_gate_status %||% "NOT_RUN", fit = contract$fit_gate_status %||% "NOT_RUN", postfit = contract$postfit_gate_status %||% "NOT_RUN"),
     runtime = contract$runtime %||% list(),
     modeled_weeks = contract$dynamic_dimensions$modeled_weeks %||% NA_integer_,
     supported_cells = contract$dynamic_dimensions$supported_cells %||% NA_integer_,

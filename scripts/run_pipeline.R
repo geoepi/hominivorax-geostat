@@ -5,6 +5,7 @@ repo_root <- normalizePath(file.path(dirname(sub("^--file=", "", script_arg)), "
 source(file.path(repo_root, "R", "production_orchestration.R"), local = .GlobalEnv)
 source(file.path(repo_root, "R", "cds_upstream_provenance.R"), local = .GlobalEnv)
 source(file.path(repo_root, "R", "production_validation_gates.R"), local = .GlobalEnv)
+source(file.path(repo_root, "R", "production_refresh_release.R"), local = .GlobalEnv)
 
 args <- commandArgs(trailingOnly = TRUE)
 option <- function(name, default = NULL) {
@@ -18,10 +19,18 @@ flag <- function(name) paste0("--", name) %in% args
 eq <- function(name, value) paste0("--", name, "=", value)
 
 mode <- tolower(option("mode", "submit"))
+dry_run_requested <- identical(mode, "dry-run") || flag("dry-run")
 production_orchestration_assert_runtime_preflight(mode)
 config_path <- option("config")
 if (is.null(config_path)) stop("Usage: run_pipeline.R --mode submit|stage|direct --config PATH [options]", call. = FALSE)
 config_path <- production_orchestration_resolve_path(config_path, getwd())
+refresh_request_path <- option("refresh-request")
+refresh_request <- if (is.null(refresh_request_path)) NULL else production_release_read_request(
+  production_orchestration_resolve_path(refresh_request_path, repo_root), repo_root)
+if (!is.null(refresh_request) && identical(refresh_request$operation$mode, "adopt") &&
+    !isTRUE(refresh_request$operation$dispatch_authorized) && !dry_run_requested) {
+  stop("This adoption request authorizes planning only; scheduler dispatch and artifact registration are disabled.", call. = FALSE)
+}
 run_id_arg <- option("run-id")
 run_root_arg <- option("run-root")
 stage_arg <- option("stage")
@@ -30,12 +39,26 @@ through_arg <- option("through", "postfit")
 resume_arg <- option("resume")
 fit_job_id_arg <- option("fit-job-id", Sys.getenv("PIPELINE_FIT_JOB_ID", unset = "not-under-scheduler"))
 if (is.null(resume_arg) && flag("resume")) resume_arg <- run_id_arg
+if (!is.null(refresh_request) && identical(refresh_request$operation$mode, "resume")) {
+  requested_resume_id <- as.character(refresh_request$resume$run_id)
+  if (!is.null(resume_arg) && !identical(as.character(resume_arg), requested_resume_id)) stop("--resume conflicts with the versioned resume request.", call. = FALSE)
+  resume_arg <- requested_resume_id
+  run_id_arg <- requested_resume_id
+  resume_manifest_path <- production_release_resolve_path(refresh_request$resume$manifest_path, repo_root)
+  run_root_arg <- dirname(dirname(resume_manifest_path))
+} else if (!is.null(refresh_request) && !is.null(resume_arg)) {
+  stop("A refresh request with mode full or adopt may not be combined with --resume.", call. = FALSE)
+}
 if (!is.null(resume_arg) && is.null(run_id_arg)) run_id_arg <- resume_arg
 if (flag("resume") && is.null(run_id_arg)) stop("--resume requires --run-id for the existing run to resume.", call. = FALSE)
 
 print_contract <- function(contract, dry = FALSE) {
   cat(if (dry) "DRY RUN — no jobs submitted\n" else "Production run submitted\n")
   cat("Run ID: ", contract$run_id, "\n", sep = "")
+  if (!is.null(contract$refresh_request)) {
+    cat("Refresh request: ", contract$refresh_request$request_id, " (", contract$operation_mode, ")\n", sep = "")
+    cat("Request SHA256: ", contract$refresh_request$sha256, "\n", sep = "")
+  }
   cat("Config: ", contract$config$path, "\nSHA256: ", contract$config$sha256, "\n", sep = "")
   cat("Git commit: ", contract$repository$git_commit, "\nBranch: ", contract$repository$branch, "\n", sep = "")
   cat("Runtime: ", contract$runtime$module_profile, "\nRuntime preflight: ", contract$runtime$preflight, "\n", sep = "")
@@ -64,12 +87,24 @@ rehydrate_contract <- function(contract) {
   chime_execution <- production_orchestration_rehydrate_chime_execution_id(contract)
   contract <- chime_execution$contract
   cfg <- production_orchestration_read_config(config_path, repo_root)
+    if (!is.null(contract$refresh_request$path)) {
+    stored_request <- production_release_read_request(contract$refresh_request$path, repo_root)
+    if (!identical(attr(stored_request, "request_sha256"), as.character(contract$refresh_request$sha256))) stop("Refresh request changed after the run manifest was written.", call. = FALSE)
+    if (identical(as.character(contract$operation_mode), "adopt") && identical(as.character(stored_request$configuration$role), "active_deployment")) {
+      cfg$input$observations <- attr(stored_request, "resolved")$observations
+      cfg$temporal$start_epiweek <- as.character(stored_request$analysis$start_epiweek)
+      cfg$temporal$end_rule <- "last_complete_epiweek"
+      cfg$project$output_root <- attr(stored_request, "resolved")$output_root
+    }
+  }
   if (!is.null(contract$config$sha256) && !identical(as.character(contract$config$sha256), production_orchestration_hash_file(config_path))) stop("Resume config SHA does not match the run manifest.", call. = FALSE)
   if (!is.null(contract$input$sha256) && !identical(as.character(contract$input$sha256), production_orchestration_hash_file(cfg$input$observations))) stop("Resume observation-source SHA does not match the run manifest.", call. = FALSE)
   contract$settings <- list(cfg = cfg, stages = production_orchestration_read_stage_configs(cfg))
   generated <- contract$generated_configs
   if (is.null(generated)) generated <- list()
-  if (!length(generated) || any(!file.exists(unlist(generated, use.names = FALSE)))) {
+  if (identical(as.character(contract$operation_mode), "adopt")) {
+    contract$generated_configs <- list()
+  } else if (!length(generated) || any(!file.exists(unlist(generated, use.names = FALSE)))) {
     contract <- production_orchestration_write_stage_configs(contract)
   } else {
     names(generated) <- sub("\\.yml$", "", basename(unlist(generated, use.names = FALSE)))
@@ -81,6 +116,12 @@ rehydrate_contract <- function(contract) {
 }
 
 load_or_create_contract <- function() {
+  if (!is.null(refresh_request)) {
+    contract <- production_release_refresh_contract(refresh_request, config_path, repo_root, run_root = run_root_arg,
+      allow_blocked_adoption_plan = dry_run_requested)
+    if (identical(refresh_request$operation$mode, "resume")) contract <- rehydrate_contract(contract)
+    return(contract)
+  }
   if (!is.null(resume_arg)) {
     if (is.null(run_id_arg)) run_id_arg <<- resume_arg
     cfg <- production_orchestration_read_config(config_path, repo_root)
@@ -94,11 +135,56 @@ load_or_create_contract <- function() {
 
 prepare_contract <- function(contract, write_files = TRUE) {
   if (write_files) {
-    dirs <- unlist(contract$paths, use.names = FALSE)
+    if (identical(contract$operation_mode, "adopt")) {
+      if (!isTRUE(refresh_request$operation$dispatch_authorized)) stop("This adoption request is approved for planning only; it cannot register artifacts or dispatch Post-fit.", call. = FALSE)
+      if (!identical(as.character(refresh_request$configuration$role), "candidate_execution")) stop("Post-fit requires a candidate_execution configuration; the supplied active-deployment configuration is only for reconciliation.", call. = FALSE)
+      registered <- production_release_register_adoption(contract, refresh_request, repo_root)
+      contract <- registered$contract
+      contract$execution_state <- "ADOPTED_POSTFIT_READY"
+      dirs <- unlist(contract$paths[c("preflight", "extraction", "validation", "projection", "raster", "structural", "masked", "reporting", "metadata", "logs")], use.names = FALSE)
+    } else {
+      dirs <- unlist(contract$paths, use.names = FALSE)
+      if (is.null(contract$generated_configs)) contract <- production_orchestration_write_stage_configs(contract)
+      if (cds_upstream_provenance_configured(contract)) contract <- production_orchestration_attach_cds_provenance(contract, write_files = TRUE)
+    }
     invisible(lapply(dirs, dir.create, recursive = TRUE, showWarnings = FALSE))
-    if (is.null(contract$generated_configs)) contract <- production_orchestration_write_stage_configs(contract)
-    if (cds_upstream_provenance_configured(contract)) {
-      contract <- production_orchestration_attach_cds_provenance(contract, write_files = TRUE)
+    if (!is.null(refresh_request)) {
+      request_name <- if (identical(refresh_request$operation$mode, "resume")) {
+        paste0("resume_request_", refresh_request$request_id, ".yml")
+      } else "refresh_request.yml"
+      request_archive <- file.path(contract$paths$metadata, request_name)
+      request_source <- attr(refresh_request, "request_path")
+      if (file.exists(request_archive)) {
+        production_release_verify_file(request_archive, attr(refresh_request, "request_sha256"), label = "archived refresh request")
+      } else if (!file.copy(request_source, request_archive, overwrite = FALSE)) {
+        stop("Unable to archive the immutable refresh request in the run metadata.", call. = FALSE)
+      }
+      contract$refresh_request_archive <- list(path = normalizePath(request_archive, mustWork = TRUE),
+        sha256 = production_release_sha256(request_archive))
+      if (identical(refresh_request$operation$mode, "resume")) {
+        contract$resume_request <- list(path = contract$refresh_request_archive$path,
+          sha256 = contract$refresh_request_archive$sha256,
+          document = production_release_request_document(refresh_request))
+      } else {
+        contract$refresh_request$path <- contract$refresh_request_archive$path
+        contract$refresh_request$sha256 <- contract$refresh_request_archive$sha256
+      }
+    }
+    if (!is.null(refresh_request)) {
+      statuses <- if (identical(contract$operation_mode, "resume")) status_map(contract) else list()
+      plan <- production_release_plan(refresh_request, statuses)
+      plan$registered_artifact_path <- contract$artifact_storage$registry_path %||% NA_character_
+      plan$registered_artifact_manifest <- contract$artifact_storage$registry_manifest %||% NA_character_
+      plan$artifact_registry_target <- plan$artifact_registry_target %||% NA_character_
+      plan_stamp <- format(Sys.time(), "%Y%m%dT%H%M%SZ", tz = "UTC")
+      plan_id <- paste(contract$operation_mode, refresh_request$request_id, plan_stamp,
+                       substr(attr(refresh_request, "request_sha256"), 1L, 12L), sep = "_")
+      contract$execution_plan_path <- file.path(contract$paths$metadata, paste0("execution_plan_", plan_id, ".yml"))
+      contract$execution_plan_sha256 <- production_release_write_plan(plan, contract$execution_plan_path)
+      contract$execution_plan <- plan
+      if (identical(contract$operation_mode, "adopt")) {
+        production_orchestration_write_yaml(contract$adoption_validation, file.path(contract$paths$metadata, "adoption_validation.yml"))
+      }
     }
     production_orchestration_write_manifest(contract)
   }
@@ -171,12 +257,12 @@ stage_fit <- function(contract) {
 
 stage_postfit <- function(contract, fit_job_id = "not-under-scheduler") {
   start <- Sys.time()
-  production_orchestration_write_status(contract, "postfit", "RUNNING", start_time = start, input_artifact = file.path(contract$paths$stage3b, "joint_model_fit.rds"))
+  fit <- production_orchestration_artifact_path(contract, "fit")
+  build <- production_orchestration_artifact_path(contract, "stage3a")
+  stage2 <- production_orchestration_artifact_path(contract, "stage2")
+  production_orchestration_write_status(contract, "postfit", "RUNNING", start_time = start, input_artifact = fit)
   tryCatch({
-    dims <- contract$dynamic_dimensions %||% production_orchestration_dimension_contract(file.path(contract$paths$stage2, "joint_model_inputs.rds"), file.path(contract$paths$stage3a, "joint_inla_build.rds"))
-    fit <- file.path(contract$paths$stage3b, "joint_model_fit.rds")
-    build <- file.path(contract$paths$stage3a, "joint_inla_build.rds")
-    stage2 <- file.path(contract$paths$stage2, "joint_model_inputs.rds")
+    dims <- contract$dynamic_dimensions %||% production_orchestration_dimension_contract(stage2, build)
     holdout <- file.path(contract$paths$extraction, paste0("holdout_predictions_", contract$run_id, ".csv"))
     run_command(file.path(repo_root, "scripts", "extract_joint_inla_results.R"), c(
       eq("repo-root", repo_root), eq("build", build), eq("fit", fit), eq("stage2", stage2),
@@ -253,12 +339,14 @@ stage_postfit <- function(contract, fit_job_id = "not-under-scheduler") {
     contract$dynamic_rpi_threshold <- as.numeric(threshold_artifact$threshold_value)
     contract$final_reporting_path <- normalizePath(contract$paths$reporting, mustWork = TRUE)
     contract <- record_gate(contract, production_gate_postfit(contract, dims))
+    contract$execution_state <- if (identical(contract$operation_mode, "adopt")) "ADOPTED_POSTFIT_COMPLETE" else "PIPELINE_COMPLETE"
     contract$final_summary_path <- production_orchestration_write_final_summary(contract)
     production_orchestration_write_manifest(contract)
-    production_orchestration_write_status(contract, "postfit", if (identical(contract$postfit_gate_status, "PASS_WITH_WARNINGS")) "WARNING" else "PASS", start_time = start, input_artifact = file.path(contract$paths$stage3b, "joint_model_fit.rds"), output_artifact = threshold_path)
+    if (!is.null(contract$refresh_request$document)) contract$release_manifest <- production_release_write_model_manifest(contract)
+    production_orchestration_write_status(contract, "postfit", if (identical(contract$postfit_gate_status, "PASS_WITH_WARNINGS")) "WARNING" else "PASS", start_time = start, input_artifact = fit, output_artifact = threshold_path)
     invisible(contract)
   }, error = function(error) {
-    production_orchestration_write_status(contract, "postfit", "FAIL", start_time = start, input_artifact = file.path(contract$paths$stage3b, "joint_model_fit.rds"), error = error)
+    production_orchestration_write_status(contract, "postfit", "FAIL", start_time = start, input_artifact = fit, error = error)
     stop(error)
   })
 }
@@ -271,51 +359,102 @@ execute_stage <- function(contract, stage, fit_job_id = "not-under-scheduler") {
 }
 
 contract <- load_or_create_contract()
+if (!is.null(refresh_request) && identical(refresh_request$operation$mode, "adopt")) {
+  if (identical(mode, "direct")) stop("Adopt requests cannot run in direct mode; use a governed submit after review or dry-run for planning.", call. = FALSE)
+  fit_job_id_arg <- as.character(refresh_request$adoption$source_fit_job_id)
+}
 if (mode %in% c("submit", "direct", "dry-run")) {
-  dry <- identical(mode, "dry-run") || flag("dry-run")
+  dry <- dry_run_requested
   if (!dry) contract <- prepare_contract(contract, write_files = TRUE)
-  if (dry && cds_upstream_provenance_configured(contract)) {
+  if (dry && is.null(refresh_request) && cds_upstream_provenance_configured(contract)) {
     contract <- production_orchestration_attach_cds_provenance(contract, write_files = FALSE)
+  }
+  if (!is.null(refresh_request) && identical(refresh_request$operation$mode, "resume")) {
+    contract$resume_artifact_validation <- production_release_validate_resume_artifacts(contract, status_map(contract))
   }
   through <- production_orchestration_stage_alias(through_arg)
   resume_statuses <- if (dry && is.null(resume_arg)) list() else status_map(contract)
   from <- production_orchestration_select_resume_stage(resume_statuses, from_arg, through)
-  if (is.null(from)) {
+  plan <- NULL
+  if (!is.null(refresh_request)) {
+    if (!dry && !is.null(contract$execution_plan)) plan <- contract$execution_plan else plan <- production_release_plan(refresh_request, if (identical(refresh_request$operation$mode, "resume")) resume_statuses else list())
+    if (identical(refresh_request$operation$mode, "adopt")) {
+      plan$requested_scheduler_stages <- plan$scheduler_stages
+      blocked <- !toupper(as.character(contract$adoption_validation$outcome)) %in% c("PASS", "PASS_WITH_WARNINGS")
+      if (blocked) {
+        plan$validation_status <- "BLOCKED"
+        plan$blocking_reason <- contract$adoption_validation$reason %||% "Adoption validation did not pass."
+        plan$scheduler_stages <- character()
+      } else plan$validation_status <- "PASS_WITH_WARNINGS"
+      production_release_assert_adoption_plan(plan)
+      plan$reused_artifacts <- lapply(contract$adoption_validation$artifact_inputs[c("stage1", "stage2", "stage3a", "fit", "fit_metadata")], function(x) x[c("path", "sha256", "bytes")])
+      plan$production_configuration_compatibility <- contract$adoption_validation$deployment_configuration_compatibility
+      plan$registry_manifest <- contract$artifact_storage$registry_manifest %||% NA_character_
+      plan$registry_manifest_sha256 <- contract$artifact_storage$registry_manifest_sha256 %||% NA_character_
+      plan$product_run_root <- contract$run_root
+    }
+    stages_to_run <- plan$scheduler_stages
+  } else {
+    stages_to_run <- c("prepare", "fit", "postfit")
+    if (!is.null(from)) {
+      stages_to_run <- stages_to_run[!(stages_to_run == "prepare" & from != "prepare")]
+      stages_to_run <- stages_to_run[!(stages_to_run == "fit" & (through == "prepare" || !from %in% c("prepare", "fit")))]
+      stages_to_run <- stages_to_run[!(stages_to_run == "postfit" & through != "postfit")]
+    } else stages_to_run <- character()
+  }
+  adoption_blocked <- !is.null(refresh_request) && identical(refresh_request$operation$mode, "adopt") &&
+    !toupper(as.character(contract$adoption_validation$outcome)) %in% c("PASS", "PASS_WITH_WARNINGS")
+  if (!length(stages_to_run) && !adoption_blocked) {
     print_contract(contract, dry = dry)
-    cat("All requested stages already have PASS status; nothing to run.\n")
+    cat("All requested stages already have accepted status; nothing to run.\n")
     quit(save = "no", status = 0L)
   }
   if (dry) {
     print_contract(contract, dry = TRUE)
-    for (stage in c("prepare", "fit", "postfit")) {
-      if (stage == "prepare" && from != "prepare") next
-      if (stage == "fit" && (through == "prepare" || !from %in% c("prepare", "fit"))) next
-      if (stage == "postfit" && through != "postfit") next
+    if (!is.null(refresh_request)) {
+      cat("Requested execution plan: ", paste(plan$stage_sequence, collapse = " -> "), "\n", sep = "")
+      if (identical(refresh_request$operation$mode, "adopt")) {
+        cat("Adoption validation: ", plan$validation_status, "\n", sep = "")
+        if (adoption_blocked) cat("Blocking reason: ", plan$blocking_reason, "\n", sep = "")
+        cat("Historical fit job ID: ", plan$historical_fit_job_id, " (provenance only; no Slurm dependency)\n", sep = "")
+        cat("Prepare jobs: none\nFit jobs: none\n")
+        if (adoption_blocked) cat("Post-fit jobs: none; requested Post-fit is blocked pending provenance resolution\n")
+        cat("Artifact registry destination: ", plan$artifact_registry_target, "\n", sep = "")
+        cat("Artifact registration performed: no\n")
+        cat("Production configuration compatible with candidate: ", plan$production_configuration_compatibility$matches, "\n", sep = "")
+        for (role in names(plan$reused_artifacts)) cat(if (adoption_blocked) "Declared artifact " else "Reuse ", role, ": ", plan$reused_artifacts[[role]]$path, " SHA256=", plan$reused_artifacts[[role]]$sha256, "\n", sep = "")
+        cat("Post-fit products would be written under: ", plan$product_run_root, "\n", sep = "")
+      }
+      cat("Scheduler jobs submitted: 0\n")
+    }
+    for (stage in stages_to_run) {
       profile <- contract$scheduler[[stage]]
-      dependency <- if (stage == "fit") "afterok:<prepare-job-id>" else if (stage == "postfit") "afterok:<fit-job-id>" else "none"
+      dependency <- if (!is.null(plan)) plan$dependencies[[stage]] %||% "none" else if (stage == "fit") "afterok:<prepare-job-id>" else if (stage == "postfit") "afterok:<fit-job-id>" else "none"
       cat("Job ", stage, ": account=", contract$scheduler$account, ", partition=", contract$scheduler$partition,
           ", cpus=", profile$cpus, ", mem=", profile$mem, ", time=", profile$time,
           ", dependency=", dependency, "\n", sep = "")
       stage_args <- c("--mode", "stage", "--config", config_path, "--run-id", contract$run_id, "--run-root", contract$run_root, "--stage", stage, "--repo-root", repo_root)
       cat("  command: ", production_orchestration_stage_command(repo_root, stage_args), "\n", sep = "")
     }
-    quit(save = "no", status = 0L)
+    quit(save = "no", status = if (adoption_blocked) 2L else 0L)
   }
   if (identical(mode, "direct")) {
-    for (stage in c("prepare", "fit", "postfit")) {
-      if (stage == "prepare" && from != "prepare") next
-      if (stage == "fit" && (through == "prepare" || !from %in% c("prepare", "fit"))) next
-      if (stage == "postfit" && through != "postfit") next
-      contract <- execute_stage(contract, stage, fit_job_id_arg)
-    }
+    for (stage in stages_to_run) contract <- execute_stage(contract, stage, fit_job_id_arg)
     print_contract(contract, dry = FALSE)
     quit(save = "no", status = 0L)
   }
   jobs <- list()
-  for (stage in c("prepare", "fit", "postfit")) {
-    if (stage == "prepare" && from != "prepare") next
-    if (stage == "fit" && (through == "prepare" || !from %in% c("prepare", "fit"))) next
-    if (stage == "postfit" && through != "postfit") next
+  if (!is.null(refresh_request)) {
+    current_request_sha <- production_release_sha256(attr(refresh_request, "request_path"))
+    if (!identical(current_request_sha, attr(refresh_request, "request_sha256"))) stop("Refresh request changed after planning.", call. = FALSE)
+    production_release_validate_request_inputs(refresh_request)
+    if (identical(refresh_request$operation$mode, "resume")) contract$resume_artifact_validation <- production_release_validate_resume_artifacts(contract, status_map(contract))
+    if (identical(refresh_request$operation$mode, "adopt")) {
+      for (artifact in contract$artifact_inputs) production_release_verify_file(artifact$path, artifact$sha256, artifact$bytes, "registered adoption artifact")
+      production_release_verify_file(contract$artifact_storage$registry_manifest, contract$artifact_storage$registry_manifest_sha256, label = "registered artifact manifest")
+    }
+  }
+  for (stage in stages_to_run) {
     profile <- contract$scheduler[[stage]]
     dependency <- if (stage == "fit" && !is.null(jobs$prepare)) paste0("afterok:", jobs$prepare) else if (stage == "postfit" && !is.null(jobs$fit)) paste0("afterok:", jobs$fit) else NULL
     stage_args <- c("--mode", "stage", "--config", config_path, "--run-id", contract$run_id, "--run-root", contract$run_root, "--stage", stage, "--repo-root", repo_root)
@@ -332,6 +471,9 @@ if (mode %in% c("submit", "direct", "dry-run")) {
     if (!length(value) || !is.null(attr(value, "status"))) stop("Unable to submit ", stage, " job: ", paste(value, collapse = " "), call. = FALSE)
     jobs[[stage]] <- sub(";.*$", "", trimws(value[[length(value)]]))
     contract$job_ids[[stage]] <- jobs[[stage]]
+    if (identical(contract$operation_mode, "adopt") && identical(stage, "postfit")) {
+      contract$execution_state <- "ADOPTED_POSTFIT_SUBMITTED"
+    }
     production_orchestration_write_manifest(contract)
   }
   print_contract(contract, dry = FALSE)
