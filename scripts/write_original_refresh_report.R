@@ -62,6 +62,7 @@ input_paths <- c(
   subgroup_tier2_yearweek = file.path(validation_dir, "tier2_temporal_yearweek_metrics.csv"),
   fit = file.path(run_root, "stage3b", "joint_model_fit.rds"),
   fit_metadata = file.path(run_root, "stage3b", "joint_model_fit_metadata.rds"),
+  fit_stdout = file.path(repo_root, paste0("original-refresh-fit-", args$fit_job, ".out")),
   fit_stderr = file.path(repo_root, paste0("original-refresh-fit-", args$fit_job, ".err")),
   stage1 = file.path(run_root, "stage1", "model_inputs.rds"),
   stage2 = file.path(run_root, "stage2", "joint_model_inputs.rds"),
@@ -71,6 +72,10 @@ input_paths <- c(
 )
 missing <- input_paths[!file.exists(input_paths)]
 if (length(missing)) stop("Required original-refresh reporting inputs are missing: ", paste(names(missing), collapse = ", "))
+fit_stdout_lines <- readLines(input_paths[["fit_stdout"]], warn = FALSE)
+fit_commit_line <- grep("^Repository:[[:space:]]+", fit_stdout_lines, value = TRUE)
+if (length(fit_commit_line) != 1L) stop("Could not identify a unique fit-source commit in the Slurm stdout log.")
+fit_repository_commit <- sub("^Repository:[[:space:]]+", "", fit_commit_line[[1L]])
 fit_stderr_lines <- readLines(input_paths[["fit_stderr"]], warn = FALSE)
 warning_lines <- grep("warning|reinstall|vb\\.correction", fit_stderr_lines,
   ignore.case = TRUE, value = TRUE)
@@ -155,6 +160,7 @@ hash_paths <- c(
   stage2 = input_paths[["stage2"]], stage2_audit = input_paths[["stage2_audit"]],
   stage3a = input_paths[["stage3a"]], formula_audit = input_paths[["formula_audit"]],
   fit = input_paths[["fit"]], fit_metadata = input_paths[["fit_metadata"]],
+  fit_stdout = input_paths[["fit_stdout"]],
   fit_stderr = input_paths[["fit_stderr"]],
   fit_health = input_paths[["fit_health"]], extraction_audit = input_paths[["extraction_audit"]],
   validation_metrics = input_paths[["validation_metrics"]], validation_audit = input_paths[["validation_audit"]],
@@ -176,6 +182,7 @@ manifest <- data.frame(
 )
 manifest$fit_job <- as.character(args$fit_job)
 manifest$repository_commit <- paste(system2("git", c("-C", repo_root, "rev-parse", "HEAD"), stdout = TRUE), collapse = "")
+manifest$fit_repository_commit <- fit_repository_commit
 
 fixed_file <- file.path(out_dir, "original_refresh_fixed_effect_summaries.csv")
 hyper_file <- file.path(out_dir, "original_refresh_hyperparameter_summaries.csv")
@@ -227,7 +234,7 @@ utils::write.csv(formula_audit, formula_audit_file, row.names = FALSE, na = "")
 utils::write.csv(warning_provenance, warning_file, row.names = FALSE, na = "")
 utils::write.csv(comparison_counts, comparison_counts_file, row.names = FALSE, na = "")
 utils::write.csv(comparison_paired, comparison_paired_file, row.names = FALSE, na = "")
-if (!file.copy(input_paths[["comparison_report"]], comparison_report_file, overwrite = FALSE)) {
+if (!file.copy(input_paths[["comparison_report"]], comparison_report_file, overwrite = isTRUE(args$overwrite))) {
   stop("Could not copy the matched C-1 comparison report into the original-refresh archive.")
 }
 subgroup_sources <- c(input_paths[["subgroup_report"]], input_paths[["subgroup_tier1_admin"]],
@@ -235,11 +242,12 @@ subgroup_sources <- c(input_paths[["subgroup_report"]], input_paths[["subgroup_t
   input_paths[["subgroup_tier2_week"]], input_paths[["subgroup_tier2_yearweek"]])
 subgroup_targets <- c(subgroup_report_file, subgroup_tier1_admin_file, subgroup_tier2_admin_file,
   subgroup_tier2_year_file, subgroup_tier2_week_file, subgroup_tier2_yearweek_file)
-if (!all(file.copy(subgroup_sources, subgroup_targets, overwrite = FALSE))) {
+if (!all(file.copy(subgroup_sources, subgroup_targets, overwrite = isTRUE(args$overwrite)))) {
   stop("Could not copy all predictive subgroup tables into the original-refresh archive.")
 }
 execution <- data.frame(
-  fit_job = as.character(args$fit_job), repository_commit = manifest$repository_commit[[1L]],
+  fit_job = as.character(args$fit_job), fit_repository_commit = fit_repository_commit,
+  report_repository_commit = manifest$repository_commit[[1L]],
   fit_configuration_sha256 = sha256(file.path(repo_root, "config", "original_refresh_w44_2026", "joint_inla_fit.yml")),
   cpus = args$cpus, requested_memory = args$memory, elapsed = args$elapsed,
   peak_rss = args$max_rss, exit_status = args$exit_status,
@@ -253,7 +261,8 @@ utils::write.csv(execution, execution_file, row.names = FALSE, na = "")
 manifest <- rbind(manifest, data.frame(
   role = "fit_warning_provenance", path = warning_file, sha256 = sha256(warning_file),
   bytes = as.numeric(file.info(warning_file)$size), fit_job = as.character(args$fit_job),
-  repository_commit = manifest$repository_commit[[1L]], stringsAsFactors = FALSE
+  repository_commit = manifest$repository_commit[[1L]], fit_repository_commit = fit_repository_commit,
+  stringsAsFactors = FALSE
 ))
 utils::write.csv(manifest, manifest_file, row.names = FALSE, na = "")
 
@@ -361,7 +370,7 @@ report <- c(
   "## Slurm and software provenance",
   "",
   paste0("- Fit Slurm job: ", args$fit_job, "; allocation: ", args$cpus, " CPUs / ", args$memory, "; elapsed: ", args$elapsed, "; peak RSS: ", args$max_rss, "; exit status: ", args$exit_status, "."),
-  paste0("- Repository commit: ", manifest$repository_commit[[1L]], "."),
+  paste0("- Fit-source repository commit: ", fit_repository_commit, "; report-generator repository commit: ", manifest$repository_commit[[1L]], "."),
   paste0("- R: ", R.version.string, "; INLA: ", if (requireNamespace("INLA", quietly = TRUE)) as.character(utils::packageVersion("INLA")) else validation_metadata$software$INLA_validation_runtime, "."),
   paste0("- Fit SHA-256: ", sha256(input_paths[["fit"]]), "; Stage 3A SHA-256: ", sha256(input_paths[["stage3a"]]), "; Stage 2 SHA-256: ", sha256(input_paths[["stage2"]]), "; copied Stage 1 SHA-256: ", sha256(input_paths[["stage1"]]), "."),
   "",

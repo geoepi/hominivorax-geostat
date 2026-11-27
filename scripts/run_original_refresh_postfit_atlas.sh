@@ -62,7 +62,7 @@ Rscript --vanilla scripts/compare_c1_original_refresh_holdouts.R \
   --c1-tier2-rows="$C1_TIER2_ROWS" --c1-metrics="$C1_METRICS" \
   --refreshed-metrics="$VALIDATION_DIR/holdout_validation_metrics_$RUN_ID.csv" \
   --output-dir="$RUN_ROOT/comparison"
-sacct_row=$(sacct -j "$FIT_JOB" --format=Elapsed,MaxRSS,ExitCode --noheader --parsable2 | awk -F'|' 'NF >= 3 && $1 != "" {print; exit}')
+sacct_row=$(sacct -j "$FIT_JOB" --format=Elapsed,MaxRSS,ExitCode --noheader --parsable2 | awk -F'|' 'NF >= 3 && $1 != "" && $2 != "" && $3 != "" {print; exit}')
 if [[ -z "$sacct_row" ]]; then echo "Could not retrieve the completed fit job accounting row for $FIT_JOB." >&2; exit 2; fi
 IFS='|' read -r FIT_ELAPSED FIT_MAX_RSS FIT_EXIT_CODE <<< "$sacct_row"
 FIT_EXIT_STATUS="${FIT_EXIT_CODE%%:*}"
