@@ -104,7 +104,7 @@
     },
     "supporting_record_checksums": {
       "qualification_report_sha256": "62aa07157d1442d9c4bd0b42ec76a26b1680f92c8aa4cedd6401d1c75273ca86",
-      "promotion_review_sha256": "02be03c8fbbc36091de963d129d5e8ea291c165382f3052abba51383d507a9a5",
+      "promotion_review_sha256": "69871db8bcbaec86cd75d4f5572a358ad69c85366bc4b525f53397fa9a135ce4",
       "artifact_manifest_sha256": "8927eccc2140d7fcac54a9a8aeb2f71b8f66921487a8ac31208534c2ea0067aa",
       "formula_audit_sha256": "016c543b28265ebe5e5ada8e1bdbaf18718d30ad365c27de8d6fadcdc16050ac",
       "fit_health_sha256": "5a4ffd1772ffa8eee8f272d94ade4ea26be4c0a53639d24a3cd1da32d2333bca",
