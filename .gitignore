@@ -91,6 +91,7 @@ outputs/preprocessing_demo/
 !/scripts/compare_c1_original_refresh_holdouts.R
 !/scripts/extract_original_refresh_summaries.R
 !/scripts/summarize_original_refresh_predictive_groups.R
+!/scripts/write_original_refresh_report.R
 !/scripts/run_original_refresh_preparation_atlas.sh
 !/scripts/run_original_refresh_fit_atlas.sh
 !/scripts/run_original_refresh_postfit_atlas.sh
