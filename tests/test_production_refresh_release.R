@@ -246,6 +246,18 @@ test_that("versioned refresh request modes are strict and full runs preserve Pre
   invalid <- request
   invalid$operation$mode <- "ADOPT"
   expect_error(production_release_validate_request(invalid), "operation.mode")
+  invalid <- request
+  invalid$analysis$requested_endpoint <- "2024-W04"
+  expect_error(production_release_validate_request(invalid), "exceeds a declared observation or environmental availability endpoint")
+})
+
+test_that("an explicit requested horizon remains fixed when the source has later dates", {
+  observations <- data.frame(date = c("2026-11-01", "2026-11-13"), stringsAsFactors = FALSE)
+  horizon <- production_orchestration_resolve_requested_horizon(observations, "2022-W01", "2026-W44")
+  expect_identical(horizon$resolved_final_complete_epiweek, "2026-W44")
+  expect_identical(horizon$resolved_final_complete_week_end, "2026-11-01")
+  expect_identical(horizon$raw_max_observation_date, "2026-11-13")
+  expect_identical(horizon$observations_excluded_after_final_complete_week, 1L)
 })
 
 test_that("resume starts at each first incomplete stage and reuses accepted upstream stages", {

@@ -87,6 +87,32 @@ production_orchestration_resolve_horizon <- function(observations, start_epiweek
   )
 }
 
+production_orchestration_resolve_requested_horizon <- function(observations, start_epiweek, requested_endpoint) {
+  if (!is.data.frame(observations) || !nrow(observations)) stop("Current observations are empty.", call. = FALSE)
+  if (!"date" %in% names(observations)) stop("Requested horizon resolution requires a date column in the authoritative observations.", call. = FALSE)
+  start <- production_orchestration_parse_week(start_epiweek)
+  endpoint <- production_orchestration_parse_week(requested_endpoint)
+  start_date <- production_orchestration_week_start(start$year, start$week)
+  endpoint_start <- production_orchestration_week_start(endpoint$year, endpoint$week)
+  endpoint_end <- endpoint_start + 6L
+  if (endpoint_start < start_date) stop("Requested analysis endpoint precedes configured start_epiweek.", call. = FALSE)
+  dates <- suppressWarnings(as.Date(as.character(observations$date), tryFormats = c("%Y-%m-%d", "%m/%d/%Y", "%d/%m/%Y")))
+  valid <- !is.na(dates)
+  if (!any(valid)) stop("Requested horizon resolution found no valid observation dates.", call. = FALSE)
+  raw_max <- max(dates[valid])
+  if (!any(valid & dates <= endpoint_end)) stop("Requested analysis endpoint has no valid observations at or before its week end.", call. = FALSE)
+  weeks <- production_orchestration_week_sequence(start$label, endpoint$label)
+  list(
+    configured_start_epiweek = start$label,
+    resolved_final_complete_epiweek = endpoint$label,
+    resolved_final_complete_week_end = as.character(endpoint_end),
+    raw_max_observation_date = as.character(raw_max),
+    observations_excluded_after_final_complete_week = as.integer(sum(valid & dates > endpoint_end)),
+    modeled_weeks = length(weeks),
+    modeled_week_labels = weeks
+  )
+}
+
 production_orchestration_git_commit <- function(repo_root) {
   value <- tryCatch(system2("git", c("-C", repo_root, "-c", "safe.directory=*", "rev-parse", "HEAD"), stdout = TRUE, stderr = FALSE), error = function(e) character())
   if (!length(value)) NA_character_ else trimws(value[[1L]])
@@ -314,7 +340,7 @@ production_orchestration_stage_command <- function(repo_root, stage_args) {
 production_orchestration_contract <- function(config_path, repo_root, run_id = NULL, run_root = NULL, config_overrides = NULL) {
   cfg <- production_orchestration_read_config(config_path, repo_root)
   if (!is.null(config_overrides)) {
-    allowed_overrides <- c("observations", "start_epiweek", "end_rule", "output_root")
+    allowed_overrides <- c("observations", "start_epiweek", "end_rule", "end_epiweek", "output_root")
     extra_overrides <- setdiff(names(config_overrides), allowed_overrides)
     if (length(extra_overrides)) stop("Unsupported production configuration overrides: ", paste(extra_overrides, collapse = ", "), call. = FALSE)
     if (!is.null(config_overrides$observations)) cfg$input$observations <- production_orchestration_resolve_path(config_overrides$observations, repo_root)
@@ -327,7 +353,9 @@ production_orchestration_contract <- function(config_path, repo_root, run_id = N
   git_commit <- production_orchestration_git_commit(repo_root)
   run_id <- run_id %||% production_orchestration_run_id(git_commit)
   if (!grepl("^[A-Za-z0-9_.-]+$", run_id)) stop("run_id contains unsupported characters.", call. = FALSE)
-  horizon <- production_orchestration_resolve_horizon(observations, cfg$temporal$start_epiweek, cfg$temporal$end_rule)
+  horizon <- if (!is.null(config_overrides$end_epiweek)) {
+    production_orchestration_resolve_requested_horizon(observations, cfg$temporal$start_epiweek, config_overrides$end_epiweek)
+  } else production_orchestration_resolve_horizon(observations, cfg$temporal$start_epiweek, cfg$temporal$end_rule)
   root <- run_root %||% file.path(cfg$project$output_root, run_id)
   root <- normalizePath(root, mustWork = FALSE)
   list(

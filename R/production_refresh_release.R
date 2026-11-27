@@ -69,8 +69,19 @@ production_release_validate_request <- function(request) {
       (is.null(request$covariate_registry$path) || is.null(request$covariate_registry$sha256))) stop("A versioned covariate registry requires both path and SHA-256.", call. = FALSE)
   production_release_assert_fields(request$analysis, c("start_epiweek", "requested_endpoint"),
                                    c("start_epiweek", "requested_endpoint"), "analysis")
-  if (!grepl("^[0-9]{4}-W[0-9]{2}$", as.character(request$analysis$start_epiweek)) ||
-      !grepl("^[0-9]{4}-W[0-9]{2}$", as.character(request$analysis$requested_endpoint))) stop("Analysis endpoints must use YYYY-Www epiweek format.", call. = FALSE)
+  week_fields <- c(request$data$availability_endpoint, request$environmental_data$availability_endpoint,
+                   request$analysis$start_epiweek, request$analysis$requested_endpoint)
+  if (any(!grepl("^[0-9]{4}-W[0-9]{2}$", as.character(week_fields)))) stop("Availability and analysis endpoints must use YYYY-Www epiweek format.", call. = FALSE)
+  start_week <- production_orchestration_parse_week(request$analysis$start_epiweek)
+  endpoint_week <- production_orchestration_parse_week(request$analysis$requested_endpoint)
+  observation_endpoint <- production_orchestration_parse_week(request$data$availability_endpoint)
+  environmental_endpoint <- production_orchestration_parse_week(request$environmental_data$availability_endpoint)
+  endpoint_start <- production_orchestration_week_start(endpoint_week$year, endpoint_week$week)
+  if (endpoint_start < production_orchestration_week_start(start_week$year, start_week$week)) stop("Requested analysis endpoint precedes analysis start.", call. = FALSE)
+  if (endpoint_start > production_orchestration_week_start(observation_endpoint$year, observation_endpoint$week) ||
+      endpoint_start > production_orchestration_week_start(environmental_endpoint$year, environmental_endpoint$week)) {
+    stop("Requested analysis endpoint exceeds a declared observation or environmental availability endpoint.", call. = FALSE)
+  }
   production_release_assert_fields(request$output, c("root"), c("root"), "output")
   if (length(request$output$root) != 1L || is.na(request$output$root) || !nzchar(as.character(request$output$root))) stop("output.root must be one non-empty path.", call. = FALSE)
   production_release_assert_fields(request$qualification, c("status", "required_gates", "evidence_manifest", "evidence_manifest_sha256"),
@@ -210,10 +221,8 @@ production_release_refresh_contract <- function(request, config_path, repo_root,
     if (mode == "full" && !compatibility$matches) stop("Full refresh request differs from its execution configuration: ", paste(names(compatibility$checks)[!unlist(compatibility$checks)], collapse = ", "), call. = FALSE)
     if (mode == "adopt" && identical(as.character(request$configuration$role), "candidate_execution") && !compatibility$matches) stop("Adopt request differs from its candidate execution configuration.", call. = FALSE)
     if (mode == "adopt" && identical(as.character(request$configuration$role), "active_deployment") && isTRUE(request$operation$dispatch_authorized)) stop("An active deployment configuration may be used only for a no-dispatch adoption plan.", call. = FALSE)
-    overrides <- if (mode == "adopt" && identical(as.character(request$configuration$role), "active_deployment")) {
-      list(observations = request$data$observations_path, start_epiweek = request$analysis$start_epiweek,
-           end_rule = "last_complete_epiweek", output_root = request$output$root)
-    } else NULL
+    overrides <- list(observations = request$data$observations_path, start_epiweek = request$analysis$start_epiweek,
+      end_epiweek = request$analysis$requested_endpoint, output_root = request$output$root)
     run_id <- if (mode == "adopt") paste0("adopt-", request$request_id) else request$request_id
     expected_run_root <- file.path(resolved$output_root, run_id)
     if (!is.null(run_root) && !identical(normalizePath(run_root, mustWork = FALSE), normalizePath(expected_run_root, mustWork = FALSE))) stop("--run-root may not override the versioned output location in a refresh request.", call. = FALSE)
