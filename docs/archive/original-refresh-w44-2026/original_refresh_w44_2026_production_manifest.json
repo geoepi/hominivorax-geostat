@@ -104,7 +104,7 @@
     },
     "supporting_record_checksums": {
       "qualification_report_sha256": "62aa07157d1442d9c4bd0b42ec76a26b1680f92c8aa4cedd6401d1c75273ca86",
-      "promotion_review_sha256": "69871db8bcbaec86cd75d4f5572a358ad69c85366bc4b525f53397fa9a135ce4",
+      "promotion_review_sha256": "bc9d4cbbc8ee4359f628c116d41534ba08ced3afa49dba6a0cd9aae7ef695596",
       "artifact_manifest_sha256": "8927eccc2140d7fcac54a9a8aeb2f71b8f66921487a8ac31208534c2ea0067aa",
       "formula_audit_sha256": "016c543b28265ebe5e5ada8e1bdbaf18718d30ad365c27de8d6fadcdc16050ac",
       "fit_health_sha256": "5a4ffd1772ffa8eee8f272d94ade4ea26be4c0a53639d24a3cd1da32d2333bca",
@@ -165,7 +165,7 @@
     "exit_code": 0,
     "runner_self_test": "PASS",
     "summary_path": "docs/archive/original-refresh-w44-2026/canonical_test_summary_caa6822.tsv",
-    "summary_sha256": "0334d850f5645c903daae788a180e29f888f66098bf18d44680e84f0e1ff8402",
+    "summary_sha256": "063bd12101f028bcdf57140094780219d3999212ca760fa881213f9ef42e11c8",
     "self_test_command": "Rscript tests/run_tests.R --self-test --log-dir /project/disease_ecology/hominivorax-geostat-original-refresh-w44-2026/outputs/original_refresh_w44_2026/validation/canonical_test_logs_caa6822"
   },
   "historical_model_preservation": {

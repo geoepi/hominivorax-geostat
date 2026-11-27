@@ -50,7 +50,7 @@ Slurm job ID. Exit code was 0:
 
 The per-test summary is archived in
 [`canonical_test_summary_caa6822.tsv`](canonical_test_summary_caa6822.tsv)
-(SHA-256 `0334d850f5645c903daae788a180e29f888f66098bf18d44680e84f0e1ff8402`).
+(SHA-256 `063bd12101f028bcdf57140094780219d3999212ca760fa881213f9ef42e11c8`).
 The full stdout and stderr logs remain in the Atlas validation output tree at
 `/project/disease_ecology/hominivorax-geostat-original-refresh-w44-2026/outputs/original_refresh_w44_2026/validation/canonical_test_logs_caa6822/run-222ff255d14b86/`.
 The separate runner self-test passed, confirming failure propagation and
