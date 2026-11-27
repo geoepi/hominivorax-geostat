@@ -32,7 +32,7 @@
         "sheep"
       ],
       "excluded_c1_only_terms": ["clay", "wv0010", "spressure"],
-      "audit_path": "docs/archive/original-refresh-w44-2026/original_refresh_formula_audit.csv"
+      "audit_path": "docs/archive/original-refresh-w44-2026/original_refresh_formula_audit_adoption_v2.csv"
     },
     "data_release": {
       "release_id": "2026-11-13",
@@ -93,7 +93,7 @@
       }
     ],
     "supporting_records": {
-      "artifact_manifest": "docs/archive/original-refresh-w44-2026/original_refresh_artifact_manifest.csv",
+      "artifact_manifest": "docs/archive/original-refresh-w44-2026/original_refresh_artifact_manifest_adoption_v2.csv",
       "fit_health": "docs/archive/original-refresh-w44-2026/original_refresh_fit_health.csv",
       "extraction_audit": "docs/archive/original-refresh-w44-2026/original_refresh_extraction_audit.csv",
       "validation_metrics": "docs/archive/original-refresh-w44-2026/original_refresh_predictive_metrics.csv",
@@ -104,13 +104,16 @@
       "fit_warning_provenance": "docs/archive/original-refresh-w44-2026/original_refresh_fit_warnings.csv",
       "qualification_report": "docs/archive/original-refresh-w44-2026/original-refresh-w44-2026.md",
       "matched_c1_comparison": "docs/archive/original-refresh-w44-2026/matched_c1_original_refresh_comparison.md",
-      "source_provenance_reconciliation": "docs/archive/original-refresh-w44-2026/original_refresh_w44_2026_source_provenance_reconciliation_v1.json"
+      "source_provenance_reconciliation": "docs/archive/original-refresh-w44-2026/original_refresh_w44_2026_source_provenance_reconciliation_v1.json",
+      "source_artifact_manifest": "docs/archive/original-refresh-w44-2026/original_refresh_artifact_manifest.csv",
+      "source_formula_audit": "docs/archive/original-refresh-w44-2026/original_refresh_formula_audit.csv",
+      "formula_audit_duplicate_reconciliation": "docs/archive/original-refresh-w44-2026/original_refresh_formula_audit_deduplication_v1.json"
     },
     "supporting_record_checksums": {
       "qualification_report_sha256": "62aa07157d1442d9c4bd0b42ec76a26b1680f92c8aa4cedd6401d1c75273ca86",
       "promotion_review_sha256": "bc9d4cbbc8ee4359f628c116d41534ba08ced3afa49dba6a0cd9aae7ef695596",
-      "artifact_manifest_sha256": "8927eccc2140d7fcac54a9a8aeb2f71b8f66921487a8ac31208534c2ea0067aa",
-      "formula_audit_sha256": "016c543b28265ebe5e5ada8e1bdbaf18718d30ad365c27de8d6fadcdc16050ac",
+      "artifact_manifest_sha256": "222487eaf50a4365399504380735df1d55d1538c1e26ac2e5069b8d85f5c043e",
+      "formula_audit_sha256": "123cdb4c74a0db1d3427784999efaf6d2458f79b29da4dedc7079705a01c72da",
       "fit_health_sha256": "5a4ffd1772ffa8eee8f272d94ade4ea26be4c0a53639d24a3cd1da32d2333bca",
       "extraction_audit_sha256": "6180eaf4e86e2752db82bd5224b5d4d4942d7d7ce0b54ba705fd2636318b858a",
       "validation_metrics_sha256": "5f29c19d01b4ae7fa74683848058bca29eed4364e5a5b0659515ebbe38265011",
@@ -120,7 +123,10 @@
       "random_component_summary_sha256": "d94b69bb611cfdabbf922ed7ae83ab9ec67b264abf7a7eb3f2ff95666c8a0c58",
       "fit_warning_provenance_sha256": "c6d583cf8458867cd2c2945a67cc2a3e6f7c232032bcbea485de79c99a138c6e",
       "matched_c1_comparison_sha256": "0dd2a7280b0194658b45a85c23cde7275589fc90889572a4e89dafc8795dc1bf",
-      "source_provenance_reconciliation_sha256": "8792892040e2a44ad4702536520cd4bed6e38b50308d31e966a3470c5fa118fc"
+      "source_provenance_reconciliation_sha256": "8792892040e2a44ad4702536520cd4bed6e38b50308d31e966a3470c5fa118fc",
+      "source_artifact_manifest_sha256": "8927eccc2140d7fcac54a9a8aeb2f71b8f66921487a8ac31208534c2ea0067aa",
+      "source_formula_audit_sha256": "016c543b28265ebe5e5ada8e1bdbaf18718d30ad365c27de8d6fadcdc16050ac",
+      "formula_audit_duplicate_reconciliation_sha256": "b0156d9c1a6bfe4dbbc5a04ca87552f7123e38ac21451791bcd3f94d1b31abeb"
     },
     "qualification_evidence": {
       "fit_health_pass": 21,
