@@ -19,7 +19,7 @@ fixture_write_csv <- function(data, path, ...) {
   normalizePath(path, mustWork = TRUE)
 }
 
-make_adoption_fixture <- function(metadata_commit = NULL, record_stage1_metadata = TRUE) {
+make_adoption_fixture <- function(metadata_commit = NULL, record_stage1_metadata = TRUE, include_provenance_reconciliation = FALSE) {
   root <- tempfile(pattern = "refresh_adoption_fixture_")
   dir.create(root, recursive = TRUE)
   source_root <- file.path(root, "source")
@@ -120,27 +120,72 @@ make_adoption_fixture <- function(metadata_commit = NULL, record_stage1_metadata
   utils::write.table(data.frame(test_file = "test_fixture.R", status = "PASS", exit_status = 0L),
     canonical_path, sep = "\t", quote = FALSE, row.names = FALSE)
   qualification_report <- fixture_write(file.path(root, "qualification-report.md"), "Final qualification: ORIGINAL_REFRESH_W44_QUALIFIED_WITH_LIMITATIONS\n")
-  qualification_path <- file.path(root, "qualification.yml")
+  superseded_qualification_path <- fixture_write(file.path(root, "historical-qualification.json"), "{\"historical\":true}\n")
+  qualification_path <- file.path(root, "qualification.json")
   formula_sha <- fixture_hash(artifact_paths$formula_audit)
+  provenance_reconciliation_path <- NULL
+  if (isTRUE(include_provenance_reconciliation)) {
+    provenance_reconciliation_path <- file.path(root, "source-provenance-reconciliation.json")
+    tree_id <- paste(rep("c", 40L), collapse = "")
+    fixture_reconciliation <- list(
+      schema_version = 1L, record_id = "fixture-source-reconciliation-v1",
+      fit = list(job_id = "12345", launch_commit = commit, metadata_runtime_commit = metadata_commit,
+                 metadata_audit_commit = metadata_commit, launch_commit_recorded_at = "2024-01-01T00:00:00Z",
+                 metadata_commit_recorded_at = "2024-01-01T00:00:30Z", audit_start_utc = "2024-01-01T00:00:00Z",
+                 audit_end_utc = "2024-01-01T00:01:00Z"),
+      comparison = list(
+        changed_paths = c("docs/archive/configuration-c-1-2026/assessment.md", "docs/archive/configuration-c-1-2026/summary.csv"),
+        documentation_paths = "docs/archive/configuration-c-1-2026/assessment.md",
+        archived_scientific_evidence_paths = "docs/archive/configuration-c-1-2026/summary.csv",
+        test_only_paths = character(), executable_paths = character(), model_specification_paths = character(),
+        configuration_paths = character(), runtime_setting_paths = character(),
+        launch_tree_ids = list(R = tree_id, scripts = tree_id, config = tree_id, tests = tree_id),
+        metadata_tree_ids = list(R = tree_id, scripts = tree_id, config = tree_id, tests = tree_id),
+        fit_relevant_trees_identical = TRUE, model_behavior_changed = FALSE, executable_source_changes = 0L, test_file_changes = 0L,
+        configuration_file_changes = 0L, model_definition_changes = 0L, likelihood_or_runtime_setting_changes = 0L,
+        classification = "NON_EXECUTABLE_C1_ARCHIVE_ONLY"),
+      metadata_discrepancy = "The W44 worktree HEAD was updated during the fit audit window by a commit adding C-1 archive reports only; the model execution commit from the Slurm launch remains authoritative.",
+      decision = list(status = "RECONCILED_NON_EXECUTABLE_METADATA_DRIFT", source_identity = "launch_commit",
+        governance_mode = "HGE", authorization_basis = "USER_TASK_CONDITIONAL_PROVENANCE_RECONCILIATION",
+        production_activation_authorized = FALSE))
+    jsonlite::write_json(fixture_reconciliation, provenance_reconciliation_path, auto_unbox = TRUE, pretty = TRUE, digits = NA)
+  }
   qualification <- list(
+    evidence_schema_version = 2L,
+    supersedes = list(path = superseded_qualification_path, sha256 = fixture_hash(superseded_qualification_path)),
     decision_status = "W44_PRODUCTION_PROMOTION_BLOCKED",
+    review_date = "2026-11-27",
+    historical_model_preservation = list(),
+    active_production_snapshot = list(),
+    deployment_manifest_reconciliation = list(),
+    activation = list(),
+    integration = list(),
     candidate_model = list(
-      model_id = "ORIGINAL_REFRESH_W44_2026", proposed_production_id = "ORIGINAL_W44_2026_PRODUCTION",
+      model_id = "ORIGINAL_REFRESH_W44_2026", proposed_production_id = "ORIGINAL_W44_2026_PRODUCTION", active_in_production = FALSE,
+      qualification_status = "ORIGINAL_REFRESH_W44_QUALIFIED_WITH_LIMITATIONS",
       formula_identity = "original_joint_inla_v1", formula_reference = list(path = formula_reference, fixed_effect_count_including_intercepts = 16L),
       data_release = list(release_id = "2026-11-13", observations_sha256 = fixture_hash(observation_path), analysis_start_epiweek = "2024-W01", analysis_end_epiweek = "2024-W03"),
       fit = list(slurm_job_id = "12345", artifact_path = artifact_paths$fit, artifact_bytes = file.info(artifact_paths$fit)$size, artifact_sha256 = fit_sha),
-      repository = list(fit_source_commit = commit, report_generation_commit = report_commit),
+      repository = list(fit_source_commit = commit, metadata_runtime_commit = metadata_commit, report_generation_commit = report_commit),
+      runtime = list(environment = "fixture"),
       stages = list(list(stage = "1", path = artifact_paths$stage1, sha256 = stage1_sha),
                     list(stage = "2", path = artifact_paths$stage2, sha256 = stage2_sha),
                     list(stage = "3A", path = artifact_paths$stage3a, sha256 = stage3a_sha)),
-      supporting_records = list(artifact_manifest = "artifact_manifest.csv", formula_audit = "source/outputs/validation/formula_audit.csv", qualification_report = "qualification-report.md"),
-      supporting_record_checksums = list(artifact_manifest_sha256 = fixture_hash(artifact_manifest_path), formula_audit_sha256 = formula_sha, qualification_report_sha256 = fixture_hash(qualification_report)),
-      qualification = list(fit_health_pass = 4L, fit_health_fail = 0L, extraction_pass = 3L, extraction_fail = 0L,
-        validation_pass = 3L, validation_warning = 0L, validation_fail = 0L)
+      supporting_records = c(list(artifact_manifest = "artifact_manifest.csv", formula_audit = "source/outputs/validation/formula_audit.csv", qualification_report = "qualification-report.md"),
+        if (is.null(provenance_reconciliation_path)) list() else list(source_provenance_reconciliation = provenance_reconciliation_path)),
+      supporting_record_checksums = c(list(artifact_manifest_sha256 = fixture_hash(artifact_manifest_path), formula_audit_sha256 = formula_sha, qualification_report_sha256 = fixture_hash(qualification_report)),
+        if (is.null(provenance_reconciliation_path)) list() else list(source_provenance_reconciliation_sha256 = fixture_hash(provenance_reconciliation_path))),
+      qualification_evidence = list(fit_health_pass = 4L, fit_health_fail = 0L, extraction_pass = 3L, extraction_fail = 0L,
+        validation_pass = 3L, validation_warning = 0L, validation_fail = 0L, tier1_holdouts = 10L, tier2_holdouts = 10L,
+        holdout_identity_match_with_c1 = TRUE, tier1_area_weighted_pb_auc = 0.9, tier1_area_weighted_cbi = 0.9,
+        tier2_mae = 1, tier2_rmse = 1, tier2_pearson = 0.9, tier2_spearman = 0.9, tier2_calibration_mean_ratio = 1,
+        tier2_mae_difference_refreshed_minus_c1 = 0, tier2_mae_difference_interpretation = "fixture",
+        limitations = c("fixture limitation"), fit_stderr_inla_experimental_vb_warning_occurrences = 0L,
+        fit_stderr_unclassified_warning_lines = 0L, rasters_generated = FALSE, posterior_sampling_performed = FALSE)
     ),
     canonical_tests = list(summary_path = "canonical-tests.tsv", summary_sha256 = fixture_hash(canonical_path))
   )
-  yaml::write_yaml(qualification, qualification_path)
+  jsonlite::write_json(qualification, qualification_path, auto_unbox = TRUE, pretty = TRUE, digits = NA, null = "null")
 
   execution_config_path <- file.path(root, "production.yml")
   yaml::write_yaml(list(project = list(output_root = output_root), input = list(observations = observation_path),
@@ -163,6 +208,7 @@ make_adoption_fixture <- function(metadata_commit = NULL, record_stage1_metadata
     resume = NULL,
     adoption = list(artifact_manifest = artifact_manifest_path, artifact_manifest_sha256 = fixture_hash(artifact_manifest_path),
       source_fit_job_id = "12345", fit_sha256 = fit_sha, fit_source_commit = commit, report_generation_commit = report_commit,
+      provenance_reconciliation = if (is.null(provenance_reconciliation_path)) NULL else list(path = provenance_reconciliation_path, sha256 = fixture_hash(provenance_reconciliation_path)),
       lineage = list(stage1_to_stage2_sha256 = stage1_sha, stage2_to_stage3a_sha256 = stage2_sha, stage3a_to_fit_sha256 = stage3a_sha))
   )
   yaml::write_yaml(request, request_path)
@@ -295,7 +341,11 @@ test_that("adoption validates checksums, formula, stage lineage, audits, and met
 
   wrong_qualification <- fixture$request
   wrong_qualification$qualification$status <- "APPROVED"
-  expect_error(production_release_validate_adoption(wrong_qualification, fixture$root), "qualification status is not stated")
+  expect_error(production_release_validate_adoption(wrong_qualification, fixture$root), "qualification status does not match")
+
+  wrong_evidence_checksum <- fixture$request
+  wrong_evidence_checksum$qualification$evidence_manifest_sha256 <- paste(rep("0", 64L), collapse = "")
+  expect_error(production_release_validate_adoption(wrong_evidence_checksum, fixture$root), "Qualification manifest is missing or has a different SHA-256")
 
   file.remove(fixture$artifact_paths$stage3a)
   expect_error(production_release_validate_adoption(fixture$request, fixture$root), "does not exist|missing")
@@ -304,6 +354,56 @@ test_that("adoption validates checksums, formula, stage lineage, audits, and met
 test_that("fit metadata commit mismatch blocks adoption even when Slurm completed", {
   fixture <- make_adoption_fixture(metadata_commit = paste(rep("d", 40L), collapse = ""))
   expect_error(production_release_validate_adoption(fixture$request, fixture$root), "Fit source commit mismatch")
+})
+
+test_that("a checksummed non-executable provenance reconciliation preserves both fit commits", {
+  metadata_commit <- paste(rep("d", 40L), collapse = "")
+  fixture <- make_adoption_fixture(metadata_commit = metadata_commit, include_provenance_reconciliation = TRUE)
+  result <- production_release_validate_adoption(fixture$request, fixture$root, verify_files = TRUE)
+  expect_identical(result$fit_provenance$launch_commit, fixture$request$adoption$fit_source_commit)
+  expect_identical(result$fit_provenance$metadata_runtime_commit, metadata_commit)
+  expect_identical(result$fit_provenance$provenance_reconciliation$status, "RECONCILED_NON_EXECUTABLE_METADATA_DRIFT")
+  expect_false(result$fit_provenance$provenance_reconciliation$production_activation_authorized %||% FALSE)
+  expect_error(production_release_validate_source_reconciliation(
+    fixture$request$adoption$provenance_reconciliation, fixture$root, "12345",
+    fixture$request$adoption$fit_source_commit, metadata_commit,
+    "2024-01-01T00:00:01Z", "2024-01-01T00:01:00Z"),
+    "audit timestamps do not match the fit metadata")
+
+  inconsistent_evidence <- jsonlite::fromJSON(fixture$qualification_path, simplifyVector = FALSE)
+  inconsistent_evidence$candidate_model$repository$metadata_runtime_commit <- paste(rep("e", 40L), collapse = "")
+  jsonlite::write_json(inconsistent_evidence, fixture$qualification_path, auto_unbox = TRUE, pretty = TRUE, digits = NA, null = "null")
+  inconsistent_request <- fixture$request
+  inconsistent_request$qualification$evidence_manifest_sha256 <- fixture_hash(fixture$qualification_path)
+  expect_error(production_release_validate_adoption(inconsistent_request, fixture$root),
+    "metadata runtime commit does not match fit metadata")
+})
+
+test_that("versioned qualification JSON is strict, complete, checksummed, and preserves the historical record", {
+  fixture <- make_adoption_fixture()
+  evidence <- production_release_read_qualification_manifest(fixture$qualification_path, fixture$root)
+  expect_identical(as.integer(evidence$evidence_schema_version), 2L)
+  expect_identical(evidence$candidate_model$qualification_status, "ORIGINAL_REFRESH_W44_QUALIFIED_WITH_LIMITATIONS")
+
+  duplicate_path <- fixture_write(file.path(fixture$root, "duplicate-keys.json"),
+    c("{", "  \"candidate_model\": {", "    \"qualification_status\": \"QUALIFIED\",",
+      "    \"qualification_status\": \"BLOCKED\"", "  }", "}"))
+  expect_error(production_release_read_qualification_manifest(duplicate_path, fixture$root), "Duplicate map key")
+
+  missing_status <- jsonlite::fromJSON(fixture$qualification_path, simplifyVector = FALSE)
+  missing_status$candidate_model$qualification_status <- NULL
+  missing_status_path <- file.path(fixture$root, "missing-status.json")
+  jsonlite::write_json(missing_status, missing_status_path, auto_unbox = TRUE, pretty = TRUE, digits = NA, null = "null")
+  expect_error(production_release_read_qualification_manifest(missing_status_path, fixture$root), "qualification_status is missing")
+
+  missing_evidence <- jsonlite::fromJSON(fixture$qualification_path, simplifyVector = FALSE)
+  missing_evidence$candidate_model$qualification_evidence <- NULL
+  missing_evidence_path <- file.path(fixture$root, "missing-evidence.json")
+  jsonlite::write_json(missing_evidence, missing_evidence_path, auto_unbox = TRUE, pretty = TRUE, digits = NA, null = "null")
+  expect_error(production_release_read_qualification_manifest(missing_evidence_path, fixture$root), "qualification_evidence is missing")
+
+  historical_path <- file.path(repo_root, "docs", "archive", "original-refresh-w44-2026", "original_refresh_w44_2026_production_manifest.json")
+  expect_identical(fixture_hash(historical_path), "eed2d7cda3d8aa562f545b9d9e423e8d3495481d4e2f39626cd92a3da17c9786")
 })
 
 test_that("legacy fit metadata may omit Stage 1 path when the checked Stage 2 config supplies that edge", {
