@@ -176,12 +176,20 @@ governance.
 
 ## Git and deployment state
 
-The candidate code branch was synchronized with `origin` at the tested SHA.
+The tested code revision `caa682268b8e41de8d56aaedd8a44df099377dd7` was
+synchronized with `origin` when the suite ran. The review evidence was then
+added as documentation-only commits; PR #15 was opened at head
+`1641b5022363ea1a934f94a09c350b01ab118011`.
 The repository has no `.github/workflows` directory. GitHub exposed no candidate
 statuses/check-runs in the prior audit; the branch-protection endpoint was
 inaccessible to the connected account. No merge, tag, Atlas production sync,
 or production configuration write was performed. The active configuration
 remains on W39, and the two no-submit dry-runs created no jobs.
+
+Draft PR [#15](https://github.com/geoepi/hominivorax-geostat/pull/15) targets
+`main`. It is open and unmerged for code review; no status checks were
+reported. No reviewer approval, merge, release tag, or Atlas synchronization
+has occurred.
 
 The follow-on promotion record, JSON manifest, and copied test summary are
 documentation/evidence changes (Category A). The JSON parsed successfully;
