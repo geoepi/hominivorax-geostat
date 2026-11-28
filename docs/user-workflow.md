@@ -165,6 +165,29 @@ and secure Atlas paths are documented in the
 [framework guide](developer/refresh-release-framework.md) and
 [Atlas deployment guide](developer/atlas-deployment.md).
 
+## 10. Find accepted products and understand release identity
+
+Run execution files remain in the configured `production_runs` directory;
+accepted packages remain in the configured sibling `postfit_acceptance`
+directory. A release manifest records the immutable model specification
+identity separately from the observation/environment data release, run ID,
+and historical Fit job. `ROUTINE_REFRESH` retains a specification ID only
+when the complete descriptor digest matches; a scientific change requires
+`MODEL_REVISION` and a new specification ID. The descriptor also records
+product semantics such as the structural mask threshold and RPI contract.
+
+After acceptance registration, a schema v2 release manifest points to the
+accepted package and its checksummed product manifest. Its status remains
+`QUALIFIED_NOT_ACTIVE` until the separate activation procedure succeeds.
+Current product discovery follows the validated active-release manifest; it
+does not infer a release from a worktree or scheduler job. The existing active
+pointer is not initialized from W39 configuration by inference.
+
+A cleanup eligibility report is a review aid only. It requires both 90 days
+and two subsequent qualified refresh cycles, and it does not delete files.
+Scientific model revisions and unresolved duplicate candidates are excluded
+from routine-refresh expiry.
+
 ## Further reading
 
 - [Documentation index](README.md)

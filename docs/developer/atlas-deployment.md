@@ -11,7 +11,11 @@ used by operators. It complements the private Atlas operator record at
 | Code checkout | `/project/disease_ecology/hominivorax-geostat` |
 | Secure configuration root | `/project/disease_ecology/hominivorax-geostat-config` |
 | Production configuration | `/project/disease_ecology/hominivorax-geostat-config/production.yml` |
-| Production outputs | `/project/disease_ecology/nws-geostat-output/production_runs` |
+| Production execution history | `/project/disease_ecology/nws-geostat-output/production_runs` |
+| Accepted product packages | `/project/disease_ecology/nws-geostat-output/postfit_acceptance` |
+| Model artifact registry | `/project/disease_ecology/nws-geostat-output/production_runs/model_registry` |
+| Reporting application source | `/project/disease_ecology/hominivorax-geostat-reporting` |
+| Development worktrees | `/project/disease_ecology/worktrees` |
 
 The production configuration is intentionally outside Git. It contains
 governed input and stage-configuration paths and must not be copied into the
@@ -143,3 +147,26 @@ for standalone execution. A resume that supplies a different value from the
 one already recorded in the manifest is rejected before resumed execution;
 an uncorrelated existing run may be bound to a supplied value through the
 normal resume path.
+
+## Directory and release discovery contract
+
+Execution history, accepted products, and reporting application source have
+separate roles. Keep accepted packages under the existing
+`postfit_acceptance` root. Keep the reporting Git checkout as source code;
+do not use it as a product store or create another project-root reporting
+directory. The model registry is beneath `production_runs`. Release records
+use regular manifest paths and checksums; this contract does not use symlinks
+or directory swaps.
+
+A read-only active-release lookup returns the verified active manifest path and
+SHA-256:
+
+```bash
+./scripts/manage_model_release_atlas.sh \
+  --action discover-active \
+  --active-state /project/disease_ecology/hominivorax-geostat-config/active-release.yml
+```
+
+This command reports an absent pointer when none exists. It does not initialize
+one from the current W39 configuration. The accepted package is separately
+identified by the release manifest under `postfit_acceptance`.

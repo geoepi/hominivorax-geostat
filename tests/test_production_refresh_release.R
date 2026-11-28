@@ -414,6 +414,139 @@ test_that("legacy fit metadata may omit Stage 1 path when the checked Stage 2 co
   expect_match(result$limitations[[2L]], "omits the Stage 1 path")
 })
 
+test_that("specification digest classifies refreshes independently of model names", {
+  fixture <- make_adoption_fixture()
+  descriptor <- list(
+    likelihood = list(tier1 = "binomial", tier2 = "nbinomial"),
+    fixed_effects = list(order = c("intercept1", "intercept2", "north", "road_dens"), interactions = c("mintemp:soilmoist", "mintemp:leafarea")),
+    random_effects = list(tier1 = "spde", tier2 = "spde", temporal = "rw1", livestock = "rw2", shared_field = "estimated_copy"),
+    priors = list(spatial_range = c(150, 90), spatial_sigma = c(0.5, 1), temporal = "pc_rw", livestock_sigma = 0.5),
+    spatial_temporal = list(grouping = "quarter_index", group_model = "iid", temporal_constraint = TRUE),
+    transformations = list(temperature_hinge = 12, dynamic_missing_policy = "fail", livestock_missing_policy = "impute_zero"),
+    product_semantics = list(
+      temperature_mask_threshold_c = fixture$request$reporting$temperature_mask_threshold_c,
+      rpi_calibration = fixture$request$reporting$rpi_calibration,
+      rpi_quantile = fixture$request$reporting$rpi_quantile,
+      required_products = unlist(fixture$request$reporting$required_products, use.names = FALSE)
+    )
+  )
+  digest <- production_release_specification_digest(descriptor)
+  reordered <- descriptor[c("product_semantics", "transformations", "spatial_temporal", "priors", "random_effects", "fixed_effects", "likelihood")]
+  expect_identical(production_release_specification_digest(reordered), digest)
+  expect_identical(production_release_classify_specification(descriptor, digest)$release_class, "ROUTINE_REFRESH")
+
+  request <- fixture$request
+  request$release <- list(
+    release_class = "ROUTINE_REFRESH",
+    data_release_id = request$data$release_id,
+    comparison_specification_id = request$model$specification_id,
+    comparison_specification_sha256 = digest,
+    specification_descriptor = descriptor,
+    specification_sha256 = digest,
+    analysis_period = list(start_epiweek = request$analysis$start_epiweek,
+                           end_epiweek = request$analysis$requested_endpoint),
+    accepted_products_root = file.path(dirname(request$output$root), "postfit_acceptance"),
+    previous_release_id = NULL
+  )
+  expect_identical(production_release_validate_request(request), "adopt")
+
+  revision <- request
+  revision$release$specification_descriptor$transformations$temperature_hinge <- 13
+  revision$release$specification_sha256 <- production_release_specification_digest(revision$release$specification_descriptor)
+  revision$release$release_class <- "MODEL_REVISION"
+  revision$model$specification_id <- "original_joint_inla_v2"
+  expect_identical(production_release_validate_request(revision), "adopt")
+  expect_identical(production_release_classify_specification(
+    revision$release$specification_descriptor, digest
+  )$release_class, "MODEL_REVISION")
+
+  invalid <- request
+  invalid$release$release_class <- "MODEL_REVISION"
+  expect_error(production_release_validate_request(invalid), "does not agree with verified scientific specification digests")
+  invalid <- request
+  invalid$release$specification_sha256 <- paste(rep("0", 64L), collapse = "")
+  expect_error(production_release_validate_request(invalid), "does not match its descriptor")
+  invalid <- request
+  invalid$reporting$rpi_quantile <- 0.20
+  expect_error(production_release_validate_request(invalid), "product semantics do not match")
+  invalid <- request
+  invalid$release$accepted_products_root <- file.path(fixture$root, "reporting-source")
+  expect_error(production_release_validate_request(invalid), "canonical postfit_acceptance")
+})
+
+test_that("effective specification descriptor includes model structure and transformations", {
+  signature <- list(
+    formula = "Y ~ -1 + intercept1 + north + f(week_steps, model='rw1')",
+    fixed_effect_names = c("intercept1", "north"),
+    fixed_effect_formula_order = c("intercept1", "north"),
+    fixed_effect_tiers = list(intercept1 = "tier1", north = "tier1"),
+    family = c("binomial", "nbinomial"),
+    spde_structure = list(tier1 = list(range = 150), tier2 = list(range = 90)),
+    shared_field = list(source = "tier1_field", target = "tier2_copy_field"),
+    hyperparameter_count = 10L,
+    theta_order = c("tier1_field:range", "family:nbinomial:size"),
+    effect_structure = list(tier1 = "spde", temporal = "rw1"),
+    prior_structure = list(spatial = list(prior = "pc"), temporal = list(model = "rw1"))
+  )
+  descriptor <- production_release_specification_descriptor_from_signature(
+    signature,
+    transformations = list(temperature_hinge = 12, livestock_missing_policy = "impute_zero"),
+    product_semantics = list(mask_threshold_c = 16, rpi_quantile = 0.10),
+    covariate_registry = list(covariates = list(north = list(
+      model_term = "north", tier = "tier1", input_section = "static",
+      temporal_support = "static", transformation = list(method = "identity", output_column = "north"),
+      missing_policy = "fail", reporting_label = "North"
+    )))
+  )
+  expect_true(production_release_is_sha256(production_release_specification_digest(descriptor)))
+  expect_identical(descriptor$transformations$covariates$north$transformation$method, "identity")
+  expect_false("manifest_sha256" %in% names(descriptor$transformations$covariates$north))
+})
+
+test_that("adopted execution IDs use CHIME's timestamp and hexadecimal format", {
+  run_id <- production_release_adoption_run_id("adopt-original-refresh-w44-2026-adoption",
+                                                as.POSIXct("2026-11-27 23:59:58", tz = "UTC"))
+  expect_match(run_id, "^20[0-9]{6}_[0-9]{6}_[0-9a-f]{8}$")
+  expect_false(grepl("^adopt-", run_id))
+})
+
+test_that("canonical directories preserve accepted products and separate the registry", {
+  root <- file.path(tempdir(), "nws-geostat-output", "production_runs")
+  paths <- production_release_canonical_directories(root)
+  expect_identical(paths$production_runs, normalizePath(root, mustWork = FALSE))
+  expect_identical(paths$accepted_products, file.path(dirname(root), "postfit_acceptance"))
+  expect_identical(paths$model_registry, file.path(root, "model_registry"))
+  expect_false(identical(paths$accepted_products, paths$model_registry))
+  expect_error(production_release_canonical_directories(dirname(root)), "production_runs")
+})
+
+test_that("cleanup eligibility is conservative, cycle-aware, and report-only", {
+  replacement_sha <- paste(rep("a", 64L), collapse = "")
+  candidates <- data.frame(
+    path = c("/archive/old-fit.rds", "/archive/c1-fit.rds", "/archive/duplicate.rds"),
+    classification = c("ROUTINE_REFRESH_SUPERSEDED", "MODEL_REVISION", "ROUTINE_REFRESH_SUPERSEDED"),
+    bytes = c(1024, 2048, 4096),
+    owner = c("project", "project", "project"),
+    known_source_references = c("none", "none", "none"),
+    downstream_consumers = c("none", "none", "CHIME"),
+    retention_start_date = c("2026-01-01", "2025-01-01", "2026-01-01"),
+    subsequent_qualified_refreshes = c(2, 9, 2),
+    active_job_references = c("none", "none", "none"),
+    replacement_path = c("/archive/current-fit.rds", "/archive/current-c1.rds", "/archive/current-fit.rds"),
+    replacement_sha256 = replacement_sha,
+    replacement_verified = TRUE,
+    scientific_preservation_required = c(FALSE, TRUE, FALSE),
+    duplicate_finding = c(FALSE, FALSE, TRUE),
+    stringsAsFactors = FALSE
+  )
+  before <- file.exists(candidates$path)
+  report <- production_release_cleanup_eligibility(candidates, as_of = as.Date("2026-11-27"))
+  expect_identical(report$retention_eligible, c(TRUE, FALSE, FALSE))
+  expect_identical(report$estimated_recoverable_bytes, c(1024, 0, 0))
+  expect_true(all(report$required_approval == "EXPLICIT_OWNER_AND_GOVERNANCE_APPROVAL"))
+  expect_identical(file.exists(candidates$path), before)
+})
+
 test_that("production configuration compatibility reports output mismatches", {
   fixture <- make_adoption_fixture()
   compatible <- production_release_configuration_compatibility(fixture$request, fixture$root)
@@ -437,6 +570,96 @@ test_that("adoption plans are post-fit only and never depend on the historical f
   bad_plan <- plan
   bad_plan$dependencies[["postfit"]] <- "afterok:12345"
   expect_error(production_release_assert_adoption_plan(bad_plan), "Historical fit job ID")
+})
+
+test_that("accepted-package registration is immutable, canonical, and does not activate", {
+  root <- file.path(tempdir(), paste0("accepted_package_fixture_", Sys.getpid()))
+  fixture <- make_release_fixture(root, "accepted-model")
+  manifest <- yaml::read_yaml(fixture$manifest_path)
+  production_runs <- file.path(root, "nws-geostat-output", "production_runs")
+  run_root <- file.path(production_runs, "fixture-run")
+  dir.create(file.path(run_root, "metadata"), recursive = TRUE)
+  run_manifest_path <- file.path(run_root, "metadata", "run_manifest.yml")
+  yaml::write_yaml(list(run_id = "fixture-run", job_ids = list(fit = "fixture-fit-job")), run_manifest_path)
+  manifest$schema_version <- 2L
+  manifest$output_root <- run_root
+  manifest$data$release_id <- "2026-11-13"
+  manifest$run_manifest <- list(path = run_manifest_path, sha256 = fixture_hash(run_manifest_path))
+  manifest$products$manifest_path <- file.path(root, "reporting", "metadata", "manifest_fixture.csv")
+  manifest$products$manifest_sha256 <- fixture_hash(manifest$products$manifest_path)
+  descriptor <- list(
+    likelihood = list(tier1 = "binomial", tier2 = "nbinomial"),
+    fixed_effects = list(formula = "Y ~ x", names = c("intercept1", "x"), order = c("intercept1", "x"), tiers = list(tier1 = c("intercept1", "x"))),
+    random_effects = list(effects = list(spatial = "spde")),
+    priors = list(spatial = "pc"),
+    spatial_temporal = list(spatial = "spde", temporal = "rw1"),
+    transformations = list(preprocessing = list(temperature_hinge = 12), covariates = NULL),
+    product_semantics = list(
+      temperature_mask_threshold_c = manifest$reporting$temperature_mask_threshold_c,
+      rpi_calibration = manifest$reporting$rpi_calibration,
+      rpi_quantile = 0.10,
+      required_products = manifest$reporting$required_products
+    )
+  )
+  specification_sha256 <- production_release_specification_digest(descriptor)
+  accepted_root <- file.path(root, "nws-geostat-output", "postfit_acceptance")
+  manifest$release <- list(
+    release_class = "ROUTINE_REFRESH",
+    model_specification_id = manifest$specification_id,
+    specification_sha256 = specification_sha256,
+    specification_descriptor = descriptor,
+    comparison_specification_id = manifest$specification_id,
+    comparison_specification_sha256 = specification_sha256,
+    data_release_id = manifest$data$release_id,
+    analysis_period = list(start_epiweek = "2022-W01", end_epiweek = "2026-W44"),
+    code_commit = "fixture",
+    configuration_sha256 = manifest$configuration$sha256,
+    qualification_status = "QUALIFIED",
+    fit_artifact = manifest$fit,
+    product_categories = manifest$reporting$required_products,
+    accepted_products_root = accepted_root,
+    accepted_package = list(status = "AWAITING_ACCEPTANCE_REGISTRATION"),
+    current_release_status = "QUALIFIED_NOT_ACTIVE",
+    previous_release_id = "prior-release"
+  )
+  manifest_path <- file.path(run_root, "model-release.yml")
+  yaml::write_yaml(manifest, manifest_path)
+
+  package <- file.path(accepted_root, "fixture-run")
+  product_root <- file.path(package, "objects")
+  metadata_root <- file.path(package, "metadata")
+  dir.create(product_root, recursive = TRUE)
+  dir.create(metadata_root, recursive = TRUE)
+  product_names <- as.character(manifest$reporting$required_products)
+  product_paths <- vapply(product_names, function(name) fixture_write(file.path(product_root, paste0(name, ".csv")), paste(name, "\n")), character(1L))
+  product_manifest_path <- file.path(metadata_root, "manifest_fixture.csv")
+  utils::write.csv(data.frame(
+    logical_product_name = product_names,
+    path = file.path("objects", paste0(product_names, ".csv")),
+    checksum_sha256 = vapply(product_paths, fixture_hash, character(1L)),
+    bytes = vapply(product_paths, function(path) as.numeric(file.info(path)$size), numeric(1L)),
+    temperature_variable = c("mintemp", NA, NA),
+    temperature_threshold_celsius = c(16, NA, NA),
+    rpi_threshold_calibration = c(NA, NA, "same-week observation-paired dynamic threshold"),
+    stringsAsFactors = FALSE
+  ), product_manifest_path, row.names = FALSE, na = "")
+  summary_path <- file.path(metadata_root, "acceptance-summary.yml")
+  yaml::write_yaml(list(status = "ACCEPTED", source_run_id = "fixture-run",
+                        fit_job_id = "fixture-fit-job"), summary_path)
+
+  registered <- production_release_register_accepted_package(
+    manifest_path, package, summary_path, product_manifest_path
+  )
+  expect_identical(registered$status, "QUALIFIED_NOT_ACTIVE")
+  expect_true(file.exists(registered$path))
+  accepted_manifest <- production_release_read_model_manifest(registered$path, verify_artifact = FALSE)$manifest
+  expect_identical(accepted_manifest$release$accepted_package$status, "ACCEPTED")
+  expect_identical(accepted_manifest$release$accepted_package$path, normalizePath(package))
+  outside_path <- file.path(root, "outside-accepted-manifest.yml")
+  expect_error(production_release_register_accepted_package(
+    manifest_path, package, summary_path, product_manifest_path, output_path = outside_path
+  ), "must remain inside its execution run directory")
+  expect_false(file.exists(outside_path))
 })
 
 test_that("registry copy is checksum verified, immutable, idempotent, and preserves source artifacts", {
@@ -464,6 +687,28 @@ test_that("registry copy is checksum verified, immutable, idempotent, and preser
   expect_identical(fixture_hash(source), source_sha)
 })
 
+test_that("canonical registry references avoid a second durable payload", {
+  root <- tempfile(pattern = "model_registry_reference_fixture_")
+  production_root <- file.path(root, "production_runs")
+  source <- fixture_write(file.path(production_root, "20261127_190000_aaaaaaaa", "stage3b", "fit.rds"), "large fit fixture\n")
+  target <- file.path(production_root, "model_registry", "model-v1")
+  artifact <- list(fit = list(path = source, sha256 = fixture_hash(source),
+                              bytes = file.info(source)$size, storage_policy = "reference"))
+  first <- production_release_copy_bundle(artifact, target, production_root = production_root)
+  expect_identical(first$storage_policy, "reference")
+  expect_identical(first$artifacts$fit$storage_type, "reference")
+  expect_identical(normalizePath(first$artifacts$fit$path), normalizePath(source))
+  expect_false(file.exists(file.path(target, "fit", basename(source))))
+  second <- production_release_copy_bundle(artifact, target, production_root = production_root)
+  expect_true(second$reused)
+  external <- fixture_write(file.path(root, "development", "fit.rds"), "external fit\n")
+  external_bundle <- list(fit = list(path = external, sha256 = fixture_hash(external),
+                                     bytes = file.info(external)$size, storage_policy = "reference"))
+  expect_error(production_release_copy_bundle(external_bundle, file.path(production_root, "model_registry", "bad"),
+                                               production_root = production_root),
+               "restricted to existing artifacts under canonical production_runs")
+})
+
 test_that("release activation and rollback are atomic, compare-and-swap guarded, and append audited history", {
   skip_on_os("windows")
   root <- tempfile(pattern = "model_activation_fixture_")
@@ -486,6 +731,10 @@ test_that("release activation and rollback are atomic, compare-and-swap guarded,
   activation <- yaml::read_yaml(activation_event)
   expect_identical(activation$previous_state$production_id, "old-model")
   expect_identical(production_release_verify_active(active_path)$status, "PASS")
+  discovered <- production_release_discover_active(active_path)
+  expect_identical(discovered$status, "ACTIVE_RELEASE_VERIFIED")
+  expect_identical(discovered$production_id, "new-model")
+  expect_identical(fixture_hash(active_path), production_release_sha256(active_path))
 
   active_state <- yaml::read_yaml(active_path)
   active_sha <- fixture_hash(active_path)

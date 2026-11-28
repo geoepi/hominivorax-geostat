@@ -1,0 +1,212 @@
+schema_version: 1
+request_id: original-refresh-w44-2026-adoption
+operation:
+  mode: adopt
+  requested_stages:
+    - postfit
+  dispatch_authorized: false
+configuration:
+  role: active_deployment
+  path: /project/disease_ecology/hominivorax-geostat-config/production.yml
+  sha256: 0667d4ab1c6780da0ce435bd3a7e67fa83a2b90d0c8cc8b4658909d3d4f6ea49
+  identity_id: ORIGINAL_REFRESH_W44_2026
+  identity_path: /project/disease_ecology/hominivorax-geostat-original-refresh-w44-2026/config/original_refresh_w44_2026/identity.yml
+  identity_sha256: d55fcc137f685766c45ee7614fafa19186f36cd6c01a646696619990bead2dff
+model:
+  candidate_id: ORIGINAL_REFRESH_W44_2026
+  production_id: ORIGINAL_W44_2026_PRODUCTION
+  specification_id: original_joint_inla_v1
+  formula_identity: original_joint_inla_v1
+data:
+  release_id: '2026-11-13'
+  availability_endpoint: 2026-W44
+  observations_path: /project/disease_ecology/NWScrewworm/data/processed_data/case_detections/combined_clean_obs_2026-11-13.csv
+  observations_sha256: 784168081cc1d3206f3537b8731994cbfc34be15be7c515fe06710d4ea9bdaac
+environmental_data:
+  availability_endpoint: 2026-W44
+  identity_path: docs/archive/original-refresh-w44-2026/original_refresh_artifact_manifest.csv
+  identity_sha256: 8927eccc2140d7fcac54a9a8aeb2f71b8f66921487a8ac31208534c2ea0067aa
+covariate_registry:
+  identifier: original_joint_inla_v1
+  sha256: null
+  mode: manifest_free_original
+  path: null
+analysis:
+  start_epiweek: 2022-W01
+  requested_endpoint: 2026-W44
+output:
+  root: /project/disease_ecology/nws-geostat-output/production_runs
+qualification:
+  status: ORIGINAL_REFRESH_W44_QUALIFIED_WITH_LIMITATIONS
+  required_gates:
+    - adoption
+    - postfit
+  evidence_manifest: docs/archive/original-refresh-w44-2026/original_refresh_w44_2026_production_manifest_v2.json
+  evidence_manifest_sha256: f7799eb0220bafb7b9915b1cacda1ad5eb6a7df12bd4461a2a26cb93db6dafdc
+reporting:
+  temperature_mask_threshold_c: 16.0
+  rpi_calibration: same_week_observation_pairs
+  rpi_quantile: 0.10
+  required_products:
+    - fixed_effects_tier1
+    - fixed_effects_tier2
+    - species_composition
+    - cattle_effect
+    - temporal_effects
+    - selected_week_maps
+    - model_summary
+    - potential_abundance
+    - tier2_eta_structural
+    - tier2_intensity_structural
+    - structural_potential_abundance
+    - structural_potential_abundance_temp_masked
+    - random_effect_summaries
+    - rpi_dynamic_threshold
+    - rpi
+    - rpi_class_summary
+    - rpi_class_map
+    - rpi_readiness
+resume: null
+adoption:
+  artifact_manifest: docs/archive/original-refresh-w44-2026/original_refresh_artifact_manifest_adoption_v2.csv
+  artifact_manifest_sha256: 222487eaf50a4365399504380735df1d55d1538c1e26ac2e5069b8d85f5c043e
+  source_fit_job_id: '21355414'
+  fit_sha256: e9409c37ca88dedb0441d65c184c2c5cae9ca1dcf923aeb52db03bf8e451605c
+  fit_source_commit: 42f27497b251cdcd84d2b44b1844cd18292610a8
+  report_generation_commit: 1f9924e7c1a3b459b9302e298b08c1d6d8cac999
+  provenance_reconciliation:
+    path: docs/archive/original-refresh-w44-2026/original_refresh_w44_2026_source_provenance_reconciliation_v1.json
+    sha256: 8792892040e2a44ad4702536520cd4bed6e38b50308d31e966a3470c5fa118fc
+  lineage:
+    stage1_to_stage2_sha256: 64571f7b3a7aa59625cbe788d10ce8f149f1b53b8015efcabceed99dcc25f9af
+    stage2_to_stage3a_sha256: 1a09657781f6989154d331a7467c6dbc28d7be8011991709d3259e94eac95fe0
+    stage3a_to_fit_sha256: 74dc75e578474712cc06c62634b50c26631779003c8e804bbd2f7ff62bbb74a5
+
+release:
+  release_class: ROUTINE_REFRESH
+  data_release_id: '2026-11-13'
+  comparison_specification_id: original_joint_inla_v1
+  comparison_specification_sha256: 812fd38b9c5c41874ffbb982bf1c42bc3b58c30d3a94641970467587760421e8
+  specification_sha256: 812fd38b9c5c41874ffbb982bf1c42bc3b58c30d3a94641970467587760421e8
+  specification_descriptor:
+    likelihood:
+      - binomial
+      - nbinomial
+    fixed_effects:
+      formula: >-
+        Y ~ -1 + intercept1 + intercept2 + f(tier1_field, model = spde_tier1, group = tier1_field.group, control.group = list(model = "iid", hyper = pc_rw)) + f(week_steps, model = "rw1", constr = TRUE, scale.model = TRUE, hyper = pc_rw) + f(admin_f, model = "iid", constr = TRUE, hyper = pc_rw_strong) + f(tier2_field, model = spde_tier2, group = tier2_field.group, control.group = list(model = "iid", hyper = pc_rw)) + f(tier2_copy_field, copy = "tier1_field", group = tier2_copy_field.group, fixed = FALSE, hyper = hyper_copy) + f(tier2_week, model = "rw1", constr = TRUE, scale.model = TRUE, hyper = pc_rw) + f(cattle_q, cattle_mid_log1p, model = "rw2", constr = TRUE, scale.model = TRUE, hyper = pc_rw_cat) + north + road_dens + night_illum + mintemp + soilmoist + leafarea + rhum + mintemp:soilmoist + mintemp:leafarea + cattle + horses + pigs + goats + sheep
+      names: [intercept1, north, road_dens, night_illum, intercept2, mintemp, soilmoist, leafarea, rhum, 'mintemp:soilmoist', 'mintemp:leafarea', cattle, horses, pigs, goats, sheep]
+      order: [intercept1, intercept2, north, road_dens, night_illum, mintemp, soilmoist, leafarea, rhum, 'mintemp:soilmoist', 'mintemp:leafarea', cattle, horses, pigs, goats, sheep]
+      tiers:
+        tier1: [intercept1, north, road_dens, night_illum]
+        tier2: [intercept2, mintemp, soilmoist, leafarea, rhum, 'mintemp:soilmoist', 'mintemp:leafarea', cattle, horses, pigs, goats, sheep]
+    random_effects:
+      shared_field:
+        source: tier1_field
+        target: tier2_copy_field
+        group_model: iid
+      hyperparameter_count: 10
+      theta_order:
+        - tier1_field:range
+        - tier1_field:stdev
+        - week_steps:precision
+        - admin_f:precision
+        - tier2_field:range
+        - tier2_field:stdev
+        - tier2_copy_field:coefficient
+        - tier2_week:precision
+        - cattle_q:precision
+        - family:nbinomial:size
+      effects:
+        tier1_spde: tier1_field
+        tier1_weekly: week_steps
+        tier1_administrative: admin_f
+        tier2_spde: tier2_field
+        tier2_copy: tier2_copy_field
+        tier2_weekly: tier2_week
+        cattle: cattle_q
+        likelihood: nbinomial
+    priors:
+      spatial:
+        tier1:
+          alpha: 2
+          prior_range_km: 150
+          prior_range_probability: 0.05
+          prior_sigma: 0.5
+          prior_sigma_probability: 0.05
+          constr: true
+        tier2:
+          alpha: 2
+          prior_range_km: 90
+          prior_range_probability: 0.5
+          prior_sigma: 1
+          prior_sigma_probability: 0.5
+          constr: true
+      shared_field:
+        enabled: true
+        estimate_copy_coefficient: true
+        beta_prior_mean: 0.5
+        beta_prior_precision: 0.2
+      temporal:
+        tier1: {model: rw1, constr: true, scale_model: true}
+        tier2: {model: rw1, constr: true, scale_model: true}
+      administrative:
+        tier1: {enabled: true, model: iid, constr: true, prior_sigma: 0.3, prior_probability: 0.01}
+      livestock:
+        enabled: true
+        model: rw2
+        constr: true
+        scale_model: true
+        prior_sigma: 0.5
+        prior_probability: 0.05
+        bins: 22
+      nbinomial:
+        prior: pc.mgamma
+        parameter: 7
+    spatial_temporal:
+      grouping: {variable: quarter_index, group_model: iid}
+      temporal_indices:
+        two_week: true
+        quarter: true
+        six_month: true
+        year: true
+      spatial_prior_parameters:
+        tier1: {alpha: 2, range_km: 150, range_probability: 0.05, sigma: 0.5, sigma_probability: 0.05, constrained: true}
+        tier2: {alpha: 2, range_km: 90, range_probability: 0.5, sigma: 1, sigma_probability: 0.5, constrained: true}
+      temporal_models: {tier1: rw1, tier2: rw1}
+    transformations:
+      preprocessing:
+        temperature_hinge: 12
+        dynamic_missing_policy: fail
+        livestock_missing_policy: impute_zero
+        livestock_rw2_bins: 22
+        livestock_rw2_variables: [cattle, pigs, sheep, goats, horses]
+      covariates: null
+    product_semantics:
+      temperature_mask_threshold_c: 16.0
+      rpi_calibration: same_week_observation_pairs
+      rpi_quantile: 0.10
+      required_products:
+        - fixed_effects_tier1
+        - fixed_effects_tier2
+        - species_composition
+        - cattle_effect
+        - temporal_effects
+        - selected_week_maps
+        - model_summary
+        - potential_abundance
+        - tier2_eta_structural
+        - tier2_intensity_structural
+        - structural_potential_abundance
+        - structural_potential_abundance_temp_masked
+        - random_effect_summaries
+        - rpi_dynamic_threshold
+        - rpi
+        - rpi_class_summary
+        - rpi_class_map
+        - rpi_readiness
+  analysis_period:
+    start_epiweek: 2022-W01
+    end_epiweek: 2026-W44
+  accepted_products_root: /project/disease_ecology/nws-geostat-output/postfit_acceptance
+  previous_release_id: null

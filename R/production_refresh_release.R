@@ -94,11 +94,280 @@ production_release_read_qualification_manifest <- function(path, repo_root) {
   evidence
 }
 
+
+production_release_canonicalize <- function(value) {
+  if (!is.list(value)) return(value)
+  keys <- names(value)
+  if (!is.null(keys) && all(nzchar(keys))) {
+    ordered <- order(keys)
+    value <- value[ordered]
+    names(value) <- keys[ordered]
+  }
+  lapply(value, production_release_canonicalize)
+}
+
+production_release_specification_digest <- function(descriptor) {
+  required <- c("likelihood", "fixed_effects", "random_effects", "priors", "spatial_temporal",
+                "transformations", "product_semantics")
+  production_release_assert_fields(descriptor, required, required, "scientific specification descriptor")
+  production_orchestration_require("jsonlite")
+  production_orchestration_require("digest")
+  canonical <- production_release_canonicalize(descriptor)
+  encoded <- as.character(jsonlite::toJSON(canonical, auto_unbox = TRUE, null = "null",
+                                           digits = NA, POSIXt = "ISO8601", force = TRUE))
+  tolower(digest::digest(encoded, algo = "sha256", serialize = FALSE))
+}
+
+production_release_specification_descriptor_from_signature <- function(model_signature, transformations,
+                                                                          product_semantics,
+                                                                          covariate_registry = NULL) {
+  fields <- c("formula", "fixed_effect_names", "fixed_effect_formula_order", "fixed_effect_tiers",
+              "family", "spde_structure", "shared_field", "hyperparameter_count", "theta_order",
+              "effect_structure", "prior_structure")
+  missing <- setdiff(fields, names(model_signature))
+  if (length(missing)) stop("Effective model signature lacks scientific fields: ", paste(missing, collapse = ", "), call. = FALSE)
+  covariate_registry <- covariate_registry %||% model_signature$covariate_registry
+  registry_descriptor <- NULL
+  if (!is.null(covariate_registry)) {
+    registry_descriptor <- lapply(covariate_registry$covariates, function(entry) {
+      list(model_term = entry$model_term, tier = entry$tier, input_section = entry$input_section,
+           temporal_support = entry$temporal_support, transformation = entry$transformation,
+           missing_policy = entry$missing_policy, reporting_label = entry$reporting_label)
+    })
+  }
+  list(
+    likelihood = model_signature$family,
+    fixed_effects = list(formula = model_signature$formula,
+                         names = model_signature$fixed_effect_names,
+                         order = model_signature$fixed_effect_formula_order,
+                         tiers = model_signature$fixed_effect_tiers),
+    random_effects = list(shared_field = model_signature$shared_field,
+                          hyperparameter_count = model_signature$hyperparameter_count,
+                          theta_order = model_signature$theta_order,
+                          effects = model_signature$effect_structure),
+    priors = model_signature$prior_structure,
+    spatial_temporal = list(spde = model_signature$spde_structure,
+                            shared_field = model_signature$shared_field,
+                            temporal = model_signature$prior_structure$temporal,
+                            administrative = model_signature$prior_structure$administrative),
+    transformations = list(preprocessing = transformations, covariates = registry_descriptor),
+    product_semantics = product_semantics
+  )
+}
+
+production_release_classify_specification <- function(descriptor, comparison_sha256) {
+  candidate_sha256 <- production_release_specification_digest(descriptor)
+  if (!production_release_is_sha256(comparison_sha256)) {
+    stop("Comparison scientific specification must have a SHA-256 digest.", call. = FALSE)
+  }
+  list(release_class = if (identical(candidate_sha256, tolower(as.character(comparison_sha256)))) {
+         "ROUTINE_REFRESH"
+       } else {
+         "MODEL_REVISION"
+       },
+       specification_sha256 = candidate_sha256,
+       comparison_specification_sha256 = tolower(as.character(comparison_sha256)))
+}
+
+production_release_canonical_directories <- function(production_runs_root) {
+  if (length(production_runs_root) != 1L || is.na(production_runs_root) || !nzchar(as.character(production_runs_root))) {
+    stop("Production execution root must be one non-empty path.", call. = FALSE)
+  }
+  production_runs <- normalizePath(path.expand(as.character(production_runs_root)), mustWork = FALSE)
+  if (!identical(basename(production_runs), "production_runs")) {
+    stop("Production execution root must use the established production_runs directory.", call. = FALSE)
+  }
+  parent <- dirname(production_runs)
+  list(
+    production_runs = production_runs,
+    accepted_products = file.path(parent, "postfit_acceptance"),
+    model_registry = file.path(production_runs, "model_registry")
+  )
+}
+
+production_release_path_within <- function(path, root) {
+  if (length(path) != 1L || is.na(path) || !file.exists(path) || dir.exists(path)) return(FALSE)
+  resolved_path <- normalizePath(path, mustWork = TRUE)
+  resolved_root <- normalizePath(root, mustWork = TRUE)
+  identical(resolved_path, resolved_root) ||
+    startsWith(resolved_path, paste0(sub("/+$", "", resolved_root), .Platform$file.sep))
+}
+
+production_release_validate_release_metadata <- function(request) {
+  release <- request$release
+  fields <- c("release_class", "data_release_id", "comparison_specification_id",
+              "comparison_specification_sha256", "specification_descriptor", "specification_sha256",
+              "analysis_period", "accepted_products_root", "previous_release_id")
+  production_release_assert_fields(release, fields, fields, "release")
+  if (!as.character(release$release_class) %in% c("ROUTINE_REFRESH", "MODEL_REVISION")) {
+    stop("release.release_class must be ROUTINE_REFRESH or MODEL_REVISION.", call. = FALSE)
+  }
+  if (!identical(as.character(release$data_release_id), as.character(request$data$release_id))) {
+    stop("release.data_release_id must match data.release_id.", call. = FALSE)
+  }
+  if (!production_release_is_sha256(release$comparison_specification_sha256)) {
+    stop("release.comparison_specification_sha256 must be a SHA-256 digest.", call. = FALSE)
+  }
+  observed <- production_release_specification_digest(release$specification_descriptor)
+  if (!production_release_is_sha256(release$specification_sha256) ||
+      !identical(observed, tolower(as.character(release$specification_sha256)))) {
+    stop("Scientific specification digest does not match its descriptor.", call. = FALSE)
+  }
+  expected_product_semantics <- list(
+    temperature_mask_threshold_c = as.numeric(request$reporting$temperature_mask_threshold_c),
+    rpi_calibration = as.character(request$reporting$rpi_calibration),
+    rpi_quantile = as.numeric(request$reporting$rpi_quantile),
+    required_products = as.character(unlist(request$reporting$required_products, use.names = FALSE))
+  )
+  observed_product_semantics <- release$specification_descriptor$product_semantics
+  observed_product_semantics <- list(
+    temperature_mask_threshold_c = as.numeric(observed_product_semantics$temperature_mask_threshold_c),
+    rpi_calibration = as.character(observed_product_semantics$rpi_calibration),
+    rpi_quantile = as.numeric(observed_product_semantics$rpi_quantile),
+    required_products = as.character(unlist(observed_product_semantics$required_products, use.names = FALSE))
+  )
+  if (!identical(production_release_canonicalize(observed_product_semantics),
+                 production_release_canonicalize(expected_product_semantics))) {
+    stop("Scientific specification product semantics do not match the requested reporting contract.", call. = FALSE)
+  }
+  classified <- production_release_classify_specification(
+    release$specification_descriptor, release$comparison_specification_sha256
+  )
+  if (!identical(classified$release_class, as.character(release$release_class))) {
+    stop("Release class does not agree with verified scientific specification digests.", call. = FALSE)
+  }
+  same_specification_id <- identical(as.character(request$model$specification_id),
+                                     as.character(release$comparison_specification_id))
+  if (identical(classified$release_class, "ROUTINE_REFRESH") && !same_specification_id) {
+    stop("ROUTINE_REFRESH must retain the compared scientific specification ID.", call. = FALSE)
+  }
+  if (identical(classified$release_class, "MODEL_REVISION") && same_specification_id) {
+    stop("MODEL_REVISION must use a distinct scientific specification ID.", call. = FALSE)
+  }
+  production_release_assert_fields(release$analysis_period, c("start_epiweek", "end_epiweek"),
+                                   c("start_epiweek", "end_epiweek"), "release.analysis_period")
+  if (!identical(as.character(release$analysis_period$start_epiweek), as.character(request$analysis$start_epiweek)) ||
+      !identical(as.character(release$analysis_period$end_epiweek), as.character(request$analysis$requested_endpoint))) {
+    stop("Release analysis_period must match the declared request horizon.", call. = FALSE)
+  }
+  canonical <- production_release_canonical_directories(request$output$root)
+  if (!identical(normalizePath(as.character(release$accepted_products_root), mustWork = FALSE),
+                 normalizePath(canonical$accepted_products, mustWork = FALSE))) {
+    stop("Accepted products root must resolve to the canonical postfit_acceptance sibling of production_runs.", call. = FALSE)
+  }
+  list(
+    release_class = classified$release_class,
+    specification_sha256 = classified$specification_sha256,
+    comparison_specification_sha256 = classified$comparison_specification_sha256,
+    model_specification_id = as.character(request$model$specification_id),
+    comparison_specification_id = as.character(release$comparison_specification_id),
+    data_release_id = as.character(release$data_release_id),
+    analysis_period = release$analysis_period,
+    accepted_products_root = canonical$accepted_products,
+    previous_release_id = release$previous_release_id
+  )
+}
+
+production_release_cleanup_eligibility <- function(candidates, as_of = Sys.Date()) {
+  if (is.character(candidates) && length(candidates) == 1L) {
+    candidates <- utils::read.csv(candidates, stringsAsFactors = FALSE, check.names = FALSE)
+  }
+  required <- c("path", "classification", "bytes", "owner", "known_source_references",
+                "downstream_consumers", "retention_start_date", "subsequent_qualified_refreshes",
+                "active_job_references", "replacement_path", "replacement_sha256",
+                "replacement_verified", "scientific_preservation_required", "duplicate_finding")
+  if (!is.data.frame(candidates) || !all(required %in% names(candidates))) {
+    stop("Cleanup candidate inventory lacks required read-only review fields.", call. = FALSE)
+  }
+  if (!inherits(as.Date(as_of), "Date") || length(as.Date(as_of)) != 1L || is.na(as.Date(as_of))) {
+    stop("as_of must be one valid calendar date.", call. = FALSE)
+  }
+  text_values <- function(x) {
+    value <- trimws(as.character(x))
+    is.na(value) | !nzchar(value) | tolower(value) %in% c("none", "[]", "null", "na")
+  }
+  bool_value <- function(x) tolower(as.character(x)) %in% c("true", "1", "yes")
+  rows <- lapply(seq_len(nrow(candidates)), function(i) {
+    item <- candidates[i, , drop = FALSE]
+    blocks <- character()
+    bytes <- suppressWarnings(as.numeric(item$bytes[[1L]]))
+    cycles <- suppressWarnings(as.integer(item$subsequent_qualified_refreshes[[1L]]))
+    start <- suppressWarnings(as.Date(as.character(item$retention_start_date[[1L]])))
+    classification <- toupper(as.character(item$classification[[1L]]))
+    if (!is.finite(bytes) || bytes < 0) blocks <- c(blocks, "artifact size is missing or invalid")
+    if (text_values(item$owner[[1L]])) blocks <- c(blocks, "owner is unknown")
+    if (!identical(classification, "ROUTINE_REFRESH_SUPERSEDED")) blocks <- c(blocks, "routine-refresh retention does not apply to this classification")
+    if (is.na(start) || as.Date(as_of) < start + 90L) blocks <- c(blocks, "90-day retention period has not expired")
+    if (is.na(cycles) || cycles < 2L) blocks <- c(blocks, "two subsequent qualified refreshes are not recorded")
+    if (!text_values(item$known_source_references[[1L]])) blocks <- c(blocks, "source references remain unresolved")
+    if (!text_values(item$downstream_consumers[[1L]])) blocks <- c(blocks, "downstream consumers remain unresolved")
+    if (!text_values(item$active_job_references[[1L]])) blocks <- c(blocks, "active or historical job references require review")
+    if (text_values(item$replacement_path[[1L]]) || !production_release_is_sha256(item$replacement_sha256[[1L]]) ||
+        !bool_value(item$replacement_verified[[1L]])) blocks <- c(blocks, "verified replacement artifact is absent")
+    if (bool_value(item$scientific_preservation_required[[1L]])) blocks <- c(blocks, "scientific preservation requirements apply")
+    if (bool_value(item$duplicate_finding[[1L]])) blocks <- c(blocks, "confirmed duplicate finding is retained pending consumer resolution")
+    eligible <- !length(blocks)
+    data.frame(
+      path = as.character(item$path[[1L]]),
+      classification = classification,
+      bytes = bytes,
+      owner = as.character(item$owner[[1L]]),
+      known_source_references = as.character(item$known_source_references[[1L]]),
+      downstream_consumers = as.character(item$downstream_consumers[[1L]]),
+      retention_eligible = eligible,
+      scientific_preservation_required = bool_value(item$scientific_preservation_required[[1L]]),
+      active_job_references = as.character(item$active_job_references[[1L]]),
+      verified_replacement = bool_value(item$replacement_verified[[1L]]),
+      estimated_recoverable_bytes = if (eligible) bytes else 0,
+      blocking_conditions = paste(blocks, collapse = "; "),
+      required_approval = "EXPLICIT_OWNER_AND_GOVERNANCE_APPROVAL",
+      as_of = as.character(as.Date(as_of)),
+      stringsAsFactors = FALSE
+    )
+  })
+  if (!length(rows)) return(data.frame())
+  do.call(rbind, rows)
+}
+
+production_release_discover_active <- function(active_state_path, verify_artifact = FALSE) {
+  state <- production_release_active_state(active_state_path)
+  production_release_verify_file(state$configuration_path, state$configuration_sha256,
+                                 label = "active release configuration")
+  validated <- production_release_read_model_manifest(state$manifest_path, state$manifest_sha256,
+                                                       verify_artifact = verify_artifact)
+  manifest <- validated$manifest
+  if (!identical(as.character(manifest$production_id), as.character(state$production_id))) {
+    stop("Active pointer and release manifest production IDs differ.", call. = FALSE)
+  }
+  if (!identical(normalizePath(state$configuration_path, mustWork = TRUE),
+                 normalizePath(manifest$configuration$path, mustWork = TRUE)) ||
+      !identical(tolower(as.character(state$configuration_sha256)),
+                 tolower(as.character(manifest$configuration$sha256)))) {
+    stop("Active pointer and release configuration identities differ.", call. = FALSE)
+  }
+  verified <- list(
+    status = "PASS",
+    generation = as.integer(state$generation),
+    production_id = state$production_id,
+    candidate_id = manifest$candidate_id,
+    formula_identity = manifest$formula_identity,
+    artifact_path = manifest$fit$path,
+    artifact_sha256 = manifest$fit$sha256,
+    observed_artifact_sha256 = if (verify_artifact) production_release_sha256(manifest$fit$path) else NA_character_,
+    manifest_path = state$manifest_path,
+    manifest_sha256 = validated$sha256
+  )
+  list(status = "ACTIVE_RELEASE_VERIFIED", active_state_path = normalizePath(active_state_path, mustWork = TRUE),
+       generation = as.integer(state$generation), production_id = state$production_id,
+       manifest_path = state$manifest_path, manifest_sha256 = validated$sha256,
+       release = manifest, verification = verified)
+}
+
 production_release_validate_request <- function(request) {
   top <- c("schema_version", "request_id", "operation", "configuration", "model", "data",
            "environmental_data", "covariate_registry", "analysis", "output", "qualification",
            "reporting", "resume", "adoption")
-  production_release_assert_fields(request, top, top, "refresh request")
+  production_release_assert_fields(request, top, c(top, "release"), "refresh request")
   if (!identical(as.integer(request$schema_version), 1L)) stop("Unsupported refresh request schema_version.", call. = FALSE)
   if (length(request$request_id) != 1L || is.na(request$request_id) || !grepl("^[A-Za-z0-9_.-]+$", request$request_id)) {
     stop("request_id must contain only letters, digits, dot, underscore, or hyphen.", call. = FALSE)
@@ -196,6 +465,7 @@ production_release_validate_request <- function(request) {
       if (!production_release_is_sha256(request$adoption$provenance_reconciliation$sha256)) stop("adoption.provenance_reconciliation.sha256 must be a SHA-256 digest.", call. = FALSE)
     }
   } else if (!is.null(request$adoption)) stop("Only adopt requests may contain adoption fields.", call. = FALSE)
+  if (!is.null(request$release)) production_release_validate_release_metadata(request)
   invisible(mode)
 }
 
@@ -268,6 +538,15 @@ production_release_configuration_compatibility <- function(request, repo_root) {
        requested_output_root = requested_output)
 }
 
+production_release_adoption_run_id <- function(request_id, now = Sys.time()) {
+  production_orchestration_require("digest")
+  now <- as.POSIXct(now, tz = "UTC")
+  nonce <- digest::digest(paste(as.character(request_id),
+                                format(now, "%Y-%m-%dT%H:%M:%OS6Z", tz = "UTC")),
+                          algo = "sha256", serialize = FALSE)
+  production_orchestration_run_id(nonce, now = now)
+}
+
 production_release_refresh_contract <- function(request, config_path, repo_root, run_root = NULL,
                                                 allow_blocked_adoption_plan = FALSE) {
   mode <- production_release_validate_request(request)
@@ -301,7 +580,7 @@ production_release_refresh_contract <- function(request, config_path, repo_root,
     if (mode == "adopt" && identical(as.character(request$configuration$role), "active_deployment") && isTRUE(request$operation$dispatch_authorized)) stop("An active deployment configuration may be used only for a no-dispatch adoption plan.", call. = FALSE)
     overrides <- list(observations = request$data$observations_path, start_epiweek = request$analysis$start_epiweek,
       end_epiweek = request$analysis$requested_endpoint, output_root = request$output$root)
-    run_id <- if (mode == "adopt") paste0("adopt-", request$request_id) else request$request_id
+    run_id <- if (mode == "adopt") production_release_adoption_run_id(request$request_id) else request$request_id
     expected_run_root <- file.path(resolved$output_root, run_id)
     if (!is.null(run_root) && !identical(normalizePath(run_root, mustWork = FALSE), normalizePath(expected_run_root, mustWork = FALSE))) stop("--run-root may not override the versioned output location in a refresh request.", call. = FALSE)
     run_root <- expected_run_root
@@ -311,7 +590,9 @@ production_release_refresh_contract <- function(request, config_path, repo_root,
     contract$operation_mode <- mode
     contract$configuration_compatibility <- compatibility
     contract$refresh_request <- list(path = attr(request, "request_path"), sha256 = attr(request, "request_sha256"),
-                                     request_id = request$request_id, mode = mode, document = production_release_request_document(request))
+                                     request_id = request$request_id, mode = mode, execution_run_id = run_id,
+                                     release_metadata = if (is.null(request$release)) NULL else production_release_validate_release_metadata(request),
+                                     document = production_release_request_document(request))
     if (mode == "adopt") {
       adoption <- tryCatch(production_release_validate_adoption(request, repo_root, verify_files = TRUE), error = identity)
       if (inherits(adoption, "error")) {
@@ -848,13 +1129,15 @@ production_release_write_plan <- function(plan, path) {
   production_release_sha256(path)
 }
 
-production_release_copy_bundle <- function(artifact_paths, registry_dir) {
+production_release_copy_bundle <- function(artifact_paths, registry_dir, production_root = NULL) {
   production_orchestration_require("yaml")
   parent <- dirname(registry_dir)
   dir.create(parent, recursive = TRUE, showWarnings = FALSE)
   lock_path <- paste0(registry_dir, ".registry.lock")
   if (!dir.create(lock_path, showWarnings = FALSE)) stop("Registry lock exists; refusing concurrent registration: ", lock_path, call. = FALSE)
   on.exit(unlink(lock_path, recursive = TRUE), add = TRUE)
+  policies <- vapply(artifact_paths, function(item) item$storage_policy %||% "copy", character(1L))
+  if (any(!policies %in% c("copy", "reference"))) stop("Artifact storage policy must be copy or reference.", call. = FALSE)
   if (dir.exists(registry_dir) || file.exists(registry_dir)) {
     existing_manifest <- file.path(registry_dir, "registry-manifest.yml")
     if (!file.exists(existing_manifest)) stop("Versioned model registry destination exists without a manifest; refusing to overwrite: ", registry_dir, call. = FALSE)
@@ -862,36 +1145,64 @@ production_release_copy_bundle <- function(artifact_paths, registry_dir) {
     if (!identical(sort(names(existing$artifacts)), sort(names(artifact_paths)))) stop("Existing model registry has a different artifact set.", call. = FALSE)
     for (name in names(artifact_paths)) {
       record <- existing$artifacts[[name]]
-      if (!identical(tolower(as.character(record$sha256)), tolower(as.character(artifact_paths[[name]]$sha256))) ||
-          !identical(normalizePath(record$source_path, mustWork = FALSE), normalizePath(artifact_paths[[name]]$path, mustWork = FALSE))) stop("Existing model registry differs for artifact ", name, call. = FALSE)
+      record_policy <- record$storage_type %||% "copy"
+      if (!identical(record_policy, policies[[name]]) ||
+          !identical(tolower(as.character(record$sha256)), tolower(as.character(artifact_paths[[name]]$sha256))) ||
+          !identical(normalizePath(record$source_path, mustWork = FALSE), normalizePath(artifact_paths[[name]]$path, mustWork = FALSE))) {
+        stop("Existing model registry differs for artifact ", name, call. = FALSE)
+      }
       production_release_verify_file(record$path, record$sha256, artifact_paths[[name]]$bytes %||% NULL, paste0("registered ", name))
     }
     return(list(path = normalizePath(registry_dir, mustWork = TRUE), manifest = normalizePath(existing_manifest, mustWork = TRUE),
-                manifest_sha256 = production_release_sha256(existing_manifest), artifacts = existing$artifacts, reused = TRUE))
+                manifest_sha256 = production_release_sha256(existing_manifest), artifacts = existing$artifacts, reused = TRUE,
+                storage_policy = existing$storage_policy %||% "copy"))
   }
   staging <- tempfile(pattern = paste0(".", basename(registry_dir), ".staging-"), tmpdir = parent)
   if (!dir.create(staging, recursive = FALSE, showWarnings = FALSE)) stop("Unable to create registry staging directory.", call. = FALSE)
   committed <- FALSE
   on.exit(if (!committed && dir.exists(staging)) unlink(staging, recursive = TRUE), add = TRUE)
-  copied <- list()
+  registered <- list()
   for (name in names(artifact_paths)) {
-    source <- artifact_paths[[name]]$path
+    source_value <- artifact_paths[[name]]$path
+    if (!file.exists(source_value) || dir.exists(source_value)) {
+      stop("Failed to stage model artifact ", name, call. = FALSE)
+    }
+    source <- normalizePath(source_value, mustWork = TRUE)
     expected <- artifact_paths[[name]]$sha256
-    destination <- file.path(staging, name, basename(source))
-    dir.create(dirname(destination), recursive = TRUE, showWarnings = FALSE)
-    if (!file.copy(source, destination, overwrite = FALSE, copy.mode = TRUE, copy.date = TRUE)) stop("Failed to stage model artifact ", name, call. = FALSE)
-    verified <- production_release_verify_file(destination, expected, label = paste0("staged ", name))
-    copied[[name]] <- list(path = file.path(registry_dir, name, basename(source)), bytes = verified$bytes,
-                           sha256 = verified$sha256, source_path = normalizePath(source, mustWork = TRUE))
+    if (!production_release_is_sha256(expected)) stop("Artifact ", name, " has an invalid SHA-256 identity.", call. = FALSE)
+    verified_source <- production_release_verify_file(source, expected, artifact_paths[[name]]$bytes %||% NULL,
+                                                     paste0("source ", name))
+    if (identical(policies[[name]], "reference")) {
+      if (is.null(production_root) || !dir.exists(production_root) || !production_release_path_within(source, production_root)) {
+        stop("Reference registration is restricted to existing artifacts under canonical production_runs; refusing a development-worktree reference.", call. = FALSE)
+      }
+      destination <- source
+      storage_type <- "reference"
+    } else {
+      destination <- file.path(staging, name, basename(source))
+      dir.create(dirname(destination), recursive = TRUE, showWarnings = FALSE)
+      if (!file.copy(source, destination, overwrite = FALSE, copy.mode = TRUE, copy.date = TRUE)) stop("Failed to stage model artifact ", name, call. = FALSE)
+      verified_source <- production_release_verify_file(destination, expected, label = paste0("staged ", name))
+      destination <- file.path(registry_dir, name, basename(source))
+      storage_type <- "copy"
+    }
+    registered[[name]] <- list(path = destination, bytes = verified_source$bytes,
+                               sha256 = verified_source$sha256, source_path = source,
+                               storage_type = storage_type)
   }
-  manifest <- list(schema_version = 1L, created_at_utc = format(Sys.time(), "%Y-%m-%dT%H:%M:%SZ", tz = "UTC"), artifacts = copied)
+  storage_policy <- if (all(policies == "reference")) "reference" else if (all(policies == "copy")) "copy" else "mixed_reference_and_copy"
+  manifest <- list(schema_version = 2L, storage_policy = storage_policy,
+                   canonical_production_root = if (is.null(production_root)) NULL else normalizePath(production_root, mustWork = FALSE),
+                   created_at_utc = format(Sys.time(), "%Y-%m-%dT%H:%M:%SZ", tz = "UTC"),
+                   artifacts = registered)
   production_release_atomic_yaml(manifest, file.path(staging, "registry-manifest.yml"), replace = FALSE)
   if (dir.exists(registry_dir) || file.exists(registry_dir)) stop("Registry destination appeared during staging; refusing to overwrite.", call. = FALSE)
   if (!file.rename(staging, registry_dir)) stop("Atomic registry publication failed; the source artifacts remain unchanged.", call. = FALSE)
   committed <- TRUE
   manifest_path <- file.path(registry_dir, "registry-manifest.yml")
   list(path = normalizePath(registry_dir, mustWork = TRUE), manifest = normalizePath(manifest_path, mustWork = TRUE),
-       manifest_sha256 = production_release_sha256(manifest_path), artifacts = copied, reused = FALSE)
+       manifest_sha256 = production_release_sha256(manifest_path), artifacts = registered, reused = FALSE,
+       storage_policy = storage_policy)
 }
 
 production_release_register_adoption <- function(contract, request, repo_root) {
@@ -909,11 +1220,21 @@ production_release_register_adoption <- function(contract, request, repo_root) {
     source_bundle$covariate_registry <- list(path = resolved$covariate_registry,
       sha256 = request$covariate_registry$sha256, bytes = file.info(resolved$covariate_registry)$size)
   }
-  registry_root <- file.path(request$output$root, "model_registry", request$model$production_id)
-  registered <- production_release_copy_bundle(source_bundle, registry_root)
-  contract$artifact_storage <- list(policy = "versioned_copy_required_for_development_source", registry_path = registered$path,
+  canonical <- production_release_canonical_directories(request$output$root)
+  core_artifacts <- intersect(c("stage1", "stage2", "stage3a", "fit"), names(source_bundle))
+  for (name in core_artifacts) {
+    source_bundle[[name]]$storage_policy <- if (production_release_path_within(source_bundle[[name]]$path, canonical$production_runs)) {
+      "reference"
+    } else {
+      "copy"
+    }
+  }
+  registry_root <- file.path(canonical$model_registry, request$model$production_id)
+  registered <- production_release_copy_bundle(source_bundle, registry_root, production_root = canonical$production_runs)
+  contract$artifact_storage <- list(policy = registered$storage_policy, registry_path = registered$path,
                                     registry_manifest = registered$manifest, reused_existing_registry = isTRUE(registered$reused),
                                     registry_manifest_sha256 = registered$manifest_sha256 %||% production_release_sha256(registered$manifest),
+                                    canonical_payload_root = canonical$production_runs,
                                     source = source_artifacts, registered = registered$artifacts)
   contract$artifact_inputs <- registered$artifacts
   list(contract = contract, registry = registered)
@@ -985,6 +1306,29 @@ production_release_write_model_manifest <- function(contract) {
     source_execution = contract$refresh_request$source_execution %||% list(type = "pipeline_run", code_commit = contract$repository$git_commit),
     output_root = contract$run_root, artifact_storage = contract$artifact_storage %||% list(policy = "run-scoped production output")
   )
+  if (!is.null(request$release)) {
+    release_identity <- production_release_validate_release_metadata(request)
+    manifest$schema_version <- 2L
+    manifest$release <- list(
+      release_class = release_identity$release_class,
+      model_specification_id = release_identity$model_specification_id,
+      specification_sha256 = release_identity$specification_sha256,
+      specification_descriptor = request$release$specification_descriptor,
+      comparison_specification_id = release_identity$comparison_specification_id,
+      comparison_specification_sha256 = release_identity$comparison_specification_sha256,
+      data_release_id = release_identity$data_release_id,
+      analysis_period = release_identity$analysis_period,
+      code_commit = contract$repository$git_commit,
+      configuration_sha256 = contract$config$sha256,
+      qualification_status = request$qualification$status,
+      fit_artifact = manifest$fit,
+      product_categories = request$reporting$required_products,
+      accepted_products_root = release_identity$accepted_products_root,
+      accepted_package = list(status = "AWAITING_ACCEPTANCE_REGISTRATION"),
+      current_release_status = "QUALIFIED_NOT_ACTIVE",
+      previous_release_id = release_identity$previous_release_id
+    )
+  }
   path <- file.path(contract$run_root, "model-release.yml")
   production_release_atomic_yaml(manifest, path, replace = FALSE)
   list(path = normalizePath(path, mustWork = TRUE), sha256 = production_release_sha256(path))
@@ -1000,6 +1344,65 @@ production_release_atomic_yaml <- function(object, path, replace = TRUE) {
   if (!file.exists(temp) || file.info(temp)$size <= 0) stop("Temporary YAML write failed: ", temp, call. = FALSE)
   if (!file.rename(temp, path)) stop("Atomic rename failed for ", path, "; the previous file remains unchanged.", call. = FALSE)
   normalizePath(path, mustWork = TRUE)
+}
+
+
+production_release_register_accepted_package <- function(model_manifest_path, package_path,
+                                                           acceptance_summary_path, product_manifest_path,
+                                                           output_path = NULL) {
+  production_orchestration_require("yaml")
+  if (!file.exists(model_manifest_path)) stop("Model release manifest does not exist.", call. = FALSE)
+  manifest <- production_release_read_model_manifest(model_manifest_path, verify_artifact = FALSE)$manifest
+  if (!identical(as.integer(manifest$schema_version), 2L)) stop("Accepted-package registration requires a schema v2 release manifest.", call. = FALSE)
+  release <- manifest$release
+  if (is.null(release) || !production_release_is_sha256(release$specification_sha256)) stop("Model release scientific identity is incomplete.", call. = FALSE)
+  canonical <- production_release_canonical_directories(dirname(manifest$output_root))
+  root <- normalizePath(canonical$accepted_products, mustWork = TRUE)
+  package <- normalizePath(package_path, mustWork = TRUE)
+  summary <- normalizePath(acceptance_summary_path, mustWork = TRUE)
+  products <- normalizePath(product_manifest_path, mustWork = TRUE)
+  within_dir <- function(path, directory) identical(path, directory) || startsWith(path, paste0(sub("/+$", "", directory), .Platform$file.sep))
+  if (!dir.exists(package) || !within_dir(package, root) || !within_dir(summary, package) || !within_dir(products, package)) {
+    stop("Accepted package and its metadata must remain inside the canonical postfit_acceptance package.", call. = FALSE)
+  }
+  acceptance <- yaml::read_yaml(summary)
+  acceptance_status <- toupper(as.character(acceptance$status %||% acceptance$disposition %||% ""))
+  if (!acceptance_status %in% c("PASS", "PASS_WITH_WARNINGS", "ACCEPTED")) stop("Acceptance summary is not accepted.", call. = FALSE)
+  run_manifest <- yaml::read_yaml(manifest$run_manifest$path)
+  source_run_id <- as.character(acceptance$source_run_id %||% acceptance$native_run_id %||% "")
+  if (!nzchar(source_run_id) || !identical(source_run_id, as.character(run_manifest$run_id))) {
+    stop("Accepted package does not identify this release's execution run.", call. = FALSE)
+  }
+  normalize_job_id <- function(value) {
+    if (is.null(value) || !length(value) || is.na(value[[1L]]) || !nzchar(trimws(as.character(value[[1L]])))) return("")
+    as.character(value[[1L]])
+  }
+  expected_job <- normalize_job_id(run_manifest$refresh_request$source_execution$source_fit_job_id)
+  if (!nzchar(expected_job)) expected_job <- normalize_job_id(run_manifest$job_ids$fit)
+  package_job <- normalize_job_id(acceptance$fit_job_id %||% acceptance$source_fit_job_id)
+  if (!nzchar(expected_job) || !nzchar(package_job) || !identical(package_job, expected_job)) {
+    stop("Accepted package does not identify the release's historical source Fit job.", call. = FALSE)
+  }
+  production_release_validate_product_manifest(products, manifest$reporting)
+  release$accepted_package <- list(
+    status = "ACCEPTED",
+    path = package,
+    summary_path = summary,
+    summary_sha256 = production_release_sha256(summary),
+    product_manifest_path = products,
+    product_manifest_sha256 = production_release_sha256(products)
+  )
+  release$current_release_status <- "QUALIFIED_NOT_ACTIVE"
+  manifest$release <- release
+  run_directory <- normalizePath(dirname(model_manifest_path), mustWork = TRUE)
+  output_path <- output_path %||% file.path(run_directory, "model-release-accepted.yml")
+  output_path <- normalizePath(path.expand(output_path), mustWork = FALSE)
+  if (!within_dir(output_path, run_directory)) stop("Accepted release manifest must remain inside its execution run directory.", call. = FALSE)
+  if (file.exists(output_path) || dir.exists(output_path)) stop("Refusing to overwrite an immutable accepted release manifest.", call. = FALSE)
+  written <- production_release_atomic_yaml(manifest, output_path, replace = FALSE)
+  validated <- production_release_read_model_manifest(written, verify_artifact = FALSE)
+  list(path = written, sha256 = validated$sha256, status = release$current_release_status,
+       accepted_package = release$accepted_package)
 }
 
 production_release_validate_product_manifest <- function(path, reporting) {
@@ -1038,7 +1441,8 @@ production_release_read_model_manifest <- function(path, expected_sha256 = NULL,
   manifest_sha <- production_release_sha256(path)
   if (!is.null(expected_sha256) && !identical(tolower(manifest_sha), tolower(as.character(expected_sha256)))) stop("Model release manifest SHA-256 mismatch.", call. = FALSE)
   manifest <- yaml::read_yaml(path)
-  if (!identical(as.integer(manifest$schema_version), 1L)) stop("Unsupported model release manifest schema.", call. = FALSE)
+  schema_version <- as.integer(manifest$schema_version)
+  if (!schema_version %in% c(1L, 2L)) stop("Unsupported model release manifest schema.", call. = FALSE)
   if (!identical(as.character(manifest$status), "READY_FOR_REVIEW")) stop("Model release manifest is not marked READY_FOR_REVIEW.", call. = FALSE)
   if (is.null(manifest$production_id) || is.null(manifest$fit$path) || !production_release_is_sha256(manifest$fit$sha256)) stop("Model release manifest is missing required identity fields.", call. = FALSE)
   if (!identical(as.character(manifest$configuration$role), "candidate_execution") || is.null(manifest$configuration$path) ||
@@ -1086,6 +1490,62 @@ production_release_read_model_manifest <- function(path, expected_sha256 = NULL,
   if (!file.exists(manifest$run_manifest$path) || !identical(production_release_sha256(manifest$run_manifest$path), tolower(manifest$run_manifest$sha256))) stop("Run manifest is missing or has a different SHA-256.", call. = FALSE)
   if (!file.exists(manifest$products$manifest_path) || !identical(production_release_sha256(manifest$products$manifest_path), tolower(manifest$products$manifest_sha256))) stop("Post-fit product manifest is missing or has a different SHA-256.", call. = FALSE)
   production_release_validate_product_manifest(manifest$products$manifest_path, manifest$reporting)
+  if (identical(schema_version, 2L)) {
+    release <- manifest$release
+    release_fields <- c("release_class", "model_specification_id", "specification_sha256",
+                        "specification_descriptor", "comparison_specification_id", "comparison_specification_sha256",
+                        "data_release_id", "analysis_period", "code_commit", "configuration_sha256",
+                        "qualification_status", "fit_artifact", "product_categories",
+                        "accepted_products_root", "accepted_package", "current_release_status",
+                        "previous_release_id")
+    production_release_assert_fields(release, release_fields, release_fields, "model release")
+    if (!identical(as.character(release$model_specification_id), as.character(manifest$specification_id)) ||
+        !release$release_class %in% c("ROUTINE_REFRESH", "MODEL_REVISION") ||
+        !production_release_is_sha256(release$specification_sha256) ||
+        !production_release_is_sha256(release$comparison_specification_sha256) ||
+        !production_release_is_sha256(release$configuration_sha256) ||
+        !identical(production_release_specification_digest(release$specification_descriptor),
+                   tolower(as.character(release$specification_sha256)))) {
+      stop("Model release scientific identity is invalid.", call. = FALSE)
+    }
+    derived_class <- production_release_classify_specification(
+      release$specification_descriptor, release$comparison_specification_sha256
+    )$release_class
+    if (!identical(derived_class, as.character(release$release_class))) {
+      stop("Model release class does not match its specification digests.", call. = FALSE)
+    }
+    if (!identical(as.character(release$fit_artifact$sha256), as.character(manifest$fit$sha256)) ||
+        !identical(as.character(release$data_release_id), as.character(manifest$data$release_id))) {
+      stop("Model release data or fit identity differs from its top-level artifact records.", call. = FALSE)
+    }
+    canonical <- production_release_canonical_directories(dirname(manifest$output_root))
+    if (!identical(normalizePath(release$accepted_products_root, mustWork = FALSE),
+                   normalizePath(canonical$accepted_products, mustWork = FALSE))) {
+      stop("Model release accepted-products root is not canonical.", call. = FALSE)
+    }
+    package <- release$accepted_package
+    package_status <- as.character(package$status)
+    if (!package_status %in% c("AWAITING_ACCEPTANCE_REGISTRATION", "ACCEPTED")) {
+      stop("Model release accepted-package state is invalid.", call. = FALSE)
+    }
+    if (identical(package_status, "ACCEPTED")) {
+      for (record_name in c("path", "summary_path", "summary_sha256", "product_manifest_path", "product_manifest_sha256")) {
+        if (is.null(package[[record_name]])) stop("Accepted package identity is incomplete: ", record_name, call. = FALSE)
+      }
+      if (!production_release_is_sha256(package$summary_sha256) ||
+          !production_release_is_sha256(package$product_manifest_sha256)) stop("Accepted package checksums are invalid.", call. = FALSE)
+      package_root <- normalizePath(release$accepted_products_root, mustWork = TRUE)
+      package_path <- normalizePath(package$path, mustWork = TRUE)
+      within_package <- function(path, parent) identical(path, parent) || startsWith(path, paste0(sub("/+$", "", parent), .Platform$file.sep))
+      if (!dir.exists(package_path) || !within_package(package_path, package_root) ||
+          !within_package(normalizePath(package$summary_path, mustWork = TRUE), package_path) ||
+          !within_package(normalizePath(package$product_manifest_path, mustWork = TRUE), package_path) ||
+          !identical(production_release_sha256(package$summary_path), tolower(package$summary_sha256)) ||
+          !identical(production_release_sha256(package$product_manifest_path), tolower(package$product_manifest_sha256))) {
+        stop("Accepted package metadata is missing, outside its canonical package, or has changed.", call. = FALSE)
+      }
+    }
+  }
   list(manifest = manifest, sha256 = manifest_sha)
 }
 
@@ -1128,6 +1588,10 @@ production_release_activate <- function(active_state_path, model_manifest_path, 
   old_sha <- production_release_sha256(active_state_path)
   if (as.integer(old$generation) != as.integer(expected_generation) || !identical(tolower(old_sha), tolower(expected_state_sha256))) stop("Active release changed since review; compare-and-swap failed.", call. = FALSE)
   validated <- production_release_read_model_manifest(model_manifest_path, verify_artifact = TRUE)
+  if (identical(as.integer(validated$manifest$schema_version), 2L) &&
+      !identical(as.character(validated$manifest$release$accepted_package$status), "ACCEPTED")) {
+    stop("A versioned release must reference an accepted package under postfit_acceptance before activation.", call. = FALSE)
+  }
   if (identical(as.character(old$production_id), as.character(validated$manifest$production_id))) stop("Candidate release is already active.", call. = FALSE)
   event_id <- paste0("activate-", as.integer(Sys.time()), "-", substr(validated$sha256, 1L, 12L))
   event_path <- file.path(event_root, paste0(event_id, ".yml"))

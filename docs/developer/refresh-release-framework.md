@@ -16,6 +16,24 @@ scientific formulas, validation gates, or raster/reporting definitions.
 | Production activation | No versioned active pointer | A verified release manifest and explicit compare-and-swap activation update an existing pointer atomically and append an event. |
 | Rollback | No release rollback interface | Rollback creates a new pointer generation and event referencing the prior release; it does not rewrite or delete artifacts. |
 
+## Specification identity and release class
+
+A release descriptor includes likelihood, fixed-effect formula and order,
+random-effect structure, priors, spatial/temporal structure, transformations,
+and product semantics. Its SHA-256 is computed from recursively sorted JSON,
+so mapping key order does not change identity. Product semantics bind the
+mask threshold, RPI calibration and quantile, and required product categories
+to the same descriptor. Data release and analysis endpoint remain separate
+fields.
+
+`ROUTINE_REFRESH` is valid only when the candidate descriptor digest equals
+the comparison digest and the specification ID is retained.
+`MODEL_REVISION` requires a different digest and a new specification ID.
+A matching model name alone does not select the routine class. The descriptor,
+comparison identity, data-release identity, code commit, config checksum,
+qualification state, fit identity, accepted package, product categories, and
+previous release are recorded in schema v2 manifests.
+
 ## Refresh request schema v1
 
 `--refresh-request PATH` accepts a strict YAML object with these top-level
@@ -64,24 +82,24 @@ checksummed Stage 2 configuration and Stage 1 audit prove the edge. Any
 disagreement between launch-time source commit and metadata runtime commit
 fails closed pending an explicit provenance decision.
 
-## Stable artifact registry
+## Canonical artifact storage and registration
 
-An authorized adoption stages the declared inventory under
-`<output-root>/model_registry/<production-id>` on the same filesystem as its
-final destination. The directory is published by atomic rename only after
-each copied file is rehashed. A lock prevents concurrent writers; an existing
-version is accepted only if its artifact set, source identities, and copied
-hashes match exactly. The source is never modified. In addition to the fit and
-three upstream stages, the copy retains the small configs, audits, and
-supporting records needed to verify the adopted evidence and release later.
+An authorized adoption stages metadata and any required payload copies under
+`<production-runs>/model_registry/<production-id>`. A core artifact already
+inside canonical `production_runs` may be registered by a regular-file
+reference with its path, source provenance, byte count, and SHA-256. A core
+artifact outside that canonical root, including an artifact in a development
+worktree, is copied once into registry staging and rehashed before atomic
+publication. The implementation does not use hardlinks, reflinks, or
+symlinks. An existing registry version is reused only when its declared
+artifact identities match; it is never overwritten.
 
-The W44 source artifacts are under a development output tree, so they are not
-permanent production dependencies. A one-time registry copy is required if
-W44 adoption is ever authorized. That copy includes the multi-gigabyte model
-artifacts because stable production retention and later lineage verification
-require them; it is not performed by a dry-run and is never repeated for an
-identical registry version. No production storage path is written during the
-planning-only W44 check.
+No artifact copy is performed by a planning-only request. W44's current source
+is outside canonical `production_runs`, so a future separately authorized
+adoption would need a verified canonical copy to avoid depending on a
+development worktree. This task does not copy the W44 payload or remove its
+source. A later source cleanup would require a separate owner-authorized
+review after references and consumers are resolved.
 
 ## Reconciliation and activation
 
@@ -132,11 +150,26 @@ reported as observed; they are not modified by reconciliation.
 
 ## W44 review boundary
 
-The current private configuration is tied to W39 and its recorded deployment
-manifest references a different checkout commit and config SHA. The W44 fit
-Slurm output records launch source `42f27497b251cdcd84d2b44b1844cd18292610a8`,
-while its completion metadata records `5bf5e8d0f54de55e58f3a698daefb223ddc9d2e0`.
-Adoption remains blocked until that launch/metadata discrepancy is resolved.
-The current W44 request has no dispatch authorization. This framework change
-does not copy the W44 fit, submit Post-fit, create production rasters, alter
-the private configuration, merge PR #15, or activate W44.
+The launch-record and runtime-metadata commits have been reconciled. The
+`R`, `scripts`, `config`, and `tests` trees are identical; changes are
+limited to archived documentation and evidence. The original launch identity,
+fit metadata, and qualification records remain unchanged. The W44 request is
+still planning-only with `dispatch_authorized: false`. This framework does not
+copy W44 artifacts, submit Post-fit, create rasters, change private
+configuration, initialize or update an active pointer, or activate W44.
+
+## Read-only discovery and cleanup review
+
+`discover-active` validates the existing active-state pointer and the
+referenced manifest, then returns the stable manifest path and checksum. It
+does not create the pointer. `register-accepted-package` validates the
+accepted package and writes a separate immutable schema v2 manifest with
+`QUALIFIED_NOT_ACTIVE` status; activation remains a distinct compare-and-swap
+operation.
+
+`cleanup-report` consumes an inventory of owner, size, source references,
+consumers, retention dates/cycles, job references, replacement identity, and
+preservation/duplicate flags. It reports review eligibility and estimated
+recoverable storage only. Eligibility uses the later of the 90-day minimum and
+two subsequent qualified refreshes, and the report requires explicit owner
+and governance approval. No cleanup or automatic deletion is implemented.

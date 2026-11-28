@@ -83,3 +83,48 @@ active-state pointer, and caller-supplied compare-and-swap generation and
 state SHA-256. No active-state pointer is bootstrapped from the current config
 alone because the current W39 fit identity has not been established.
 
+## Canonical storage and release operations
+
+Production execution directories remain under
+`/project/disease_ecology/nws-geostat-output/production_runs`; accepted
+reporting packages remain under its sibling
+`/project/disease_ecology/nws-geostat-output/postfit_acceptance`. The registry
+is `production_runs/model_registry`. Applications should follow a validated
+release manifest and its product manifest, not a worktree name or Slurm job
+ID. Existing run and CHIME package naming conventions remain in place.
+
+An accepted package can be recorded in a new immutable release manifest after
+its acceptance summary, source run, historical Fit job, and product manifest
+pass validation:
+
+```bash
+./scripts/manage_model_release_atlas.sh \
+  --action register-accepted-package \
+  --release-manifest /project/disease_ecology/nws-geostat-output/production_runs/<run-id>/model-release.yml \
+  --accepted-package /project/disease_ecology/nws-geostat-output/postfit_acceptance/<package> \
+  --acceptance-summary /project/disease_ecology/nws-geostat-output/postfit_acceptance/<package>/<summary.yml> \
+  --product-manifest /project/disease_ecology/nws-geostat-output/postfit_acceptance/<package>/<manifest.csv>
+```
+
+The command writes `model-release-accepted.yml` beside the run manifest. It
+does not activate the release or change the active pointer.
+
+Cleanup review is metadata-only. The input CSV must include `path`,
+`classification`, `bytes`, `owner`, `known_source_references`,
+`downstream_consumers`, `retention_start_date`,
+`subsequent_qualified_refreshes`, `active_job_references`,
+`replacement_path`, `replacement_sha256`, `replacement_verified`,
+`scientific_preservation_required`, and `duplicate_finding` columns:
+
+```bash
+./scripts/manage_model_release_atlas.sh \
+  --action cleanup-report \
+  --candidate-inventory /path/to/reviewed-candidates.csv \
+  --report-output /path/to/cleanup-eligibility.csv \
+  --as-of 2026-11-27
+```
+
+Eligibility requires both 90 days and two subsequent qualified refreshes, plus
+resolved references, a verified replacement, and no scientific preservation
+or duplicate-finding blocker. The report records estimated recoverable bytes
+and required owner/governance approval. There is no deletion action.

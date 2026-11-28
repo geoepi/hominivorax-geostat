@@ -35,3 +35,16 @@ future Stage 1/2 data minimization, future model-input updates, and scientific
 recalibration beyond the current dynamic rules for later work. Historical
 comparison utilities may remain in the repository as clearly labeled
 diagnostics; they are not required production stages.
+
+## Directory, manifest, and retention review
+
+For release-framework changes, review the full descriptor digest and its
+comparison identity, confirm that `ROUTINE_REFRESH` retains the compared
+specification ID and `MODEL_REVISION` changes it, and verify that product
+semantics agree with the reporting request. Check that execution files,
+accepted packages, and reporting source remain at their separate canonical
+locations. Verify the copy/reference registration rule and checksums without
+copying large production artifacts during qualification. Run the documented
+no-job dry-run and confirm that it does not create a run directory, submit
+stages, or alter the active pointer. Cleanup reports may be generated for
+review, but deletion remains a separately authorized operation.

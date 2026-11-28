@@ -36,6 +36,37 @@ if (action == "verify-active") {
   quit(save = "no", status = 0L)
 }
 
+if (action == "discover-active") {
+  result <- production_release_discover_active(required("active-state"),
+    verify_artifact = !identical(option("hash-artifact", "false"), "false"))
+  cat("Read-only active release manifest discovery\n")
+  emit(result[c("status", "generation", "production_id", "manifest_path", "manifest_sha256")])
+  quit(save = "no", status = 0L)
+}
+
+if (action == "cleanup-report") {
+  as_of <- as.Date(option("as-of", as.character(Sys.Date())))
+  result <- production_release_cleanup_eligibility(required("candidate-inventory"), as_of = as_of)
+  output <- required("report-output")
+  dir.create(dirname(output), recursive = TRUE, showWarnings = FALSE)
+  utils::write.csv(result, output, row.names = FALSE, na = "")
+  cat("Read-only cleanup eligibility report written; no files were removed\n")
+  cat("report_path: ", normalizePath(output, mustWork = TRUE), "\n", sep = "")
+  cat("eligible_candidates: ", sum(result$retention_eligible), "\n", sep = "")
+  quit(save = "no", status = 0L)
+}
+
+if (action == "register-accepted-package") {
+  result <- production_release_register_accepted_package(
+    required("release-manifest"), required("accepted-package"),
+    required("acceptance-summary"), required("product-manifest"),
+    output_path = option("output-manifest")
+  )
+  cat("Immutable accepted-package release manifest written; active pointer unchanged\n")
+  emit(result[c("path", "sha256", "status")])
+  quit(save = "no", status = 0L)
+}
+
 if (action == "reconcile") {
   result <- production_release_reconcile_deployment(required("config"), required("deployment-manifest"), option("repo-root", repo_root))
   cat("Read-only deployment reconciliation\n")
@@ -59,4 +90,4 @@ if (action == "rollback") {
   quit(save = "no", status = 0L)
 }
 
-stop("Unknown action: ", action, ". Supported actions are verify-active, reconcile, activate, rollback.", call. = FALSE)
+stop("Unknown action: ", action, ". Supported actions are verify-active, discover-active, cleanup-report, register-accepted-package, reconcile, activate, rollback.", call. = FALSE)
