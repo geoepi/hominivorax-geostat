@@ -81,11 +81,19 @@ build_joint_inla_from_inputs <- function(joint_inputs, cfg) {
   require_joint_inla()
   validate_joint_inla_input(joint_inputs)
   validate_joint_inla_config(cfg, require_inputs = FALSE)
+  if (!is.null(cfg$covariate_registry)) {
+    stage2_registry <- joint_inputs$covariate_registry
+    if (is.null(stage2_registry) ||
+        !identical(stage2_registry$manifest_sha256, cfg$covariate_registry$manifest_sha256) ||
+        !identical(stage2_registry$configuration$version, cfg$covariate_registry$configuration$version)) {
+      stop("Stage 2 covariate manifest identity does not match the Configuration C Stage 3A manifest.")
+    }
+  }
   tier1 <- joint_inputs$tier1
   tier2 <- joint_inputs$tier2
   grouping_variable <- cfg$spatial$grouping_variable
   groups <- joint_group_audit(tier1, tier2, grouping_variable)
-  mapping <- joint_effect_mapping(tier1, tier2)
+  mapping <- joint_effect_mapping(tier1, tier2, cfg$covariate_registry)
   predictor_audit <- list(
     tier1 = validate_joint_effect_columns(tier1, mapping$tier1, !is.na(tier1$response_training), "Stage 2 Tier 1"),
     tier2 = validate_joint_effect_columns(tier2, mapping$tier2, !is.na(tier2$response_training), "Stage 2 Tier 2")
@@ -106,6 +114,27 @@ build_joint_inla_from_inputs <- function(joint_inputs, cfg) {
   effects <- list(tier1 = make_tier1_effects(tier1, fields, mapping), tier2 = make_tier2_effects(tier2, fields, mapping))
   priors <- make_joint_priors(cfg)
   formula <- make_joint_formula(spdes$tier1$object, spdes$tier2$object, priors, cfg)
+  fixed_effect_tiers <- if (is.null(cfg$covariate_registry)) {
+    list(
+      tier1 = c("intercept1", "north", "road_dens", "night_illum"),
+      tier2 = c("intercept2", "mintemp", "soilmoist", "leafarea", "rhum", "mintemp:soilmoist", "mintemp:leafarea", "cattle", "horses", "pigs", "goats", "sheep")
+    )
+  } else {
+    configured <- cfg$covariate_registry$configuration$fixed_effects
+    list(
+      tier1 = c("intercept1", as.character(unlist(configured$tier1_terms, use.names = FALSE))),
+      tier2 = c("intercept2", as.character(unlist(configured$tier2_terms, use.names = FALSE)), as.character(unlist(configured$interaction_terms, use.names = FALSE)))
+    )
+  }
+  fixed_effect_names <- unique(c(fixed_effect_tiers$tier1, fixed_effect_tiers$tier2))
+  formula_fixed_names <- if (is.null(cfg$covariate_registry)) {
+    c("north", "road_dens", "night_illum", "mintemp", "soilmoist", "leafarea", "rhum", "mintemp:soilmoist", "mintemp:leafarea", "cattle", "horses", "pigs", "goats", "sheep")
+  } else {
+    as.character(unlist(cfg$covariate_registry$configuration$fixed_effects$formula_order, use.names = FALSE))
+  }
+  if (!setequal(setdiff(fixed_effect_names, c("intercept1", "intercept2")), formula_fixed_names)) {
+    stop("Configured fixed-effect tiers and formula terms do not reconcile.")
+  }
   nbinomial_default <- introspect_nbinomial_default()
   stacks <- build_joint_stacks(tier1, tier2, projections, effects)
   exposure <- if ("terrestrial_area_km2" %in% names(tier2)) tier2$terrestrial_area_km2 else tier2$area_km2
@@ -117,6 +146,10 @@ build_joint_inla_from_inputs <- function(joint_inputs, cfg) {
   )
   model_signature <- list(
     formula = paste(deparse(formula, width.cutoff = 500L), collapse = " "),
+    fixed_effect_names = fixed_effect_names,
+    fixed_effect_formula_order = c("intercept1", "intercept2", formula_fixed_names),
+    fixed_effect_tiers = fixed_effect_tiers,
+    covariate_registry = covariate_registry_signature(cfg$covariate_registry),
     family = c("binomial", "nbinomial"),
     spde_structure = list(tier1 = spdes$tier1$parameters, tier2 = spdes$tier2$parameters),
     shared_field = list(source = "tier1_field", target = "tier2_copy_field", group_model = "iid"),
@@ -143,6 +176,12 @@ build_joint_inla_from_inputs <- function(joint_inputs, cfg) {
     )
   )
   audit <- joint_audit(tier1, tier2, projections, spdes, cfg, predictor_audit, groups$n_groups, exposure, compatibility, priors, nbinomial_default)
+  audit <- rbind(audit,
+    data.frame(stage = "Stage 3A assembly", scope = "fixed_effects", metric = "configured_term_count", value = as.character(length(fixed_effect_names)), stringsAsFactors = FALSE),
+    data.frame(stage = "Stage 3A assembly", scope = "fixed_effects", metric = "formula_term_order", value = paste(c("intercept1", "intercept2", formula_fixed_names), collapse = ","), stringsAsFactors = FALSE),
+    data.frame(stage = "Stage 3A assembly", scope = "provenance", metric = "covariate_manifest_version", value = as.character(if (is.null(cfg$covariate_registry)) NA_character_ else cfg$covariate_registry$configuration$version), stringsAsFactors = FALSE),
+    data.frame(stage = "Stage 3A assembly", scope = "provenance", metric = "covariate_manifest_sha256", value = as.character(if (is.null(cfg$covariate_registry)) NA_character_ else cfg$covariate_registry$manifest_sha256), stringsAsFactors = FALSE)
+  )
   input_path <- cfg$inputs$joint_model_inputs
   list(
     spde = list(tier1 = spdes$tier1$object, tier2 = spdes$tier2$object),
@@ -152,10 +191,12 @@ build_joint_inla_from_inputs <- function(joint_inputs, cfg) {
     fit_reference = make_joint_fit_reference(cfg, nbinomial_default),
     model_signature = model_signature,
     effect_mapping = mapping, prediction_compatibility = compatibility,
+    fixed_effect_registry = fixed_effect_tiers, covariate_registry = cfg$covariate_registry,
     build_audit = audit, config = cfg,
     provenance = list(stage = "joint_inla_assembly", source_artifact = input_path,
                       source_artifact_sha256 = if (file.exists(input_path)) joint_inla_hash_file(input_path) else NA_character_,
                       R = R.version.string, INLA = as.character(utils::packageVersion("INLA")),
+                      covariate_manifest = covariate_registry_signature(cfg$covariate_registry),
                       executed_fit = FALSE)
   )
 }

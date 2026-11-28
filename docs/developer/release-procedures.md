@@ -6,7 +6,9 @@ recalibration.
 
 1. Confirm the release branch is clean and contains the accepted validation
    implementation.
-2. Run the relevant R tests, parse checks, and `git diff --check`.
+2. Run `Rscript tests/run_tests.R`, relevant parse checks, and `git diff --check`.
+   The canonical test runner records per-script status and separate stdout and
+   stderr logs; see [test execution](testing.md).
 3. Check README and `docs/` links, command names, configuration templates, and
    the dynamic production hard-code scan.
 4. Run the production dry-run with `config/production.example.yml`; confirm

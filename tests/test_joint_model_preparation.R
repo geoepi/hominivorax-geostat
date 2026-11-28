@@ -27,6 +27,17 @@ cfg$holdout$tier1$positive_fraction <- 0
 cfg$holdout$tier2$positive_fraction <- 0
 prepared <- prepare_joint_model_inputs(model_inputs, cfg)
 
+stopifnot(
+  is.integer(prepared$temporal_mapping$quarter_index),
+  is.integer(prepared$temporal_mapping$sixmo_index),
+  is.integer(prepared$tier1$quarter_index),
+  is.integer(prepared$tier1$sixmo_index),
+  is.integer(prepared$tier2$quarter_index),
+  is.integer(prepared$tier2$sixmo_index),
+  is.integer(prepared$prediction_grid$quarter_index),
+  is.integer(prepared$prediction_grid$sixmo_index)
+)
+
 transformation_spec <- list(
   dynamic = list(mintemp = c(center = 10, scale = 2)),
   static = list(road_density = c(impute = 0, center = 1, scale = 1), night_illumination = c(impute = 0, center = 1, scale = 1)),
@@ -56,5 +67,3 @@ missing_livestock_inputs$prediction_grid$cattle[1] <- NA_real_
 missing_holdout <- prepare_joint_model_inputs(missing_livestock_inputs, cfg_holdout)
 stopifnot(identical(baseline_holdout$holdout_metadata$tier1$selected_ids, missing_holdout$holdout_metadata$tier1$selected_ids), identical(baseline_holdout$holdout_metadata$tier2$selected_ids, missing_holdout$holdout_metadata$tier2$selected_ids))
 stopifnot(is.na(missing_livestock_inputs$tier2$cattle[1]), all(is.finite(missing_holdout$prediction_grid$cattle_q)))
-
-cat("Joint-model preparation regression tests passed\n")

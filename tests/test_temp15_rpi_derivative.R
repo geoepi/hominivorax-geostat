@@ -26,4 +26,3 @@ terra::writeRaster(terra::rast(nrows = 2, ncols = 2, xmin = 0, xmax = 2, ymin = 
 audit <- postfit_reporting_trace_cell_area(tmp, NULL, NULL)
 stopifnot(identical(audit$status, "PASS"), isTRUE(audit$nominal_average_raster_cell_area > 0))
 unlink(tmp)
-cat("TEMP15_DERIVATIVE_TEST_PASS\n")

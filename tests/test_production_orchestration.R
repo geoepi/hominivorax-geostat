@@ -329,5 +329,3 @@ test_that("validation inventory records blocking, warning, and provenance policy
   expect_true(any(inventory$check_name == "dic_waic_comparison" & inventory$proposed_severity == "WARNING"))
   expect_true(any(inventory$check_name == "artifact_shas" & inventory$proposed_severity == "PROVENANCE"))
 })
-
-cat("Production orchestration tests passed\n")

@@ -9,6 +9,12 @@ This document records the accepted statistical structure. The workflow-closure t
 
 The formula, priors, mesh, copy-field semantics, exposure, zero policy, holdout definitions, projection mathematics, rasterization, and RPI class rules are preserved by the production contracts.
 
+Configuration C is versioned separately from the frozen reference model. It
+retains this structure and adds Tier 2 additive linear terms for clay,
+`wv0010`, and weekly surface pressure. The source-unit and identity
+transformation declarations are maintained in the
+[Configuration C input manifest](input-audits/2026-11-13/configuration-c-input-manifest.yml).
+
 The four artifacts are `model_inputs.rds`, `joint_model_inputs.rds`, `joint_inla_build.rds`, and `joint_model_fit.rds`. Stage 3B also writes `joint_model_theta_init.rds` from the exact fitted `fit$mode$theta` vector, with a verified canonical theta order, source checksums, formula/family/SPDE/effect/prior signatures, hyperparameter count, and runtime versions. Reuse is disabled by default, ignores Stage 3A data-identity checksums for compatibility, preserves those checksums as provenance, and fails closed when structural metadata are missing or inconsistent.
 
 Potential abundance remains Tier 2 intensity multiplied by nominal cell area. Physiological temperature masking is not part of the raw statistical product.

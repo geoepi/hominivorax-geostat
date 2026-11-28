@@ -97,5 +97,3 @@ stopifnot(
   identical(support$mesh$graph$tv, support_subset$mesh$graph$tv),
   identical(support$tier2_polygons$poly_id, support_subset$tier2_polygons$poly_id)
 )
-
-cat("Spatial support and observation-independent mesh regression test passed\n")

@@ -151,5 +151,3 @@ full_fitted <- joint_inla_extract_fitted_values(full_build, full_fit, full_stage
 full_manual <- joint_inla_project_reconstruct_response(full_build, full_fit, full_stage2, full_components, full_fitted)
 full_metrics <- joint_inla_project_reconstruction_metrics(full_manual, full_fitted, n_worst = 2L)
 stopifnot(isTRUE(full_metrics$pass), max(abs(full_manual$difference)) < 1e-12)
-
-cat("Joint-INLA Phase 2 projection helper tests passed\n")

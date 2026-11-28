@@ -1,0 +1,6 @@
+"metric","value"
+"matched_tier2_rows",7471
+"paired_valid_rows",7471
+"mean_absolute_error_c1",2.07023661585229
+"mean_absolute_error_refreshed",2.07096841829154
+"paired_mae_difference_refreshed_minus_c1",0.000731802439250512

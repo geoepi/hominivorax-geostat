@@ -1,0 +1,3 @@
+"tier","c1_rows","refreshed_rows","matched_rows","c1_only_rows","refreshed_only_rows","exact_identity_match","key_columns"
+"tier1",4768,4768,4768,0,0,TRUE,"tier,source_.row_id"
+"tier2",7471,7471,7471,0,0,TRUE,"tier,source_.row_id"

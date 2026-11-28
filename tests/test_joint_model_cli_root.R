@@ -9,5 +9,3 @@ discovered_root <- repository_root_from_script(
 )
 stopifnot(identical(discovered_root, repo_root))
 stopifnot(!identical(discovered_root, normalizePath(file.path(dirname(external_config), ".."), mustWork = FALSE)))
-
-cat("Joint-model CLI repository-root regression test passed\n")

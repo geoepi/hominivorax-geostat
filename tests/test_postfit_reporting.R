@@ -373,4 +373,3 @@ testthat::test_that("accepted structural and masked products promote with suppor
   testthat::expect_equal(promoted$manifest$week, "2024-W01")
   testthat::expect_false(promoted$semantics$structural_potential_abundance_temp_masked$spde_terms_included)
 })
-cat("Post-fit reporting tests passed\\n")

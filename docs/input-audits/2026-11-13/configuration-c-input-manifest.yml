@@ -1,0 +1,206 @@
+manifest_schema: hominivorax-geostat-configuration-c-input-manifest/v1
+manifest_version: 1
+status: development_specification_not_production_qualified
+prior_audit_manifest: docs/input-audits/2026-11-13/input-manifest.yml
+prior_audit_resolution_report: docs/input-audits/2026-11-13/resolution-validation-report.md
+configuration:
+  id: configuration_c
+  label: Configuration C
+  version: "C-1"
+  artifact_namespace: configuration_c
+  frozen_reference: config/joint_inla.example.yml
+  fit_status: not_fitted
+  prediction_status: not_generated
+  production_status: not_promoted
+  analysis_window:
+    calendar: ISO-8601 epidemiological weeks, Monday through Sunday
+    start_epiweek: "2022-W01"
+    end_epiweek: "2026-W44"
+    end_date: "2026-11-01"
+    observations_after_endpoint: exclude_from_analysis_and_retain_in_source_archive
+  structural_contract:
+    tier1_family: binomial
+    tier2_family: nbinomial
+    row_specific_family_link: preserve_existing
+    tier1_spde: preserve_existing
+    tier2_spde: preserve_existing
+    tier1_temporal: rw1
+    tier2_temporal: rw1
+    administrative_effect: iid
+    shared_copy_field: tier2_copy_field_copies_tier1_field_with_estimated_coefficient
+    cattle_effect: rw2
+    reporting_censoring: preserve_existing
+    holdout_semantics: preserve_existing
+  fixed_effects:
+    tier1_terms: [north, road_dens, night_illum]
+    tier2_terms: [mintemp, soilmoist, leafarea, rhum, cattle, horses, pigs, goats, sheep, clay, wv0010, spressure]
+    interaction_terms: ["mintemp:soilmoist", "mintemp:leafarea"]
+    formula_order: [north, road_dens, night_illum, mintemp, soilmoist, leafarea, rhum, "mintemp:soilmoist", "mintemp:leafarea", cattle, horses, pigs, goats, sheep, clay, wv0010, spressure]
+    reporting_order:
+      tier1: [intercept1, north, road_dens, night_illum]
+      tier2: [intercept2, mintemp, soilmoist, leafarea, rhum, "mintemp:soilmoist", "mintemp:leafarea", cattle, horses, pigs, goats, sheep, clay, wv0010, spressure]
+    new_additive_linear_terms: [clay, wv0010, spressure]
+observations:
+  release_id: "2026-11-13"
+  path: "/project/disease_ecology/NWScrewworm/data/processed_data/case_detections/combined_clean_obs_2026-11-13.csv"
+  sha256: "784168081cc1d3206f3537b8731994cbfc34be15be7c515fe06710d4ea9bdaac"
+  owner_approval:
+    authority: project_owner
+    approval_date: "2026-11-21"
+    configuration: "C-1"
+    approved_release_identifier: "configuration-c1-observations-2026-11-13-current-content-approved-2026-11-21"
+    supersedes_sha256: "784168081cc1d3206f3537e8731994cbfc34be15be7c515fe06710d4ea9bdaac"
+    statement: "The project owner manually inspected and explicitly approved the current source contents for Configuration C-1; this release supersedes the previously approved observation checksum."
+  checksum_history:
+    - sha256: "784168081cc1d3206f3537e8731994cbfc34be15be7c515fe06710d4ea9bdaac"
+      status: superseded
+      superseded_on: "2026-11-21"
+      note: "Previously approved checksum retained for audit history."
+    - sha256: "784168081cc1d3206f3537b8731994cbfc34be15be7c515fe06710d4ea9bdaac"
+      status: current_owner_approved
+      verified_on: "2026-11-21"
+  provenance_notes:
+    - status: unverified_possible_explanation
+      verified: false
+      note: "The project owner notes that earlier modifications may have involved removal of duplicate records. This remains a possible explanation, not a verified historical finding."
+  bytes: 7191829
+  rows: 164767
+  columns: [date, lon, lat, host]
+  date_min: "2022-02-10"
+  date_max: "2026-11-13"
+  source_release_change_classification: OBSERVATION_RELEASE_CHANGED_PROVENANCE_UNRESOLVED
+  source_archive_modified: false
+  analysis_endpoint_policy: retain_later_rows_in_source_archive_and_exclude_after_2026-W44
+  expected_observations_after_endpoint: 968
+  checksum_check: verify_sha256_before_and_after_read
+spatial_template:
+  configured:
+    path: "/project/disease_ecology/NWScrewworm/data/processed_data/spatial_domain/study_area_raster.tif"
+    bytes: 15066
+    sha256: "d968ebe17486bde29eb68dcfae3617c8fe0932c5cad256b843c3c2aafc973a66"
+  historic_environmental_sidecar_template:
+    sha256: "4be01f0ecaff35216a72eb8f27e791311af90d35b5a4fff1e46a74edb6dc633b"
+    source_repository: "/project/disease_ecology/cds-datagrab"
+    tracked_source_path: "/project/disease_ecology/cds-datagrab/spatial_domain/study_area_raster.tif"
+    source_git_commit: "334681b2d2b40fb5934df342fb2c7715fb337c37"
+    source_git_commit_date: "2026-07-27T19:45:11-05:00"
+  comparison:
+    binary_identity: distinct
+    numerical_values_and_na_mask_equivalent: true
+    grid_geometry_equivalent: true
+    crs_equivalent: true
+    historic_provenance: tracked_CDS_binary_matches_sidecar_hash_and_predates_sidecars; sidecars_do_not_record_runtime_path
+  classification: TEMPLATE_PROVENANCE_RESOLVED
+  previous_2026_11_19_classification: TEMPLATE_PROVENANCE_UNRESOLVED
+  evidence_report: docs/input-audits/2026-11-13/resolution-validation-report.md
+source_inventory:
+  path: docs/input-audits/2026-11-13/input_file_hashes.tsv
+  sha256: "9a87da06e0c0a103de6af67c6129073456b1e0263d95c3191c8e4400e5528511"
+  records: 511
+  scope: historical_2026_11_18_audit_snapshot; current_observation_release_is_recorded_above
+covariates:
+  clay:
+    model_term: clay
+    tier: tier2
+    input_section: static_covariates
+    temporal_support: static
+    source:
+      product: SoilGrids clay mean, 0-5 cm, official 1000 m aggregated GeoTIFF
+      variable_id: clay
+      path: "/project/disease_ecology/NWScrewworm/data/raw_data/soilgrids_1000m_isric/clay_0-5cm_mean_1000.tif"
+      sha256: "20f699cc64686bb5696e395f709232e5957ea3c6a4b39f6676517a502033f424"
+      product_revision: unknown_mutable_latest_alias
+      source_url: "https://files.isric.org/soilgrids/latest/data_aggregated/1000m/clay/clay_0-5cm_mean_1000.tif"
+      physical_units: g/kg
+      stored_mapped_units: g/kg
+      data_type: Int16
+      nodata: -32768
+      scale_factor: absent
+      offset: absent
+      official_resampling_history: 1000 m mean predictions aggregated from 250 m products
+      local_resampling_history: no local processing record; current bytes match official source manifest
+    transformation:
+      method: identity
+      output_column: clay
+      output_units: g/kg
+      coefficient_interpretation: per g/kg
+    missing_policy: fail
+    reporting_label: "SoilGrids clay, 0-5 cm (per g/kg)"
+  wv0010:
+    model_term: wv0010
+    tier: tier2
+    input_section: static_covariates
+    temporal_support: static
+    source:
+      product: SoilGrids volumetric water content at 10 kPa, mean, 0-5 cm, official 1000 m aggregated GeoTIFF
+      variable_id: wv0010
+      path: "/project/disease_ecology/NWScrewworm/data/raw_data/soilgrids_1000m_isric/wv0010_0-5cm_mean_1000.tif"
+      sha256: "0786fa27fa1870b3d7737dca566972adec8a3e0f0a95230f6fec35af0a12d39c"
+      product_revision: unknown_mutable_latest_alias
+      source_url: "https://files.isric.org/soilgrids/latest/data_aggregated/1000m/wv0010/wv0010_0-5cm_mean_1000.tif"
+      physical_units: "10^-3 cm3 cm-3"
+      stored_mapped_units: "10^-3 cm3 cm-3 (Mapped_units tag)"
+      data_type: Int16
+      nodata: -32768
+      scale_factor: absent
+      offset: absent
+      official_resampling_history: 1000 m mean predictions aggregated from 250 m products
+      local_resampling_history: no local processing record; current bytes match official source manifest
+    transformation:
+      method: identity
+      output_column: wv0010
+      output_units: "10^-3 cm3 cm-3"
+      coefficient_interpretation: per 10^-3 cm3 cm-3
+    missing_policy: fail
+    reporting_label: "SoilGrids volumetric water content at 10 kPa, 0-5 cm (per 10^-3 cm3 cm-3)"
+  spressure:
+    model_term: spressure
+    tier: tier2
+    input_section: dynamic_covariates
+    temporal_support: weekly
+    source:
+      product: ERA5-Land daily mean surface pressure aggregated to weekly mean
+      variable_id: "surface_pressure / sp (parameter 134)"
+      path: "/project/disease_ecology/cds-datagrab-output/data/production/era5land_surface_pressure_mean/weekly/"
+      file_pattern: "era5land_surface_pressure_mean_YYYY-Www.tif"
+      source_units: Pa
+      processed_value_units: kPa
+      source_conversion: divide_by_1000
+      weekly_aggregation: seven daily values already converted to kPa, arithmetic mean, ISO week Monday-Sunday
+      output_unit_tags: absent_on_weekly_raster_and_sidecar; supported_by_source_code_and_daily_sidecars
+      source_code_repository_commit: "9a07372acec9c69d6f34859ff96ace866c25d633"
+      coverage:
+        first_week: "2022-W01"
+        last_week: "2026-W44"
+        raster_count: 252
+        missing_weeks: 0
+        duplicate_weeks: 0
+      representative_w44_raster_sha256: "be1cb86204e37830023cae54d0e4c59384e0e0d54d4fd4f981c4975c1fdf69cc"
+      representative_w44_sidecar_sha256: "2a7c5eea0299694282d4fbeab2fa7a7441dc4bd40ff4d3c7a97fbb09a895827e"
+    transformation:
+      method: identity
+      output_column: spressure
+      output_units: kPa
+      coefficient_interpretation: per kPa
+    missing_policy: fail
+    reporting_label: "Weekly mean surface pressure (per kPa)"
+schema_contract:
+  observation_coordinates:
+    columns: [lon, lat]
+    source_crs: EPSG:4326
+    temporal_column: date
+    week_calendar: ISO-8601
+  environmental:
+    static_variables: [clay, wv0010]
+    weekly_variables: [spressure]
+    dynamic_week_gap_policy: fail
+    missing_required_covariate_policy: fail_and_report
+    no_week_substitution: true
+  provenance:
+    carry_manifest_path_version_checksum: true
+    carry_input_source_ids_units_transformations_and_missingness_audit: true
+limitations:
+  - "The historical cause of observation content changes remains unresolved. The project owner approved the current checksum for C-1 on 2026-11-21; possible duplicate-record removal remains an unverified explanation."
+  - "The exact SoilGrids named revision and retrieval time are unknown because the source URLs use the mutable latest alias."
+  - "Weekly surface-pressure raster values are traceable to kPa through the verified processing code and daily sidecars, but the weekly raster and sidecar omit unit tags."
+  - "No Stage 1 execution, model fitting, geographic prediction, or scientific qualification is performed by this configuration change."

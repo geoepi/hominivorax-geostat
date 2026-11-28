@@ -2,6 +2,14 @@ estimate_transformations <- function(training, cfg) {
   dynamic <- c("mintemp", "soilmoist", "leafarea", "rhum")
   static <- c("cattle", "horses", "pigs", "sheep", "goats", "road_density", "night_illumination")
   if (!all(c(dynamic, static, "x", "y") %in% names(training))) stop("Training data lack covariates required for transformation estimation.")
+  registered <- cfg$covariate_registry$covariates %||% list()
+  for (name in names(registered)) {
+    column <- as.character(registered[[name]]$transformation$output_column)
+    if (!column %in% names(training)) stop("Training data lack registered environmental covariate ", name, " (", column, ").")
+    if (!identical(as.character(registered[[name]]$transformation$method), "identity")) {
+      stop("Unsupported Configuration C environmental transformation for ", name, ".")
+    }
+  }
   center_scale <- function(values) {
     c(center = mean(values, na.rm = TRUE), scale = max(sd(values, na.rm = TRUE), .Machine$double.eps))
   }
@@ -21,11 +29,31 @@ estimate_transformations <- function(training, cfg) {
     northing = c(origin = northing_origin, center = mean(northing_values, na.rm = TRUE), scale = max(sd(northing_values, na.rm = TRUE), .Machine$double.eps), offset_km = northing_offset_km),
     temperature_hinge = cfg$transformations$temperature_hinge,
     missing_policies = list(dynamic = cfg$transformations$dynamic_missing_policy, livestock = cfg$transformations$livestock_missing_policy),
+    registered_covariates = lapply(registered, function(entry) {
+      source_units <- entry$source$physical_units
+      if (is.null(source_units)) source_units <- entry$source$source_units
+      if (is.null(source_units)) source_units <- NA_character_
+      stored_units <- entry$source$stored_mapped_units
+      if (is.null(stored_units)) stored_units <- entry$source$processed_value_units
+      if (is.null(stored_units)) stored_units <- NA_character_
+      list(
+        model_term = as.character(entry$model_term),
+        tier = as.character(entry$tier),
+        temporal_support = as.character(entry$temporal_support),
+        source_units = as.character(source_units),
+        stored_units = as.character(stored_units),
+        model_units = as.character(entry$transformation$output_units),
+        method = as.character(entry$transformation$method),
+        output_column = as.character(entry$transformation$output_column),
+        missing_policy = as.character(entry$missing_policy),
+        reporting_label = as.character(entry$reporting_label)
+      )
+    }),
     type = "training_only"
   )
 }
 
-apply_transformations <- function(data, spec, include_hinge = TRUE) {
+apply_transformations <- function(data, spec, include_hinge = TRUE, require_registered_covariates = TRUE) {
   for (nm in names(spec$dynamic)) {
     if (!nm %in% names(data)) next
     values <- data[[nm]]
@@ -37,6 +65,16 @@ apply_transformations <- function(data, spec, include_hinge = TRUE) {
     values <- data[[nm]]
     values[is.na(values)] <- spec$static[[nm]]["impute"]
     data[[paste0(nm, "_log1p")]] <- log1p(values)
+  }
+  for (nm in names(spec$registered_covariates %||% list())) {
+    registered <- spec$registered_covariates[[nm]]
+    column <- as.character(registered$output_column)
+    if (!column %in% names(data)) {
+      if (isTRUE(require_registered_covariates)) stop("Data lack registered environmental covariate column: ", column)
+      next
+    }
+    if (!identical(as.character(registered$method), "identity")) stop("Unsupported registered environmental transformation for ", nm, ".")
+    data[[column]] <- as.numeric(data[[column]])
   }
   data$northing_z <- (data$y - spec$northing["origin"] - spec$northing["center"]) / spec$northing["scale"]
   if (include_hinge && "mintemp" %in% names(data)) data$tmin_hinge <- pmax(0, data$mintemp - spec$temperature_hinge)

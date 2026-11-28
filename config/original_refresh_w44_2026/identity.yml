@@ -1,0 +1,23 @@
+model:
+  identifier: ORIGINAL_REFRESH_W44_2026
+  specification_revision: original_joint_inla_v1
+  data_revision: observations_2026-11-13_through_2026-W44
+  disposition: development_candidate
+  frozen_specification_reference: R/joint_inla_spec.R::make_joint_formula with covariate_registry=null
+
+source:
+  repository_base_commit: 4a463bd62727cf33f783a31d9627afdb576a077f
+  original_formula_reference_commit: 4a463bd62727cf33f783a31d9627afdb576a077f
+  observation_path: /project/disease_ecology/NWScrewworm/data/processed_data/case_detections/combined_clean_obs_2026-11-13.csv
+  observation_sha256: 784168081cc1d3206f3537b8731994cbfc34be15be7c515fe06710d4ea9bdaac
+  observation_rows: 164767
+  analysis_start_week: 2022-W01
+  analysis_end_week: 2026-W44
+  analysis_end_date: 2026-11-01
+
+configuration_c1:
+  disposition: C1_ARCHIVED_NOT_SELECTED_FOR_PRODUCTION
+  fit_job: "21304948"
+  fit_sha256: c1662497af6e26313ead3055686195880673ad21efeb6c05f51bfe878080b28d
+  fit_commit: 923c1c0ad3d1c19c524b3dc981bbb8170620c6a0
+  predictive_qualification: C1_PREDICTIVE_VALIDATION_SUPPORTED_WITH_LIMITATIONS

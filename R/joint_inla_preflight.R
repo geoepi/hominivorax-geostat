@@ -377,8 +377,14 @@ joint_inla_preflight_build <- function(build, build_path = NA_character_, expect
   }
 
   data_names <- if (is.list(data)) names(data) else character()
-  tier1_fixed <- c("intercept1", "north", "road_dens", "night_illum")
-  tier2_fixed <- c("intercept2", "mintemp", "soilmoist", "leafarea", "rhum", "cattle", "horses", "pigs", "goats", "sheep")
+  registry_tiers <- build$fixed_effect_registry %||% build$model_signature$fixed_effect_tiers
+  if (is.list(registry_tiers) && all(c("tier1", "tier2") %in% names(registry_tiers))) {
+    tier1_fixed <- as.character(unlist(registry_tiers$tier1, use.names = FALSE))
+    tier2_fixed <- as.character(unlist(registry_tiers$tier2, use.names = FALSE))
+  } else {
+    tier1_fixed <- c("intercept1", "north", "road_dens", "night_illum")
+    tier2_fixed <- c("intercept2", "mintemp", "soilmoist", "leafarea", "rhum", "mintemp:soilmoist", "mintemp:leafarea", "cattle", "horses", "pigs", "goats", "sheep")
+  }
   fixed_names <- character()
   if (inherits(build$formula, "formula")) {
     fixed_names <- tryCatch(joint_inla_preflight_formula_fixed_names(build$formula), error = function(error) {

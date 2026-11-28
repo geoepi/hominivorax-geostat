@@ -1,0 +1,7 @@
+"warning_class","occurrence","source_log","exact_message","disposition"
+"ATLAS_RUNTIME_WARNING",1,"/project/disease_ecology/hominivorax-geostat-original-refresh-w44-2026/original-refresh-fit-21355414.err","WARNING: different compile-time and runtime versions for GEOS found:","Retained as runtime context."
+"ATLAS_RUNTIME_WARNING",2,"/project/disease_ecology/hominivorax-geostat-original-refresh-w44-2026/original-refresh-fit-21355414.err","It is probably a good idea to reinstall sf (and maybe lwgeom too)","Retained as runtime context."
+"ATLAS_RUNTIME_WARNING",3,"/project/disease_ecology/hominivorax-geostat-original-refresh-w44-2026/original-refresh-fit-21355414.err","WARNING: different compile-time and run-time versions of GEOS","Retained as runtime context."
+"ATLAS_RUNTIME_WARNING",4,"/project/disease_ecology/hominivorax-geostat-original-refresh-w44-2026/original-refresh-fit-21355414.err","You should reinstall package 'terra'","Retained as runtime context."
+"INLA_EXPERIMENTAL_VB_WARNING",5,"/project/disease_ecology/hominivorax-geostat-original-refresh-w44-2026/original-refresh-fit-21355414.err","***[0] thread_num[0] warning *** iterative process seems to diverge, 'vb.correction' is aborted","Retained under the supplied policy; nonblocking by itself."
+"INLA_EXPERIMENTAL_VB_WARNING",6,"/project/disease_ecology/hominivorax-geostat-original-refresh-w44-2026/original-refresh-fit-21355414.err","***[0] thread_num[0] warning *** iterative process seems to diverge, 'vb.correction' is aborted","Retained under the supplied policy; nonblocking by itself."

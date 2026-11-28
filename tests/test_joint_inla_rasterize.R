@@ -108,5 +108,3 @@ stopifnot(sum(fixture_run$manifest$raster_family %in% c("tier1_eta", "tier1_prob
           sum(fixture_run$manifest$raster_family == "unseen_admin_cells") == 1L,
           all(fixture_run$roundtrip$pass), all(fixture_run$distribution$pass),
           all(fixture_run$audit$status %in% c("PASS", "WARNING")))
-
-cat("Joint-INLA Phase 3 rasterization helper tests passed\n")

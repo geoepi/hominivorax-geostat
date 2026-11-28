@@ -1,0 +1,43 @@
+project:
+  output_directory: outputs/original_refresh_w44_2026/stage3b
+
+inputs:
+  stage3a_build: outputs/original_refresh_w44_2026/stage3a/joint_inla_build.rds
+
+outputs:
+  fit: joint_model_fit.rds
+  audit: joint_model_fit_audit.csv
+  metadata: joint_model_fit_metadata.rds
+  theta_init: joint_model_theta_init.rds
+  preflight: joint_inla_fit_preflight.csv
+  overwrite: false
+
+preflight:
+  enabled: true
+
+fit:
+  quantiles: [0.025, 0.25, 0.5, 0.75, 0.975]
+  control_fixed:
+    prec: 1
+    prec.intercept: 1
+  control_inla:
+    strategy: adaptive
+    int.strategy: eb
+  control_compute:
+    dic: true
+    cpo: false
+    waic: true
+  control_predictor:
+    compute: true
+  initialization:
+    mode: default
+    use_previous_theta: false
+    theta_file: null
+  control_family: null
+
+threads:
+  num_threads: 12
+  blas_threads: null
+
+version_compatibility:
+  policy: warn

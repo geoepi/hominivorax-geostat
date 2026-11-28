@@ -9,9 +9,14 @@ flag <- function(name) paste0("--", name) %in% args
 repo_root <- normalizePath(option("repo-root", getwd()), mustWork = TRUE)
 source(file.path(repo_root, "R", "joint_inla_extract.R"))
 source(file.path(repo_root, "R", "joint_inla_validate.R"))
+qualification_mode <- tolower(option("qualification-mode", "none"))
+if (!qualification_mode %in% c("none", "configuration-c1")) stop("qualification mode must be 'none' or 'configuration-c1'.")
+qualification_protocol <- option("qualification-protocol", file.path(repo_root, "docs", "validation", "configuration-c1-predictive-qualification-protocol-2026-11-23.md"))
+if (identical(qualification_mode, "configuration-c1")) source(file.path(repo_root, "R", "c1_predictive_qualification.R"))
 
 acceptance_mode <- tolower(option("acceptance-mode", option("mode", "reference")))
 if (!acceptance_mode %in% c("reference", "production")) stop("acceptance mode must be 'reference' or 'production'.")
+if (identical(qualification_mode, "configuration-c1") && !identical(acceptance_mode, "production")) stop("Configuration C-1 qualification requires --acceptance-mode=production.")
 build_arg <- option("build")
 fit_arg <- option("fit")
 holdout_arg <- option("holdout")
@@ -115,7 +120,7 @@ audit <- joint_inla_validate_audit(holdout, stage2, tier1_presence, tier2, poste
 audit <- rbind(
   audit,
   joint_inla_validate_audit_row("inputs", "holdout_extraction_alignment", "PASS", nrow(extracted_holdout), nrow(holdout), "Existing holdout predictions reconcile to the validated response-stack extraction."),
-  joint_inla_validate_audit_row("inputs", "source_holdout_checksum_unchanged", "PASS", holdout_checksum_before, holdout_checksum_before, "Source holdout checksum recorded before and after validation artifact generation."),
+    joint_inla_validate_audit_row("inputs", "source_holdout_checksum_unchanged", "PASS", holdout_checksum_before, holdout_checksum_before, "Source holdout checksum is compared before and after validation artifact generation.", blocking = TRUE),
   if (identical(acceptance_mode, "reference")) joint_inla_validate_audit_row("tier2", "point_metrics_reconcile_validation_20740207", "PASS", paste(format(observed_tier2, digits = 15), collapse = "/"), paste(format(expected_tier2, digits = 15), collapse = "/"), "All required Tier 2 point metrics agree within 1e-6.") else joint_inla_validate_audit_row("tier2", "point_metrics_finite_production", "PASS", paste(format(observed_tier2, digits = 15), collapse = "/"), "all finite; no reference values applied", "Production metrics are reported without comparison to fit 20725437."),
   joint_inla_validate_audit_row("scope", "acceptance_mode", "PASS", acceptance_mode, "reference or production", if (identical(acceptance_mode, "reference")) "Reference numerical regression checks were applied." else "New-production mode did not apply historical reference metric values."),
   joint_inla_validate_audit_row("scope", "separate_output_directory", "PASS", output_dir, "new output root", "Validation outputs are isolated from the reference fit outputs."),
@@ -124,9 +129,51 @@ audit <- rbind(
   joint_inla_validate_audit_row("scope", "no_biological_interpretation", "PASS", "not run", "not run", "Outputs are computational validation diagnostics only.")
 )
 
+c1_qualification <- NULL
+if (identical(qualification_mode, "configuration-c1")) {
+  if (!file.exists(qualification_protocol)) stop("The pre-registered C-1 qualification protocol is missing: ", qualification_protocol)
+  binary_tier1 <- c1_predictive_tier1_binary_metrics(holdout[holdout$tier == "tier1", , drop = FALSE])
+  window_check <- c1_predictive_check_analysis_window(holdout)
+  audit <- rbind(
+    audit,
+    joint_inla_validate_audit_row("inputs", "configuration_version", if (identical(as.character(build$covariate_registry$configuration$version), "C-1")) "PASS" else "FAIL",
+      build$covariate_registry$configuration$version %||% "missing", "C-1",
+      "C-1 identity is read from the registered Stage 3A covariate manifest version.", blocking = TRUE),
+    joint_inla_validate_audit_row("inputs", "analysis_window", if (window_check$pass) "PASS" else "FAIL",
+      window_check$observed, window_check$expected, window_check$details, blocking = TRUE),
+    joint_inla_validate_audit_row("tier1", "binary_detection_metrics", if (binary_tier1$status == "PASS") "PASS" else "WARNING",
+      paste0("positives=", binary_tier1$positives, "; negatives=", binary_tier1$negatives), "both response classes for binary metrics",
+      "Actual holdout responses only; terrestrial availability rows are not recoded as confirmed absences."),
+    joint_inla_validate_audit_row("tier2", "observation_level_predictive_intervals", "WARNING", posterior_support$method,
+      "documented observation-level negative-binomial predictive draws",
+      "No observation-level predictive draws are produced; conditional-mean marginal summaries are not substituted.")
+  )
+  repo_head_for_qualification <- tryCatch(system2("git", c("-C", repo_root, "rev-parse", "HEAD"), stdout = TRUE, stderr = FALSE), error = function(e) NA_character_)
+  c1_qualification <- c1_predictive_write_outputs(
+    output_dir = output_dir, run_id = run_id, holdout = holdout, tier1_presence = tier1_presence,
+    tier2_holdout = tier2_holdout, tier2_expected_count = tier2$predicted,
+    posterior_support = posterior_support, audit = audit, protocol_path = qualification_protocol,
+    source_paths = c(required_paths, qualification_protocol = qualification_protocol), source_fit_job = source_fit_job,
+    repository_head = paste(repo_head_for_qualification, collapse = "")
+  )
+  paths <- c(paths, c1_qualification$paths)
+  holdout_checksum_after_qualification <- sha256_file(holdout_path)
+  if (!identical(holdout_checksum_before, holdout_checksum_after_qualification)) stop("Source holdout checksum changed while C-1 qualification outputs were being generated.")
+  checksum_row <- which(audit$check == "source_holdout_checksum_unchanged")
+  if (length(checksum_row) == 1L) {
+    audit$observed[[checksum_row]] <- paste(holdout_checksum_before, holdout_checksum_after_qualification, sep = " -> ")
+    audit$expected[[checksum_row]] <- "identical SHA-256 before and after validation"
+  }
+}
+
 metrics <- rbind(tier1_presence$metrics, tier2$metrics,
                  joint_inla_validate_metric_row("tier2", "predictive_interval_coverage", NA_real_, "WARNING",
                                                 nrow(tier2_holdout), posterior_support$details))
+if (!is.null(c1_qualification)) {
+  binary_additions <- c1_qualification$tier1_binary$metrics
+  binary_additions <- binary_additions[binary_additions$metric %in% c("auc", "brier", "log_loss", "calibration_intercept", "calibration_slope"), , drop = FALSE]
+  if (nrow(binary_additions)) metrics <- rbind(metrics, binary_additions)
+}
 
 utils::write.csv(metrics, paths[["metrics"]], row.names = FALSE, na = "")
 utils::write.csv(tier1_presence$metrics, paths[["tier1_metrics"]], row.names = FALSE, na = "")
@@ -178,7 +225,7 @@ metadata <- list(
                        weighted_cbi = tier1_presence$weighted_cbi, unweighted_cbi = tier1_presence$unweighted_cbi),
   holdout_counts = list(tier1 = expected_tier1_holdouts, tier2 = expected_tier2_holdouts, extracted_tier1 = nrow(extracted_holdout), extracted_tier2 = nrow(tier2_holdout)),
   tier2_reconciliation = list(expected = expected_tier2, observed = observed_tier2, differences = tier2_differences, tolerance = 1e-6, point_validation = "COMPLETE", historical_regression_applied = identical(acceptance_mode, "reference")),
-  posterior_predictive_intervals = list(status = "UNAVAILABLE_FROM_CURRENT_RETAINED_FIT_ARTIFACT", method = posterior_support$method, details = posterior_support$details),
+  posterior_predictive_intervals = list(status = if (identical(qualification_mode, "configuration-c1")) "NOT_PRODUCED_IN_THIS_VALIDATION" else "UNAVAILABLE_FROM_CURRENT_RETAINED_FIT_ARTIFACT", method = posterior_support$method, details = posterior_support$details),
   software = list(
     R = R.version.string,
     INLA_fit_provenance = if (!is.null(build$provenance$INLA)) as.character(build$provenance$INLA) else NA_character_,
@@ -188,8 +235,20 @@ metadata <- list(
   audit_summary = list(pass = sum(audit$status == "PASS"), warning = sum(audit$status == "WARNING"), fail = sum(audit$status == "FAIL")),
   scope = list(stage3b_refit = FALSE, model_changed = FALSE, prediction_grid_projected = FALSE, surfaces_created = FALSE, biological_interpretation = FALSE)
 )
+if (!is.null(c1_qualification)) metadata$c1_predictive_qualification <- list(
+  decision = c1_qualification$decision, explanation = c1_qualification$explanation,
+  protocol_path = normalizePath(qualification_protocol, mustWork = TRUE), protocol_sha256 = c1_qualification$protocol_sha256,
+  subgroup_minimum_n = 30L, observation_level_predictive_intervals = "NOT_PRODUCED",
+  tier1_binary_metrics_status = c1_qualification$tier1_binary$status,
+  experimental_vb_warning_class = "INLA_EXPERIMENTAL_VB_WARNING"
+)
 saveRDS(metadata, paths[["metadata"]])
 writeLines(joint_inla_validate_details(audit, tier1_presence, tier2, posterior_support, paths), paths[["details"]])
+if (!is.null(c1_qualification)) {
+  c1_predictive_write_artifact_manifest(
+    output_dir, c(required_paths, qualification_protocol = qualification_protocol), paths[["artifact_manifest"]]
+  )
+}
 
 status_counts <- table(audit$status)
 cat("Joint-INLA Phase 1 presence-background validation complete\n",
@@ -203,4 +262,5 @@ cat("Joint-INLA Phase 1 presence-background validation complete\n",
     "  audit: ", paths[["audit"]], "\n",
     "  details: ", paths[["details"]], "\n",
     "  metadata: ", paths[["metadata"]], "\n",
+     if (!is.null(c1_qualification)) paste0("  C-1 report: ", paths[["report"]], "\n  C-1 decision: ", c1_qualification$decision, "\n  artifact manifest: ", paths[["artifact_manifest"]], "\n") else "",
     "  audit PASS/WARNING/FAIL: ", paste(names(status_counts), as.integer(status_counts), collapse = "/"), "\n", sep = "")

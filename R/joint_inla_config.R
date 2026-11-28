@@ -8,6 +8,7 @@ joint_inla_defaults <- function() {
   list(
     project = list(output_directory = "outputs/joint_inla"),
     inputs = list(joint_model_inputs = "outputs/joint_model/joint_model_inputs.rds"),
+    covariate_manifest = NULL,
     model = list(tier1 = list(family = "binomial"), tier2 = list(family = "nbinomial")),
     spatial = list(
       grouping_variable = "quarter_index", group_model = "iid",
@@ -65,6 +66,8 @@ read_joint_inla_config <- function(path, repo_root = getwd()) {
   cfg <- merge_joint_inla_config(joint_inla_defaults(), yaml::read_yaml(path))
   cfg$project$output_directory <- resolve_joint_inla_path(cfg$project$output_directory, repo_root)
   cfg$inputs$joint_model_inputs <- resolve_joint_inla_path(cfg$inputs$joint_model_inputs, repo_root)
+  cfg$covariate_manifest_path <- if (is.null(cfg$covariate_manifest)) NULL else resolve_joint_inla_path(cfg$covariate_manifest, repo_root)
+  cfg$covariate_registry <- read_covariate_registry(cfg$covariate_manifest_path, repo_root)
   cfg$config_path <- normalizePath(path, mustWork = FALSE)
   cfg$repo_root <- repo_root
   cfg
@@ -97,6 +100,7 @@ validate_joint_inla_config <- function(cfg, require_inputs = TRUE) {
   if (!identical(cfg$livestock_rw2$model, "rw2") || !isTRUE(cfg$livestock_rw2$enabled) || !identical(cfg$livestock_rw2$variable, "cattle")) stop("The cattle RW2 effect is required.")
   scalar_positive(cfg$shared_field$beta_prior_precision, "shared_field.beta_prior_precision")
   scalar_positive(cfg$livestock_rw2$prior_sigma, "livestock_rw2.prior_sigma")
+  if (!is.null(cfg$covariate_registry)) validate_covariate_registry(cfg$covariate_registry)
   if (isTRUE(require_inputs) && !file.exists(cfg$inputs$joint_model_inputs)) stop("Stage 2 joint_model_inputs.rds does not exist: ", cfg$inputs$joint_model_inputs)
   invisible(TRUE)
 }

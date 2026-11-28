@@ -211,10 +211,39 @@ postfit_reporting_effect_note <- function(term) {
   NA_character_
 }
 
+postfit_reporting_registry_value <- function(registry, term, field, default = NA_character_) {
+  if (is.null(registry) || is.null(registry$covariates[[term]])) return(default)
+  entry <- registry$covariates[[term]]
+  value <- switch(
+    field,
+    source_units = entry$source$physical_units %||% entry$source$source_units,
+    stored_units = entry$source$stored_mapped_units %||% entry$source$processed_value_units,
+    transformation = entry$transformation$method,
+    model_units = entry$transformation$output_units,
+    source_path = entry$source$path,
+    source_sha256 = entry$source$sha256,
+    temporal_support = entry$temporal_support,
+    reporting_label = entry$reporting_label,
+    data_column = entry$transformation$output_column,
+    coefficient_interpretation = entry$transformation$coefficient_interpretation,
+    NULL
+  )
+  if (is.null(value) || !length(value) || is.na(value[[1L]])) default else as.character(value[[1L]])
+}
+
 postfit_reporting_fixed_effects <- function(fit_artifact, tier_terms = NULL) {
   if (!exists("joint_inla_extract_fixed_effects", mode = "function")) stop("Source R/joint_inla_extract.R before extracting fixed effects.")
   raw <- joint_inla_extract_fixed_effects(fit_artifact)
   if (!nrow(raw)) stop("The fit contains no fixed-effect summary rows.")
+  build <- if (is.list(fit_artifact)) fit_artifact$build else NULL
+  registry <- if (is.list(build)) build$covariate_registry else NULL
+  registry_order <- registry$configuration$fixed_effects$reporting_order
+  if (is.null(tier_terms) && !is.null(registry_order)) {
+    tier_terms <- list(
+      tier1 = as.character(unlist(registry_order$tier1, use.names = FALSE)),
+      tier2 = as.character(unlist(registry_order$tier2, use.names = FALSE))
+    )
+  }
   tier_terms <- tier_terms %||% list(
     tier1 = c("intercept1", "north", "road_dens", "night_illum"),
     tier2 = c("intercept2", "mintemp", "soilmoist", "leafarea", "rhum", "cattle", "horses", "pigs", "goats", "sheep", "mintemp:soilmoist", "mintemp:leafarea")
@@ -238,15 +267,26 @@ postfit_reporting_fixed_effects <- function(fit_artifact, tier_terms = NULL) {
   out <- data.frame(
     tier = raw$tier,
     term = raw$term,
-    label = vapply(raw$term, postfit_reporting_effect_label, character(1L)),
+    label = vapply(raw$term, function(term) postfit_reporting_registry_value(registry, term, "reporting_label", postfit_reporting_effect_label(term)), character(1L)),
     posterior_mean = raw$posterior_mean,
     posterior_sd = raw$posterior_sd,
     q025 = raw$q025,
     median = raw$median,
     q975 = raw$q975,
     effect_scale = ifelse(raw$tier == "tier1", "latent logit-scale deviation", "latent log-intensity deviation"),
-    source_model_variable = vapply(raw$term, postfit_reporting_effect_source, character(1L)),
-    units_transformation_note = vapply(raw$term, postfit_reporting_effect_note, character(1L)),
+    source_model_variable = vapply(raw$term, function(term) postfit_reporting_registry_value(registry, term, "data_column", postfit_reporting_effect_source(term)), character(1L)),
+    units_transformation_note = vapply(raw$term, function(term) {
+      interpretation <- postfit_reporting_registry_value(registry, term, "coefficient_interpretation")
+      if (!is.na(interpretation)) paste0("Identity transformation; coefficient ", interpretation, ".") else postfit_reporting_effect_note(term)
+    }, character(1L)),
+    source_units = vapply(raw$term, function(term) postfit_reporting_registry_value(registry, term, "source_units"), character(1L)),
+    stored_units = vapply(raw$term, function(term) postfit_reporting_registry_value(registry, term, "stored_units"), character(1L)),
+    model_units = vapply(raw$term, function(term) postfit_reporting_registry_value(registry, term, "model_units"), character(1L)),
+    transformation = vapply(raw$term, function(term) postfit_reporting_registry_value(registry, term, "transformation"), character(1L)),
+    coefficient_interpretation = vapply(raw$term, function(term) postfit_reporting_registry_value(registry, term, "coefficient_interpretation"), character(1L)),
+    temporal_support = vapply(raw$term, function(term) postfit_reporting_registry_value(registry, term, "temporal_support"), character(1L)),
+    source_path = vapply(raw$term, function(term) postfit_reporting_registry_value(registry, term, "source_path"), character(1L)),
+    source_sha256 = vapply(raw$term, function(term) postfit_reporting_registry_value(registry, term, "source_sha256"), character(1L)),
     stringsAsFactors = FALSE
   )
   rownames(out) <- NULL
@@ -1334,7 +1374,13 @@ postfit_reporting_model_summary <- function(build, fit_artifact, stage2) {
   groups <- unique(unlist(lapply(build$fields %||% list(), function(x) x[["tier1_field.group"]] %||% x[["tier2_field.group"]]), use.names = FALSE))
   groups <- groups[is.finite(as.numeric(groups))]
   marginal <- if (exists("joint_inla_extract_marginal_log_likelihood", mode = "function")) joint_inla_extract_marginal_log_likelihood(fit) else data.frame()
+  model_signature <- build$model_signature %||% list()
+  registry <- build$covariate_registry
   list(
+    model_specification_id = if (is.null(registry)) "frozen_reference" else as.character(registry$configuration$id),
+    model_specification_version = if (is.null(registry)) NA_character_ else as.character(registry$configuration$version),
+    covariate_manifest = build$provenance$covariate_manifest %||% NULL,
+    fixed_effect_terms = model_signature$fixed_effect_formula_order %||% character(),
     likelihood_families = as.character(build$family %||% NA_character_),
     tier_rows = rows, holdout_counts = holdouts,
     mesh_vertices = c(tier1 = build$spde$tier1$n.spde %||% NA_integer_, tier2 = build$spde$tier2$n.spde %||% NA_integer_),

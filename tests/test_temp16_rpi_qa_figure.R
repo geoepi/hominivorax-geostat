@@ -16,5 +16,4 @@ missing <- required[!vapply(required, grepl, logical(1L), x = src, fixed = TRUE)
 if (length(missing)) stop("Missing required derivative contract text: ", paste(missing, collapse = ", "))
 if (!grepl("output_root.*temp15_root|temp15_root.*output_root", src)) stop("Missing 15 C overwrite guard.")
 if (!grepl("postfit_reporting_rpi_class_palette", src, fixed = TRUE)) stop("Missing explicit canonical palette.")
-cat("TEMP16_SOURCE_CONTRACT_PASS\n")
 

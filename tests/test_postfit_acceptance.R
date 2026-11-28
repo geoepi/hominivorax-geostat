@@ -42,5 +42,3 @@ stopifnot(grepl("acceptance_mode", validation_text, fixed = TRUE),
 stopifnot(grepl("acceptance-mode.*reference", validation_text),
           grepl("historical_metric_regression_applied", validation_text, fixed = TRUE),
           grepl("Refusing to write into a non-empty", validation_text, fixed = TRUE))
-
-cat("Post-fit acceptance orchestration tests passed\n")

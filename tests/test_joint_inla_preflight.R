@@ -290,5 +290,4 @@ if (!requireNamespace("INLA", quietly = TRUE)) {
   stopifnot(isTRUE(dry$audit$dry_run[[1L]]), file.exists(dry$paths$preflight),
             !file.exists(dry$paths$fit))
 
-  cat("Stage 3B production-shaped preflight tests passed\n")
 }

@@ -1,0 +1,546 @@
+manifest_schema: hominivorax-geostat-input-manifest/v2
+manifest_version: 2
+audit_date: 2026-11-18
+release:
+  observation_release_id: "2026-11-13"
+  environmental_release_id: "era5land-weekly-through-2026-W44"
+  covariate_registry_version: "unversioned-in-repository"
+  status: "audited-not-registered-for-production"
+repository:
+  canonical_remote: "geoepi/hominivorax-geostat"
+  canonical_branch: "main"
+  audit_base_commit: "cf21c04ef53158b9bcca38dad75e7f75ee9e984a"
+  working_branch: "feature/revised-environmental-inputs"
+  change_classification: "D"
+  classification_reason: "Scientific inputs, temporal coverage, raster support provenance, and production data paths"
+configuration:
+  private_production_config:
+    path: "/project/disease_ecology/hominivorax-geostat-config/production.yml"
+    bytes: 1189
+    sha256: "0667d4ab1c6780da0ce435bd3a7e67fa83a2b90d0c8cc8b4658909d3d4f6ea49"
+  private_preprocessing_config:
+    path: "/project/disease_ecology/hominivorax-geostat-config/preprocessing.yml"
+    bytes: 2607
+    sha256: "8fe922db778f93bdd6e91dfc2904c8ff7b2cbee8be790e93babd91987595c781"
+  production_temporal_rule: "last_complete_epiweek"
+  private_stage_observation_actual_max: "2026-07-31"
+  private_stage_observation_week: "2026-W31"
+input_hash_inventory:
+  path: "input_file_hashes.tsv"
+  sha256: "9a87da06e0c0a103de6af67c6129073456b1e0263d95c3191c8e4400e5528511"
+  canonical_lf_sha256: "a4be5650ddf9b7b664b7c115687bd14052015d076b8e76eff0837257d2a8d323"
+  hash_note: "sha256 preserves the 2026-11-18 audit worktree byte hash; canonical_lf_sha256 hashes the same TSV after CRLF-to-LF normalization for cross-platform comparison."
+  records: 511
+  checksum_algorithm: "SHA-256"
+  scope: "Revised sources, comparison observation release, private configuration checksums, configured template, and all new surface-pressure rasters and sidecars. Existing four weekly stacks were checked for coverage and template provenance, but their individual hashes are not enumerated here."
+input_registry:
+  path: "input_registry.tsv"
+  sha256: "84371ce87123766b963bbc1b92d27b790395125a872f8eeffaa505c5b6d78932"
+  hash_line_endings: "SHA-256 over UTF-8 TSV after CRLF-to-LF normalization."
+  records: 511
+  columns: ["input_id", "source_id", "path", "bytes", "sha256"]
+  identifier_rule: "Unique input_id derived from source_id and inventory path basename; source_id retains the original source grouping."
+observations:
+  path: "/project/disease_ecology/NWScrewworm/data/processed_data/case_detections/combined_clean_obs_2026-11-13.csv"
+  release_id: "2026-11-13"
+  bytes: 7304653
+  sha256: "8fd21f9db11db3df20596fe7ad0b4cbbc8b895fbaad6f702c847ed5a05dd19fc"
+  rows: 167078
+  columns: ["date", "host", "lon", "lat"]
+  missing_fields: 0
+  date_min: "2022-02-10"
+  date_max: "2026-11-13"
+  date_max_iso_week: "2026-W46"
+  resolved_last_complete_week: "2026-W45"
+  resolved_week_ending: "2026-11-08"
+  observations_after_environment_endpoint: 300
+  environment_endpoint: "2026-W44"
+  coordinate_crs: "No CRS declared in CSV; current preprocessing assigns EPSG:4326"
+  compatibility: "R read.csv fields and types conform to the existing interface"
+  predecessor:
+    path: "/project/disease_ecology/NWScrewworm/data/processed_data/case_detections/combined_clean_obs_2026-10-17_through_2026-W39.csv"
+    bytes: 8261451
+    sha256: "193245f75d9fe863de852801b8cdc405d4ceb39d25b512f9c52da4f8876f969c"
+    rows: 158739
+    actual_date_max: "2026-09-27"
+    actual_date_max_iso_week: "2026-W39"
+    leading_unnamed_column: true
+    new_release_row_difference: 8339
+static_covariates:
+  clay:
+    path: "/project/disease_ecology/NWScrewworm/data/raw_data/soilgrids_1000m_isric/clay_0-5cm_mean_1000.tif"
+    bytes: 191530251
+    sha256: "20f699cc64686bb5696e395f709232e5957ea3c6a4b39f6676517a502033f424"
+    band_count: 1
+    data_type: "Int16"
+    nodata: -32768
+    scale: null
+    offset: null
+    declared_units: null
+  wv0010:
+    path: "/project/disease_ecology/NWScrewworm/data/raw_data/soilgrids_1000m_isric/wv0010_0-5cm_mean_1000.tif"
+    bytes: 160551981
+    sha256: "0786fa27fa1870b3d7737dca566972adec8a3e0f0a95230f6fec35af0a12d39c"
+    band_count: 1
+    data_type: "Int16"
+    nodata: -32768
+    scale: null
+    offset: null
+    declared_units: "10-3cm3cm-3 (Mapped_units metadata string; uninterpreted)"
+  shared_grid:
+    width: 39812
+    height: 14509
+    resolution_m: [1000, 1000]
+    extent_x: [-19949750, 19862250]
+    extent_y: [-6148000, 8361000]
+    crs: "Homolosine; +proj=igh +lon_0=0 +datum=WGS84 +units=m; no authority declared"
+    alignment: "The two static rasters align with each other; they do not align with the configured template grid or CRS"
+weekly_covariates:
+  configured_existing:
+    - "minimum_temperature"
+    - "soil_moisture"
+    - "leaf_area_low"
+    - "relative_humidity"
+  new:
+    variable_id: "era5land_surface_pressure_mean"
+    path: "/project/disease_ecology/cds-datagrab-output/data/production/era5land_surface_pressure_mean/weekly/"
+    file_pattern: "era5land_surface_pressure_mean_YYYY-Www.tif"
+    sidecar_pattern: "*.tif.json"
+    raster_files: 252
+    sidecars: 252
+    bytes_rasters_total: 13877921
+    bytes_sidecars_total: 629466
+    first_week: "2022-W01"
+    last_week: "2026-W44"
+    missing_weeks: 0
+    duplicate_weeks: 0
+    invalid_filenames: 0
+    unmatched_sidecars: 0
+    sidecar_output_hash_matches: true
+    sidecar_week_id_matches_filename: true
+    selected_daily_dates_per_week: 7
+    calendar: "ISO week; Monday through Sunday"
+    statistic: "mean"
+    aggregation_algorithm_version: "weekly-v3-support-mask"
+    source_family_id: "era5land_daily_mean_utc06"
+    band_count: 1
+    data_type: "Float32"
+    band_description: "mean"
+    nodata: "NaN"
+    declared_units: null
+    scale: null
+    offset: null
+    grid:
+      width: 293
+      height: 202
+      resolution_km_approx: [24.995018926, 24.943655964]
+      extent_x_km: [-4361.4108818, 2962.1296637]
+      extent_y_km: [-2202.9997156, 2835.6187891]
+      crs: "Custom Albers Equal Area; datum WGS84; units km; no EPSG authority declared"
+      compare_geometry_with_configured_template: true
+    coverage_status: "Complete through W44; does not cover observation-resolved W45"
+all_weekly_stacks:
+  weeks_each: 252
+  first_week: "2022-W01"
+  last_week: "2026-W44"
+  gaps_or_duplicates: false
+template_provenance:
+  configured_template:
+    path: "/project/disease_ecology/NWScrewworm/data/processed_data/spatial_domain/study_area_raster.tif"
+    bytes: 15066
+    sha256: "d968ebe17486bde29eb68dcfae3617c8fe0932c5cad256b843c3c2aafc973a66"
+  hash_recorded_by_all_weekly_sidecars: "4be01f0ecaff35216a72eb8f27e791311af90d35b5a4fff1e46a74edb6dc633b"
+  sidecars_checked: 1260
+  mismatch: true
+  interpretation: "Recorded template hash mismatch; geometry equality does not resolve support-mask provenance."
+  resolution: "The historical file matching the sidecar hash is not available or linked. Available raster comparisons do not resolve historic support-mask provenance; see audit_resolution.template_provenance."
+software_environment:
+  execution_site: "Atlas"
+  operating_system: "Linux cluster environment"
+  R: "4.4.3"
+  INLA: "25.9.19"
+  Matrix: "1.7.0"
+  terra: "1.7.78"
+  sf: "1.0.21"
+  yaml: "2.3.8"
+  readr: "2.1.5"
+  dplyr: "1.1.4"
+  stringr: "1.5.1"
+  lubridate: "1.9.3"
+  GDAL: "3.8.5"
+  Python: "3.9.21"
+  runtime_note: "Loaded module report and sf runtime disagree on GEOS and PROJ versions; see repository-input-audit.md."
+validation:
+  focused_atlas_scripts_run: 11
+  production_preprocessing_run: false
+  production_fit_run: false
+  repository_canonical_test_aggregator: "Not documented at 2026-11-18 audit; added as tests/run_tests.R in the 2026-11-19 resolution."
+  manifest_yaml_parse_check: "Not run during the 2026-11-18 audit; parsed and validated by tests/test_input_manifest.R during the 2026-11-19 resolution."
+  test_caveats:
+    - "test_postfit_reporting.R returned exit code 0 but printed a deferred_run(env) missing-function error after its pass banner; not treated as fully clean."
+    - "INLA assembly test emitted an inla.mesh.2d deprecation message."
+  git_diff_check: "Passed: git diff --cached --check"
+implementation:
+  source_code_changed: false
+  versioned_runtime_configuration_changed: false
+  private_production_configuration_changed: false
+  production_outputs_changed: false
+  reason: "Temporal coverage, template provenance, and scientific registration decisions remain unresolved."
+decisions_required:
+  - "Refresh environmental stacks through W45 or approve a bounded W44 model horizon."
+  - "Confirm the template provenance source or regenerate environmental products against the canonical template."
+  - "Specify scientific roles, units, scales, transformations, interactions, and missing-data policies for clay, wv0010, and surface pressure."
+  - "Confirm promotion of the 2026-11-13 observation source and correction of the stale private Stage 1 observation path."
+audit_resolution:
+  date: "2026-11-19"
+  report: "resolution-validation-report.md"
+  observation_recheck:
+    path: "/project/disease_ecology/NWScrewworm/data/processed_data/case_detections/combined_clean_obs_2026-11-13.csv"
+    bytes: 7191829
+    sha256: "784168081cc1d3206f3537e8731994cbfc34be15be7c515fe06710d4ea9bdaac"
+    rows: 164767
+    columns: ["date", "lon", "lat", "host"]
+    date_min: "2022-02-10"
+    date_min_iso_week: "2022-W06"
+    date_max: "2026-11-13"
+    date_max_iso_week: "2026-W46"
+    nonzero_epiweeks: 246
+    weekly_count_rows: 249
+    weekly_counts_path: "observation_weekly_counts.tsv"
+    weekly_counts_sha256: "34cf710666de6a523d1efb7593cceb44c028f846a4218aec843dc6144536c81d"
+    missing_required_fields: 0
+    invalid_dates: 0
+    invalid_coordinates: 0
+    source_drift_from_audit_snapshot:
+      status: "same_path_different_bytes_and_column_order"
+      prior_bytes: 7304653
+      prior_sha256: "8fd21f9db11db3df20596fe7ad0b4cbbc8b895fbaad6f702c847ed5a05dd19fc"
+      prior_rows: 167078
+      row_difference: -2311
+      byte_difference: -112824
+      cause_or_release_authorization: "unresolved"
+    environmental_endpoint_week: "2026-W44"
+    observations_after_environment_endpoint: 968
+    observations_in_endpoint_week: 911
+    observations_in_W45_without_environment: 668
+    observations_in_W46_after_candidate_horizon: 300
+    candidate_last_complete_week: "2026-W45"
+    candidate_week_ending: "2026-11-08"
+    observation_file_modified: false
+  coverage_separation:
+    environmental_stacks:
+      required_stack_count: 5
+      sidecars_checked: 1260
+      first_week: "2022-W01"
+      last_week: "2026-W44"
+      weeks_each: 252
+      missing_or_duplicate_weeks: false
+      filename_sidecar_calendar_consistency: true
+      broader_scan_stack_count: 12
+      broader_scan_sidecars: 3024
+      all_broader_scan_sidecars_share_template_sha256: true
+    current_production:
+      observation_file: "/project/disease_ecology/NWScrewworm/data/processed_data/case_detections/combined_clean_obs_2026-10-17_through_2026-W39.csv"
+      actual_last_week: "2026-W39"
+      configured_coverage: ["2024-W01", "2026-W39"]
+      production_configuration_modified: false
+  template_provenance:
+    classification: "TEMPLATE_PROVENANCE_UNRESOLVED"
+    sidecar_template_sha256: "4be01f0ecaff35216a72eb8f27e791311af90d35b5a4fff1e46a74edb6dc633b"
+    sidecars_scanned: 3024
+    created_utc_sample_range: ["2026-08-28", "2026-11-12"]
+    candidate_comparison:
+      configured_template_sha256: "d968ebe17486bde29eb68dcfae3617c8fe0932c5cad256b843c3c2aafc973a66"
+      local_legacy_and_atlas_checkpoint_sha256: "cb331565767a8f16b385684dbec23cea9247d77927c5c93edbbceb18f04517e5"
+      legacy_candidate_bytes: 14528
+      dimensions: [293, 202]
+      same_numeric_transform_extent_resolution_origin_cell_order: true
+      same_cell_values_and_na_mask: true
+      na_cells: 42427
+      legacy_candidate_crs_available: false
+      historical_hash_candidate_available: false
+    repository_history_identifies_replacement: false
+    environmental_inputs_regenerated: false
+  source_metadata_status: "partial"
+  source_metadata:
+    official_references:
+      soilgrids: "https://docs.isric.org/globaldata/soilgrids/SoilGrids_faqs_01.html"
+      era5land: "https://confluence.ecmwf.int/pages/viewpage.action?pageId=143037634"
+    clay:
+      source_variable_id: "clay"
+      description: "SoilGrids clay mean, 0-5 cm, 1 km product"
+      official_units: "g/kg mapped; divide by 10 for g/100g (%) conventional units"
+      stored_units_status: "No unit, scale, or offset tag; exact stored units not certified for the unversioned source TIFF."
+      scale: "No GeoTIFF scale tag; no audit conversion applied."
+      offset: "No GeoTIFF offset tag."
+      data_type: "Int16"
+      nodata: -32768
+      source_version_status: "Exact product/download revision not recorded."
+      spatial_resolution: "1 km aggregate; ISRIC describes 1 km products as mean predictions aggregated from 250 m products."
+      temporal_resolution: "Static soil property map."
+      provenance_status: "Authoritative product definition verified; exact file revision and local processing chain unavailable."
+    wv0010:
+      source_variable_id: "wv0010"
+      description: "SoilGrids volumetric water content at 10 kPa, mean, 0-5 cm, 1 km product"
+      official_units: "10^-3 cm3 cm-3 mapped; divide by 10 for 10^-2 cm3 cm-3 (%) conventional units"
+      stored_units_status: "Band Mapped_units=10-3cm3cm-3; no scale or offset tag; no conversion applied."
+      scale: "No GeoTIFF scale tag; no audit conversion applied."
+      offset: "No GeoTIFF offset tag."
+      data_type: "Int16"
+      nodata: -32768
+      source_version_status: "Exact product/download revision not recorded."
+      spatial_resolution: "1 km aggregate; ISRIC describes 1 km products as mean predictions aggregated from 250 m products."
+      temporal_resolution: "Static soil property map."
+      provenance_status: "Authoritative product definition and mapped-unit tag verified; exact file revision and local processing chain unavailable."
+    surface_pressure:
+      source_variable_id: "sp / parameter 134"
+      description: "ERA5-Land surface pressure; weekly mean of seven selected daily records"
+      official_units: "Pa at the product level"
+      stored_units_status: "No unit, scale, or offset tag. Stored-unit conversion is unresolved; values are suggestive but not proof."
+      scale: "No GeoTIFF scale tag; upstream scaling operation unresolved."
+      offset: "No GeoTIFF offset tag."
+      data_type: "Float32"
+      nodata: "NaN"
+      source_version_status: "Exact retrieval/product revision is not recorded in sidecars."
+      spatial_resolution: "Output grid approximately 24.995 km by 24.944 km; exact source grid used before weekly processing is unavailable."
+      temporal_resolution: "Hourly ERA5-Land source product; weekly output is a mean of seven selected daily inputs from source family era5land_daily_mean_utc06."
+      first_week_finite_values:
+        count: 16756
+        grid_cells: 59186
+        minimum: 66.876854
+        mean: 94.207401
+        maximum: 102.18423
+        standard_deviation: 7.6890287
+      cached_gdal_mean_and_standard_deviation: "-9999; invalid cached statistics"
+      provenance_status: "Product-level variable identity and units verified; stored units and exact retrieval/scaling revision unavailable."
+  test_harness:
+    original_failure_diagnosis: "Direct Rscript sourcing of a top-level testthat::local_edition(3) file ran deferred cleanup outside testthat file context; testthat::test_file() supplies the expected lifecycle."
+    canonical_command: "Rscript tests/run_tests.R"
+    assertion_and_unexpected_error_self_test: "tests/run_tests.R --self-test"
+    success_banners_removed: true
+    test_files_discovered: 32
+    testthat_version: "3.2.3"
+  inla_deprecation:
+    installed_version: "25.9.19"
+    deprecated_apis:
+      - function: "INLA::inla.mesh.2d()"
+        deprecated_since: "INLA 23.08.18"
+        recommended_replacement: "fmesher::fm_mesh_2d_inla()"
+        affected_tests: ["tests/test_joint_inla_assembly.R", "tests/test_spatial_support.R"]
+        production_source: "R/preprocessing_spatial.R"
+      - function: "INLA::inla.sp2segment()"
+        deprecated_since: "INLA 2023.06.06"
+        recommended_replacement: "fmesher::fm_as_segm()"
+        affected_tests: ["tests/test_spatial_support.R"]
+        production_source: "R/preprocessing_spatial.R"
+    assessment: "Both calls run in the installed version and are informational warnings in the passing tests. Removal in a future INLA release could cause a compatibility failure; no upgrade or mesh specification change was made."
+  validation_resolution:
+    tested_commit: "e51a99f2bed79de905657fcd4d3335973678e884"
+    manifest_parse_and_inventory_test: "PASS: tests/test_input_manifest.R on Atlas; 511 inventory records and 249 weekly counts validated."
+    canonical_full_test_suite: "PASS: Rscript tests/run_tests.R exited 0; 32 executed, 18 PASS, 14 WARN, 0 skipped, 0 FAIL."
+    runner_failure_propagation_regression: "PASS: tests/test_validation_runner.R detected intentional assertion failure and unexpected error as nonzero, and confirmed project-root working directory."
+    atlas_runtime_preflight: "PASS: scripts/atlas_runtime.sh profile atlas-r44-spatial-v1; R 4.4.3, testthat 3.2.3, yaml 2.3.8, INLA 25.9.19."
+    logs: "/tmp/validation-input-audit-logs-e51a99f/run-2b4ba4e137562 on Atlas"
+    classification: "D — audit resolution changes scientific input metadata/provenance and test validation infrastructure; no production execution pathway changed."
+    production_workflows_started: false
+    atlas_main_checkout_modified: false
+  completion_decisions:
+    TEMPLATE_PROVENANCE: "TEMPLATE_PROVENANCE_UNRESOLVED"
+    TEMPORAL_COVERAGE_VERIFIED: "verified_for_2026-11-19-observation-snapshot; same-path-source-drift-unresolved"
+    SOURCE_METADATA_VERIFIED: "partial"
+    TEST_HARNESS_VALIDATED: "PASS_WITH_WARNINGS"
+    MANIFEST_VALIDATED: "PASS"
+  final_reconciliation:
+    date: "2026-11-21"
+    observation_release:
+      classification: "OBSERVATION_RELEASE_CHANGED_PROVENANCE_UNRESOLVED"
+      path: "/project/disease_ecology/NWScrewworm/data/processed_data/case_detections/combined_clean_obs_2026-11-13.csv"
+      bytes: 7191829
+      mtime: "2026-11-19T10:06:23.592700507-06:00"
+      sha256_before_read: "784168081cc1d3206f3537e8731994cbfc34be15be7c515fe06710d4ea9bdaac"
+      sha256_after_read: "784168081cc1d3206f3537e8731994cbfc34be15be7c515fe06710d4ea9bdaac"
+      rows: 164767
+      columns: ["date", "lon", "lat", "host"]
+      actual_date_range: ["2022-02-10", "2026-11-13"]
+      iso_week_range: ["2022-W06", "2026-W46"]
+      weekly_count_rows: 249
+      nonzero_weeks: 246
+      zero_weeks: 3
+      missing_cells: 0
+      invalid_dates: 0
+      invalid_coordinates: 0
+      weekly_counts_path: "observation_weekly_counts.tsv"
+      weekly_counts_sha256: "34cf710666de6a523d1efb7593cceb44c028f846a4218aec843dc6144536c81d"
+      weekly_counts_match_prior_record: true
+      historical_audit_snapshot:
+        sha256: "8fd21f9db11db3df20596fe7ad0b4cbbc8b895fbaad6f702c847ed5a05dd19fc"
+        bytes: 7304653
+        rows: 167078
+        columns: ["date", "host", "lon", "lat"]
+      change_from_historical_snapshot:
+        row_difference: -2311
+        byte_difference: -112824
+        column_order_changed: true
+        original_snapshot_available: false
+        aggregate_row_differences_recalculated: false
+        reason: "The exact historical bytes are absent; the original snapshot was not reconstructed."
+      evidence_comparison:
+        original_audit_manifest_hash: "8fd21f9db11db3df20596fe7ad0b4cbbc8b895fbaad6f702c847ed5a05dd19fc"
+        existing_checksum_inventory_hash: "8fd21f9db11db3df20596fe7ad0b4cbbc8b895fbaad6f702c847ed5a05dd19fc"
+        revised_v2_manifest_hash: "784168081cc1d3206f3537e8731994cbfc34be15be7c515fe06710d4ea9bdaac"
+        current_source_matches_revised_v2_manifest: true
+        current_source_matches_historical_inventory: false
+        alternate_named_candidate_count: 6
+        historical_hash_candidate_found: false
+        release_authorization_or_change_record_found: false
+        cause_of_row_and_byte_change: "unknown"
+    template_provenance:
+      classification: "TEMPLATE_PROVENANCE_RESOLVED"
+      previous_2026_11_19_classification: "TEMPLATE_PROVENANCE_UNRESOLVED"
+      historic_sidecar_sha256: "4be01f0ecaff35216a72eb8f27e791311af90d35b5a4fff1e46a74edb6dc633b"
+      sidecars_scanned: 3024
+      historic_source_repository: "/project/disease_ecology/cds-datagrab"
+      historic_template_path: "/project/disease_ecology/cds-datagrab/spatial_domain/study_area_raster.tif"
+      historic_template_sha256: "4be01f0ecaff35216a72eb8f27e791311af90d35b5a4fff1e46a74edb6dc633b"
+      historic_template_git_commit: "334681b2d2b40fb5934df342fb2c7715fb337c37"
+      historic_template_git_commit_date: "2026-07-27T19:45:11-05:00"
+      preceding_template_git_commit: "088d8624323aeabddbe2bd9844cb6086c8151652"
+      preceding_template_sha256: "cb331565767a8f16b385684dbec23cea9247d77927c5c93edbbceb18f04517e5"
+      deployment_checkout_commit: "fb57e3065ac309768b7f77062feffb3915c1465d"
+      deployment_template_sha256: "4be01f0ecaff35216a72eb8f27e791311af90d35b5a4fff1e46a74edb6dc633b"
+      current_configured_template_sha256: "d968ebe17486bde29eb68dcfae3617c8fe0932c5cad256b843c3c2aafc973a66"
+      historic_and_configured_binary_identical: false
+      historic_and_configured_cell_values_identical: true
+      historic_and_configured_na_mask_identical: true
+      historic_and_configured_dimensions_resolution_extent_origin_identical: true
+      historic_and_configured_crs_equivalent: true
+      crs_description: "Custom Albers Equal Area, WGS84 datum, kilometre units; no EPSG authority declared."
+      historic_identity_evidence: "The sidecar hash matches the version-controlled CDS template byte-for-byte; that Git commit predates the sidecar creation interval."
+      run_sidecars_record_template_path: false
+    surface_pressure_pipeline:
+      source_repository: "/project/disease_ecology/cds-datagrab"
+      source_repository_commit: "9a07372acec9c69d6f34859ff96ace866c25d633"
+      source_repository_commit_date: "2026-11-11T15:43:03-06:00"
+      inspection_checkout_commit: "a6f2ec6c7742f5b2d79cce589ff207f60966f988"
+      source_commit_evidence:
+        request_registry_path: "/project/disease_ecology/cds-datagrab-output/data/production/_sources/era5land_daily_mean_utc06/requests/request_registry.csv"
+        request_hashes: ["1bfb3896", "40f80aab"]
+        recorded_source_commit_for_both_requests: "9a07372acec9c69d6f34859ff96ace866c25d633"
+        config_checksum: "34cbb9f2e12afc91d3b719af895557df20c1ae3bdc40acb18904a7d3f01fbf7c"
+        config_checksum_matches_source_commit_tree: true
+        cited_pressure_processing_references_match_inspection_checkout: true
+        raw_archives:
+          - request_hash: "1bfb3896"
+            date_range: ["2026-10-02", "2026-10-31"]
+            bytes: 88789675
+            sha256: "ad0ad5f1e0fa86528826c6f6f9413f36090017eb2f64efd1ed430df1e1c829d2"
+          - request_hash: "40f80aab"
+            date_range: ["2026-11-01", "2026-11-03"]
+            bytes: 6861892
+            sha256: "ccef78cc0916501b4e6c7437bf007478c780e77c2ea4f9a43f3796071b5be1b8"
+      source_configuration: "config/era5land_daily_mean_utc06_production.yml"
+      source_code_references:
+        product_spec: "R/variable_registry.R:15"
+        unit_conversion: "R/variable_registry.R:24"
+        family_acquisition_and_mapping: "R/era5land_family.R:194-197; R/era5land_archive.R:74-89"
+        netcdf_attribute_decode: "R/netcdf_processing.R:50-56,95-129"
+        daily_metadata_write: "R/daily_processing.R:199-200"
+        weekly_aggregation_and_sidecar: "R/weekly_aggregation.R:124-143; R/variable_registry.R:46"
+      product_identity:
+        dataset: "derived-era5-land-daily-statistics"
+        source_variable: "surface_pressure"
+        netcdf_alias: "sp"
+        parameter_id: 134
+        documented_original_units: "Pa"
+        official_reference: "https://confluence.ecmwf.int/pages/viewpage.action?pageId=143037634"
+      stored_source_archive_header_audit:
+        monthly_archives_inspected: 64
+        readable_surface_pressure_members: 64
+        all_source_units: "Pa"
+        scale_factor_attribute: "absent in all 64 members"
+        add_offset_attribute: "absent in all 64 members"
+      scale_and_offset_behavior: "ncdf4::ncvar_get is called with raw_datavals=FALSE, which applies NetCDF scale_factor/add_offset; the code then explicitly multiplies by scale_factor and adds add_offset. The inspected archived source members have neither attribute, so no duplicate scaling occurred in the available source releases."
+      numerical_unit_conversion: "The product specification converts Pa to kPa by dividing values by 1000 before daily output."
+      weekly_aggregation: "The weekly raster is the mean of seven daily outputs already converted to kPa."
+      daily_sidecar_units: "Daily sidecars record source_variable=surface_pressure, netcdf_alias=sp, source_units=Pa, output_units=kPa, and unit_conversion=pascal_to_kilopascal."
+      weekly_output_metadata:
+        raster_type: "Float32"
+        band_description: "mean"
+        nodata: "NaN"
+        raster_unit_scale_offset_tags: "absent"
+        weekly_sidecar_output_units_field: "absent"
+        interpretation: "Weekly units are supported by the seven daily sidecars and the processing code; the weekly raster and its sidecar do not declare units."
+      representative_week:
+        week_id: "2026-W44"
+        raster_sha256: "be1cb86204e37830023cae54d0e4c59384e0e0d54d4fd4f981c4975c1fdf69cc"
+        sidecar_sha256: "2a7c5eea0299694282d4fbeab2fa7a7441dc4bd40ff4d3c7a97fbb09a895827e"
+        seven_daily_sidecars_record_kpa: true
+      ncdf4_scale_offset_reference: "https://github.com/cran/ncdf4/blob/master/R/ncdf4_priv_var.R"
+    soilgrids_provenance:
+      provenance_directory: "/project/disease_ecology/NWScrewworm/data/raw_data/soilgrids_1000m_isric/provenance"
+      official_manifest_path: "official_manifest.tsv"
+      official_manifest_sha256: "54cb5e1743c9ac4c8d33d0d67fa65970ff101fd5a93608dc1161287bac52ab15"
+      official_manifest_columns: ["property", "filename", "expected_sha256", "source_url"]
+      acquisition_records_found: true
+      local_processing_log_found: false
+      files:
+        clay:
+          path: "/project/disease_ecology/NWScrewworm/data/raw_data/soilgrids_1000m_isric/clay_0-5cm_mean_1000.tif"
+          product_identity: "SoilGrids clay mean, 0-5 cm, official 1000m aggregated GeoTIFF"
+          official_source_url: "https://files.isric.org/soilgrids/latest/data_aggregated/1000m/clay/clay_0-5cm_mean_1000.tif"
+          manifest_expected_sha256: "20f699cc64686bb5696e395f709232e5957ea3c6a4b39f6676517a502033f424"
+          current_sha256: "20f699cc64686bb5696e395f709232e5957ea3c6a4b39f6676517a502033f424"
+          identity_match: true
+          product_revision: "unknown; source URL uses the mutable latest alias; exact bytes are identified by SHA-256"
+          physical_and_stored_mapped_units: "g/kg"
+          conventional_percent_conversion: "divide by 10; not applied"
+          stored_data_type: "Int16"
+          nodata: -32768
+          scale_factor: "GeoTIFF scale tag absent"
+          offset: "GeoTIFF offset tag absent"
+          official_resampling_history: "The 1000m SoilGrids product is an aggregate of mean predictions from 250m products."
+          local_resampling_history: "No local processing record found; current file is byte-identical to the official-manifest source binary."
+        wv0010:
+          path: "/project/disease_ecology/NWScrewworm/data/raw_data/soilgrids_1000m_isric/wv0010_0-5cm_mean_1000.tif"
+          product_identity: "SoilGrids volumetric water content at 10 kPa, mean, 0-5 cm, official 1000m aggregated GeoTIFF"
+          official_source_url: "https://files.isric.org/soilgrids/latest/data_aggregated/1000m/wv0010/wv0010_0-5cm_mean_1000.tif"
+          manifest_expected_sha256: "0786fa27fa1870b3d7737dca566972adec8a3e0f0a95230f6fec35af0a12d39c"
+          current_sha256: "0786fa27fa1870b3d7737dca566972adec8a3e0f0a95230f6fec35af0a12d39c"
+          identity_match: true
+          product_revision: "unknown; source URL uses the mutable latest alias; exact bytes are identified by SHA-256"
+          physical_and_stored_mapped_units: "10^-3 cm3 cm-3 (Mapped_units tag confirms the stored mapping)"
+          conventional_percent_conversion: "divide by 10; not applied"
+          stored_data_type: "Int16"
+          nodata: -32768
+          scale_factor: "GeoTIFF scale tag absent"
+          offset: "GeoTIFF offset tag absent"
+          official_resampling_history: "The 1000m SoilGrids product is an aggregate of mean predictions from 250m products."
+          local_resampling_history: "No local processing record found; current file is byte-identical to the official-manifest source binary."
+      official_units_reference: "https://docs.isric.org/globaldata/soilgrids/SoilGrids_faqs_01.html"
+    integrity_verification:
+      private_production_config_sha256_matches_prior_manifest: true
+      private_preprocessing_config_sha256_matches_prior_manifest: true
+      representative_existing_pressure_artifact_matches_inventory: true
+      observation_source_hash_unchanged_during_read: true
+      production_artifacts_modified: false
+    unresolved_findings:
+      - "The observation source release change from 167078 to 164767 rows remains unexplained and unauthorized in available records; the original bytes are unavailable."
+      - "The exact named SoilGrids revision and local acquisition timestamp are not recorded; the manifest URL uses latest, although the current exact file bytes match its expected checksums."
+      - "Weekly surface-pressure rasters and their weekly sidecars omit output units; kPa is traceable through the daily sidecars and processing code."
+      - "The CDS source reader would apply nonidentity NetCDF scale/offset attributes twice; none are present in the 64 archived ERA5-Land pressure members inspected."
+    validation:
+      change_classification: "C — executable test assertions were added for the additive manifest; all other changes are audit metadata and report text."
+      canonical_test_runner: "Rscript tests/run_tests.R"
+      focused_test_files: ["test_input_manifest.R", "test_cds_upstream_provenance.R"]
+      validation_environment: "Atlas using scripts/atlas_runtime.sh profile atlas-r44-spatial-v1"
+      executed: 2
+      skipped: 30
+      passed: 1
+      warned: 1
+      failed: 0
+      warning_detail: "test_cds_upstream_provenance.R passed with exit 0; its negative-path assertion deliberately expects a child submit command to exit 1 before sbatch, which system2 reports as a warning. Atlas also emitted its RTC/time-zone warning."
+      full_32_script_suite_repeated: false
+      full_suite_omission_reason: "Focused manifest/provenance checks cover this manifest/report/test-only change; no production code or execution pathway changed."
+      git_diff_check: "PASS"
+      model_fit_or_prediction_started: false
+      production_artifacts_modified: false

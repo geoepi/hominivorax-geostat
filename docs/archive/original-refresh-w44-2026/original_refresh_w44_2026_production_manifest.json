@@ -1,0 +1,233 @@
+{
+  "decision_status": "W44_PRODUCTION_PROMOTION_BLOCKED",
+  "review_date": "2026-11-27",
+  "candidate_model": {
+    "model_id": "ORIGINAL_REFRESH_W44_2026",
+    "qualification": "ORIGINAL_REFRESH_W44_QUALIFIED_WITH_LIMITATIONS",
+    "proposed_production_id": "ORIGINAL_W44_2026_PRODUCTION",
+    "active_in_production": false,
+    "formula_identity": "original_joint_inla_v1",
+    "formula_reference": {
+      "path": "R/joint_inla_spec.R::make_joint_formula with covariate_registry=null",
+      "commit": "4a463bd62727cf33f783a31d9627afdb576a077f",
+      "fixed_effect_count_including_intercepts": 16,
+      "fixed_effect_order": [
+        "intercept1",
+        "intercept2",
+        "north",
+        "road_dens",
+        "night_illum",
+        "mintemp",
+        "soilmoist",
+        "leafarea",
+        "rhum",
+        "mintemp:soilmoist",
+        "mintemp:leafarea",
+        "cattle",
+        "horses",
+        "pigs",
+        "goats",
+        "sheep"
+      ],
+      "excluded_c1_only_terms": ["clay", "wv0010", "spressure"],
+      "audit_path": "docs/archive/original-refresh-w44-2026/original_refresh_formula_audit.csv"
+    },
+    "data_release": {
+      "release_id": "2026-11-13",
+      "observations_path": "/project/disease_ecology/NWScrewworm/data/processed_data/case_detections/combined_clean_obs_2026-11-13.csv",
+      "observations_sha256": "784168081cc1d3206f3537b8731994cbfc34be15be7c515fe06710d4ea9bdaac",
+      "source_rows": 164767,
+      "analysis_start_epiweek": "2022-W01",
+      "analysis_end_epiweek": "2026-W44",
+      "analysis_end_date": "2026-11-01"
+    },
+    "repository": {
+      "tested_branch": "feature/original-refresh-w44-2026",
+      "tested_commit": "caa682268b8e41de8d56aaedd8a44df099377dd7",
+      "fit_source_commit": "42f27497b251cdcd84d2b44b1844cd18292610a8",
+      "report_generation_commit": "1f9924e7c1a3b459b9302e298b08c1d6d8cac999",
+      "report_script_blob_sha1": "48f7391e7bde39c139f24bde6c1a0a252825f41f"
+    },
+    "runtime": {
+      "environment": "Atlas; atlas-r44-spatial-v1",
+      "r_version": "4.4.3",
+      "inla_version": "25.9.19"
+    },
+    "fit": {
+      "slurm_job_id": "21355414",
+      "state": "COMPLETED",
+      "elapsed": "10:40:50",
+      "exit_code": "0:0",
+      "requested_cpus": 12,
+      "requested_memory": "280G",
+      "peak_rss": "169361860K",
+      "artifact_path": "/project/disease_ecology/hominivorax-geostat-original-refresh-w44-2026/outputs/original_refresh_w44_2026/stage3b/joint_model_fit.rds",
+      "artifact_bytes": 6634772026,
+      "artifact_sha256": "e9409c37ca88dedb0441d65c184c2c5cae9ca1dcf923aeb52db03bf8e451605c",
+      "artifact_sha256_independently_verified": true
+    },
+    "stages": [
+      {
+        "stage": "1",
+        "path": "/project/disease_ecology/hominivorax-geostat-original-refresh-w44-2026/outputs/original_refresh_w44_2026/stage1/model_inputs.rds",
+        "bytes": 697619900,
+        "sha256": "64571f7b3a7aa59625cbe788d10ce8f149f1b53b8015efcabceed99dcc25f9af",
+        "sha256_independently_verified": true
+      },
+      {
+        "stage": "2",
+        "path": "/project/disease_ecology/hominivorax-geostat-original-refresh-w44-2026/outputs/original_refresh_w44_2026/stage2/joint_model_inputs.rds",
+        "bytes": 697271352,
+        "sha256": "1a09657781f6989154d331a7467c6dbc28d7be8011991709d3259e94eac95fe0",
+        "sha256_independently_verified": true
+      },
+      {
+        "stage": "3A",
+        "path": "/project/disease_ecology/hominivorax-geostat-original-refresh-w44-2026/outputs/original_refresh_w44_2026/stage3a/joint_inla_build.rds",
+        "bytes": 2634681832,
+        "sha256": "74dc75e578474712cc06c62634b50c26631779003c8e804bbd2f7ff62bbb74a5",
+        "sha256_independently_verified": true
+      }
+    ],
+    "supporting_records": {
+      "artifact_manifest": "docs/archive/original-refresh-w44-2026/original_refresh_artifact_manifest.csv",
+      "fit_health": "docs/archive/original-refresh-w44-2026/original_refresh_fit_health.csv",
+      "extraction_audit": "docs/archive/original-refresh-w44-2026/original_refresh_extraction_audit.csv",
+      "validation_metrics": "docs/archive/original-refresh-w44-2026/original_refresh_predictive_metrics.csv",
+      "validation_audit": "docs/archive/original-refresh-w44-2026/original_refresh_validation_audit.csv",
+      "fixed_effect_summaries": "docs/archive/original-refresh-w44-2026/original_refresh_fixed_effect_summaries.csv",
+      "hyperparameter_summaries": "docs/archive/original-refresh-w44-2026/original_refresh_hyperparameter_summaries.csv",
+      "random_component_summary": "docs/archive/original-refresh-w44-2026/original_refresh_random_component_summary.csv",
+      "fit_warning_provenance": "docs/archive/original-refresh-w44-2026/original_refresh_fit_warnings.csv",
+      "qualification_report": "docs/archive/original-refresh-w44-2026/original-refresh-w44-2026.md",
+      "matched_c1_comparison": "docs/archive/original-refresh-w44-2026/matched_c1_original_refresh_comparison.md"
+    },
+    "supporting_record_checksums": {
+      "qualification_report_sha256": "62aa07157d1442d9c4bd0b42ec76a26b1680f92c8aa4cedd6401d1c75273ca86",
+      "promotion_review_sha256": "bc9d4cbbc8ee4359f628c116d41534ba08ced3afa49dba6a0cd9aae7ef695596",
+      "artifact_manifest_sha256": "8927eccc2140d7fcac54a9a8aeb2f71b8f66921487a8ac31208534c2ea0067aa",
+      "formula_audit_sha256": "016c543b28265ebe5e5ada8e1bdbaf18718d30ad365c27de8d6fadcdc16050ac",
+      "fit_health_sha256": "5a4ffd1772ffa8eee8f272d94ade4ea26be4c0a53639d24a3cd1da32d2333bca",
+      "extraction_audit_sha256": "6180eaf4e86e2752db82bd5224b5d4d4942d7d7ce0b54ba705fd2636318b858a",
+      "validation_metrics_sha256": "5f29c19d01b4ae7fa74683848058bca29eed4364e5a5b0659515ebbe38265011",
+      "validation_audit_sha256": "2b50439ec9caef8001c6f115cdc553878520b91a257b7ad967215cf028c565fe",
+      "fixed_effect_summaries_sha256": "90b5f728e144ead125ae8d320ee8c68126685fa82522e74b7e59a28d3d559aed",
+      "hyperparameter_summaries_sha256": "0fbea2ec6bf9afa6d892506a912d13751f1a7cd4c32fe262570119592e2f522b",
+      "random_component_summary_sha256": "d94b69bb611cfdabbf922ed7ae83ab9ec67b264abf7a7eb3f2ff95666c8a0c58",
+      "fit_warning_provenance_sha256": "c6d583cf8458867cd2c2945a67cc2a3e6f7c232032bcbea485de79c99a138c6e",
+      "matched_c1_comparison_sha256": "0dd2a7280b0194658b45a85c23cde7275589fc90889572a4e89dafc8795dc1bf"
+    },
+    "qualification": {
+      "fit_health_pass": 21,
+      "fit_health_fail": 0,
+      "extraction_pass": 23,
+      "extraction_fail": 0,
+      "validation_pass": 29,
+      "validation_warning": 1,
+      "validation_fail": 0,
+      "tier1_holdouts": 4768,
+      "tier2_holdouts": 7471,
+      "holdout_identity_match_with_c1": true,
+      "tier1_area_weighted_pb_auc": 0.990703,
+      "tier1_area_weighted_cbi": 0.999734,
+      "tier2_mae": 2.07097,
+      "tier2_rmse": 3.15264,
+      "tier2_pearson": 0.781745,
+      "tier2_spearman": 0.648070,
+      "tier2_calibration_mean_ratio": 0.982682,
+      "tier2_mae_difference_refreshed_minus_c1": 0.000731802439250512,
+      "tier2_mae_difference_interpretation": "descriptive and practically small under the evaluated holdout design",
+      "limitations": [
+        "Tier 1 validation holdouts are positive-only and background rows are availability support, not confirmed absences.",
+        "Observation-level Tier 2 negative-binomial predictive intervals are unavailable from the saved fit.",
+        "Administrative support is incomplete outside fitted/direct Tier 1 levels; unused levels remain explicit.",
+        "Predictive metrics are descriptive and do not establish superiority over C-1."
+      ],
+      "fit_stderr_inla_experimental_vb_warning_occurrences": 2,
+      "fit_stderr_unclassified_warning_lines": 0,
+      "rasters_generated": false,
+      "posterior_sampling_performed": false
+    }
+  },
+  "canonical_tests": {
+    "command": "Rscript tests/run_tests.R --log-dir /project/disease_ecology/hominivorax-geostat-original-refresh-w44-2026/outputs/original_refresh_w44_2026/validation/canonical_test_logs_caa6822",
+    "tested_commit": "caa682268b8e41de8d56aaedd8a44df099377dd7",
+    "environment": "Atlas login node atlas-login-2; atlas-r44-spatial-v1",
+    "r_version": "4.4.3",
+    "inla_version": "25.9.19",
+    "slurm_job_id": null,
+    "executed": 36,
+    "passed": 21,
+    "warned": 15,
+    "failed": 0,
+    "skipped": 0,
+    "warning_lines": 23,
+    "exit_code": 0,
+    "runner_self_test": "PASS",
+    "summary_path": "docs/archive/original-refresh-w44-2026/canonical_test_summary_caa6822.tsv",
+    "summary_sha256": "063bd12101f028bcdf57140094780219d3999212ca760fa881213f9ef42e11c8",
+    "self_test_command": "Rscript tests/run_tests.R --self-test --log-dir /project/disease_ecology/hominivorax-geostat-original-refresh-w44-2026/outputs/original_refresh_w44_2026/validation/canonical_test_logs_caa6822"
+  },
+  "historical_model_preservation": {
+    "job_id": "20742007",
+    "state": "COMPLETED",
+    "exit_code": "0:0",
+    "artifact_path": "/project/disease_ecology/nws-geostat-output/joint_inla_fit/production_stage3b_20260924/joint_model_fit.rds",
+    "artifact_sha256": "d67c4ac2f570dd609bc484e858bdbe5b25cbc77c5db6eb26ee93ab7bf8e62340",
+    "artifact_sha256_independently_verified": true,
+    "modified": false
+  },
+  "active_production_snapshot": {
+    "canonical_code_root": "/project/disease_ecology/hominivorax-geostat",
+    "canonical_branch": "main",
+    "canonical_commit_observed": "cf21c04ef53158b9bcca38dad75e7f75ee9e984a",
+    "config_path": "/project/disease_ecology/hominivorax-geostat-config/production.yml",
+    "config_sha256_observed": "0667d4ab1c6780da0ce435bd3a7e67fa83a2b90d0c8cc8b4658909d3d4f6ea49",
+    "observations_path": "/project/disease_ecology/NWScrewworm/data/processed_data/case_detections/combined_clean_obs_2026-10-17_through_2026-W39.csv",
+    "analysis_start_epiweek": "2024-W01",
+    "end_rule": "last_complete_epiweek",
+    "model_version_field_present": false,
+    "existing_fit_artifact_field_present": false,
+    "production_output_root": "/project/disease_ecology/nws-geostat-output/production_runs"
+  },
+  "deployment_manifest_reconciliation": {
+    "manifest_path": "/project/disease_ecology/hominivorax-geostat-config/deployment-manifest.yml",
+    "manifest_sha256_observed": "7d1eae69290f63e7432d2a7c9fc9796a637981ffd96718808d187ad079e9fc16",
+    "recorded_canonical_commit": "d2a2ff96766971416b41e00123b46ddbf1906322",
+    "recorded_production_config_sha256": "45022942bca0fd9dd49fe50a7b19c0049badadf8d38f7071e0826e692b90b966",
+    "verified_at_utc_recorded": "2026-09-29T00:24:33Z",
+    "matches_observed_active_state": false
+  },
+  "activation": {
+    "existing_fit_activation_supported_by_current_orchestration": false,
+    "normal_orchestration_stages": ["Prepare", "Fit", "Post-fit"],
+    "stable_versioned_production_artifact_path_confirmed": false,
+    "private_production_config_modified": false,
+    "production_fit_submitted": false,
+    "postfit_raster_job_submitted": false,
+    "blockers": [
+      "No supported model-version or existing-fit artifact reference exists in the private production config or current production orchestration contract.",
+      "The only verified W44 fit path is under a development output tree; no approved stable production artifact location or pointer policy is confirmed.",
+      "The private deployment manifest records a different canonical commit and production-config SHA-256 from the observed active checkout/config."
+    ]
+  },
+  "integration": {
+    "target_branch": "main",
+    "evidence_branch_tip_when_pr_opened": "1641b5022363ea1a934f94a09c350b01ab118011",
+    "pull_request": {
+      "number": 15,
+      "url": "https://github.com/geoepi/hominivorax-geostat/pull/15",
+      "state": "open",
+      "draft": true,
+      "merged": false,
+      "base_branch": "main",
+      "base_commit": "cf21c04ef53158b9bcca38dad75e7f75ee9e984a",
+      "head_commit_at_creation": "1641b5022363ea1a934f94a09c350b01ab118011",
+      "status_checks_reported": 0,
+      "reviewers_requested": false
+    },
+    "merge_performed": false,
+    "atlas_production_checkout_synchronized": false,
+    "production_tag_created": false
+  }
+}

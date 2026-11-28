@@ -15,8 +15,8 @@ derive_temporal_mapping <- function(time_index, cfg) {
   mapping$timestep_2wk <- (mapping$timestep + 1L) %/% 2L
   earliest <- min(mapping$week_start)
   month_diff <- (as.integer(format(mapping$week_start, "%Y")) - as.integer(format(earliest, "%Y"))) * 12L + as.integer(format(mapping$week_start, "%m")) - as.integer(format(earliest, "%m"))
-  mapping$quarter_index <- floor(month_diff / 3L) + 1L
-  mapping$sixmo_index <- floor(month_diff / 6L) + 1L
+  mapping$quarter_index <- as.integer(floor(month_diff / 3L) + 1L)
+  mapping$sixmo_index <- as.integer(floor(month_diff / 6L) + 1L)
   years <- sort(unique(as.integer(format(mapping$week_start, "%Y"))))
   mapping$year_index <- match(as.integer(format(mapping$week_start, "%Y")), years)
   mapping
@@ -63,6 +63,20 @@ audit_rows <- function(stage, scope, metric, value) {
 
 prepare_joint_model_inputs <- function(model_inputs, cfg) {
   validate_joint_model_input_contract(model_inputs)
+  if (!is.null(cfg$covariate_registry)) {
+    validate_covariate_registry(cfg$covariate_registry)
+    stage1_registry <- model_inputs$covariate_registry
+    if (is.null(stage1_registry) ||
+        !identical(stage1_registry$manifest_sha256, cfg$covariate_registry$manifest_sha256) ||
+        !identical(stage1_registry$configuration$version, cfg$covariate_registry$configuration$version)) {
+      stop("Stage 1 covariate manifest identity does not match the Configuration C Stage 2 manifest.")
+    }
+    for (name in names(cfg$covariate_registry$covariates)) {
+      column <- as.character(cfg$covariate_registry$covariates[[name]]$transformation$output_column)
+      require_columns(model_inputs$tier2, column, "Stage 1 Tier 2 registered covariates")
+      require_columns(model_inputs$prediction_grid, column, "Stage 1 prediction-grid registered covariates")
+    }
+  }
   temporal_mapping <- derive_temporal_mapping(model_inputs$time_index, cfg)
   tier1 <- apply_temporal_mapping(model_inputs$tier1, temporal_mapping, cfg, "tier1")
   tier2 <- apply_temporal_mapping(model_inputs$tier2, temporal_mapping, cfg, "tier2")
@@ -83,6 +97,8 @@ prepare_joint_model_inputs <- function(model_inputs, cfg) {
   tier2 <- apply_admin_mapping(tier2, admin_mapping, "tier2")
   prediction_grid <- apply_admin_mapping(prediction_grid, admin_mapping, "prediction_grid")
   features <- add_livestock_rw2_features(tier2, prediction_grid, cfg, model_inputs$transformations)
+  features$metadata$covariate_registry <- covariate_registry_signature(cfg$covariate_registry)
+  features$metadata$registered_covariates <- model_inputs$transformations$registered_covariates %||% list()
   tier2 <- features$tier2
   prediction_grid <- features$prediction_grid
 
@@ -136,12 +152,16 @@ prepare_joint_model_inputs <- function(model_inputs, cfg) {
     holdout_metadata = list(tier1 = holdout1$metadata, tier2 = holdout2$metadata, zero_count_policy = cfg$tier2$zero_count_policy),
     feature_metadata = features$metadata,
     spatial_support = model_inputs$spatial_support,
+    covariate_registry = model_inputs$covariate_registry,
     preprocessing_metadata = model_inputs$preprocessing_metadata %||% list(),
     thinning_audit = model_inputs$thinning_audit %||% list(),
     temporal_provenance = model_inputs$temporal_provenance %||% list(),
     joint_model_config = cfg,
     preparation_audit = audit,
-    provenance = list(stage = "joint_model_preparation", source_model_inputs = cfg$inputs$model_inputs, R = R.version.string)
+    provenance = list(
+      stage = "joint_model_preparation", source_model_inputs = cfg$inputs$model_inputs, R = R.version.string,
+      covariate_manifest = covariate_registry_signature(cfg$covariate_registry)
+    )
   )
 }
 

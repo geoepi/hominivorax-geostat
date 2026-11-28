@@ -1,0 +1,14 @@
+# Stage 1 reuse is conditional on validate_original_refresh_stage1_reuse.R
+# passing against the existing C-1 Stage 1 artifact and approved source identity.
+reuse:
+  source_checkout: /project/disease_ecology/hominivorax-geostat-c1-validation-20261121
+  source_run: outputs/configuration_c/c1-validation-20261121-stage2-index-repair/stage1
+  artifact: model_inputs.rds
+  expected_artifact_sha256: 64571f7b3a7aa59625cbe788d10ce8f149f1b53b8015efcabceed99dcc25f9af
+  expected_observation_sha256: 784168081cc1d3206f3537b8731994cbfc34be15be7c515fe06710d4ea9bdaac
+  expected_observation_rows: 164767
+  expected_analysis_start_week: 2022-W01
+  expected_analysis_end_week: 2026-W44
+  expected_analysis_end_date: 2026-11-01
+  expected_source_manifest_sha256: 9f1509e98906c77cfcaa57b6146212d5e60eab7a569d309788d6f6fd738dfc8d
+  output_artifact: outputs/original_refresh_w44_2026/stage1/model_inputs.rds

@@ -82,5 +82,7 @@ reference <- joint_inla_validate_reference_background(stage2_contract, fitted_co
 stopifnot(reference$background_rows == 3L, reference$unique_spatial_nodes == 3L,
           reference$occurrence_rows == 2L, reference$represented_weeks == 3L,
           all(reference$background$weight > 0), all(reference$background$inside_domain))
-
-cat("Joint-INLA validation tests passed\n")
+background_weight_metric <- reference$metrics[reference$metrics$metric == "reference_background_total_weight", , drop = FALSE]
+stopifnot(nrow(background_weight_metric) == 1L,
+          background_weight_metric$n == nrow(reference$background),
+          abs(background_weight_metric$value - reference$total_weight) < 1e-12)

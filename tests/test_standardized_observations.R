@@ -36,5 +36,3 @@ missing_crs_cfg <- cfg
 missing_crs_cfg$inputs$observation_crs <- NULL
 missing_crs_result <- try(preprocess_standardized_observations(observations, boundary, missing_crs_cfg), silent = TRUE)
 stopifnot(inherits(missing_crs_result, "try-error"))
-
-cat("Standardized observation CRS regression test passed\n")
