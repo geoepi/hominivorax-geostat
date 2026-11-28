@@ -103,5 +103,4 @@ and production discovery behavior.
 - CHIME focused adapter suite: 32 passed (previously run in the CHIME worktree
   with its documented virtual environment and `PYTHONPATH=src`). The complete
   CHIME suite was not run because only the Geostat adapter surface changed.
-- `git diff --check`: passed for tracked changes before this report addition;
-  final staged diff check is recorded in the implementation commit review.
+- Final staged diff check passed for both HGE and CHIME changes.
