@@ -677,6 +677,15 @@ test_that("registry copy is checksum verified, immutable, idempotent, and preser
   expect_true(second$reused)
   expect_identical(second$manifest_sha256, first$manifest_sha256)
 
+  legacy_manifest <- yaml::read_yaml(first$manifest)
+  legacy_manifest$artifacts$fit$bytes <- as.numeric(artifact$fit$bytes) - 2
+  production_release_atomic_yaml(legacy_manifest, first$manifest, replace = TRUE)
+  legacy_manifest_sha <- fixture_hash(first$manifest)
+  third <- production_release_copy_bundle(artifact, target)
+  expect_true(third$reused)
+  expect_identical(as.numeric(third$artifacts$fit$bytes), as.numeric(artifact$fit$bytes))
+  expect_identical(fixture_hash(first$manifest), legacy_manifest_sha)
+
   changed <- fixture_write(file.path(root, "source", "different.rds"), "different fit\n")
   changed_bundle <- list(fit = list(path = changed, sha256 = fixture_hash(changed), bytes = file.info(changed)$size))
   expect_error(production_release_copy_bundle(changed_bundle, target), "differs for artifact")
@@ -685,6 +694,23 @@ test_that("registry copy is checksum verified, immutable, idempotent, and preser
   expect_error(suppressWarnings(production_release_copy_bundle(partial, partial_target)), "Failed to stage model artifact")
   expect_false(dir.exists(partial_target))
   expect_identical(fixture_hash(source), source_sha)
+})
+
+test_that("registry manifest serialization preserves exact large byte counts", {
+  root <- tempfile(pattern = "precise_registry_manifest_")
+  dir.create(root)
+  path <- file.path(root, "manifest.yml")
+  byte_count <- 6634772026
+
+  production_release_atomic_yaml(
+    list(artifacts = list(fit = list(bytes = byte_count))),
+    path,
+    replace = FALSE,
+    precision = 17
+  )
+
+  parsed <- yaml::read_yaml(path)
+  expect_identical(as.numeric(parsed$artifacts$fit$bytes), as.numeric(byte_count))
 })
 
 test_that("canonical registry references avoid a second durable payload", {
