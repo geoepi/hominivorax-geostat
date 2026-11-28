@@ -373,7 +373,7 @@ production_release_validate_request <- function(request) {
     stop("request_id must contain only letters, digits, dot, underscore, or hyphen.", call. = FALSE)
   }
   production_release_assert_fields(request$operation, c("mode", "requested_stages", "dispatch_authorized"),
-                                   c("mode", "requested_stages", "dispatch_authorized"), "operation")
+                                   c("mode", "requested_stages", "dispatch_authorized", "artifact_registration_authorized"), "operation")
   mode <- as.character(request$operation$mode)
   if (length(mode) != 1L || !mode %in% c("full", "resume", "adopt")) stop("operation.mode must be full, resume, or adopt.", call. = FALSE)
   stages <- tolower(unlist(request$operation$requested_stages, use.names = FALSE))
@@ -386,9 +386,23 @@ production_release_validate_request <- function(request) {
     stop("operation.dispatch_authorized must be a single TRUE or FALSE value.", call. = FALSE)
   }
 
+  registration_authorized <- request$operation$artifact_registration_authorized
+  if (!is.null(registration_authorized) &&
+      (!is.logical(registration_authorized) || length(registration_authorized) != 1L || is.na(registration_authorized))) {
+    stop("operation.artifact_registration_authorized must be a single TRUE or FALSE value when supplied.", call. = FALSE)
+  }
+  if (isTRUE(registration_authorized) &&
+      (mode != "adopt" || isTRUE(request$operation$dispatch_authorized) || length(stages))) {
+    stop("Artifact-only registration must keep dispatch_authorized false and request no execution stages.", call. = FALSE)
+  }
+
   production_release_assert_fields(request$configuration, c("role", "path", "sha256", "identity_id", "identity_path", "identity_sha256"),
                                    c("role", "path", "sha256", "identity_id", "identity_path", "identity_sha256"), "configuration")
   if (!as.character(request$configuration$role) %in% c("candidate_execution", "active_deployment")) stop("configuration.role must be candidate_execution or active_deployment.", call. = FALSE)
+  if (isTRUE(request$operation$artifact_registration_authorized) &&
+      !identical(as.character(request$configuration$role), "candidate_execution")) {
+    stop("Artifact-only registration requires a candidate_execution configuration.", call. = FALSE)
+  }
   if (mode %in% c("full", "resume") && !identical(as.character(request$configuration$role), "candidate_execution")) stop("Full and resume requests require a candidate_execution configuration.", call. = FALSE)
   for (key in c("sha256", "identity_sha256")) if (!production_release_is_sha256(request$configuration[[key]])) stop("configuration.", key, " must be a SHA-256 digest.", call. = FALSE)
   production_release_assert_fields(request$model, c("candidate_id", "production_id", "specification_id", "formula_identity"),
@@ -1205,11 +1219,7 @@ production_release_copy_bundle <- function(artifact_paths, registry_dir, product
        storage_policy = storage_policy)
 }
 
-production_release_register_adoption <- function(contract, request, repo_root) {
-  if (!identical(contract$operation_mode, "adopt")) stop("Only adopted fits may be registered with this function.", call. = FALSE)
-  if (!isTRUE(request$operation$dispatch_authorized)) stop("This request does not authorize Post-fit dispatch or artifact registration.", call. = FALSE)
-  if (!identical(as.character(request$configuration$role), "candidate_execution")) stop("An active-deployment configuration cannot authorize adoption dispatch.", call. = FALSE)
-  source_artifacts <- contract$adoption_validation$artifact_inputs
+production_release_adoption_registration_bundle <- function(source_artifacts, request) {
   source_bundle <- source_artifacts
   resolved <- attr(request, "resolved")
   source_bundle$environmental_identity <- list(path = resolved$environmental_identity,
@@ -1231,13 +1241,67 @@ production_release_register_adoption <- function(contract, request, repo_root) {
   }
   registry_root <- file.path(canonical$model_registry, request$model$production_id)
   registered <- production_release_copy_bundle(source_bundle, registry_root, production_root = canonical$production_runs)
+  list(source = source_artifacts, bundle = source_bundle, canonical = canonical, registry = registered)
+}
+
+production_release_register_adoption <- function(contract, request, repo_root) {
+  if (!identical(contract$operation_mode, "adopt")) stop("Only adopted fits may be registered with this function.", call. = FALSE)
+  if (!isTRUE(request$operation$dispatch_authorized)) stop("This request does not authorize Post-fit dispatch or artifact registration.", call. = FALSE)
+  if (!identical(as.character(request$configuration$role), "candidate_execution")) stop("An active-deployment configuration cannot authorize adoption dispatch.", call. = FALSE)
+  registration <- production_release_adoption_registration_bundle(contract$adoption_validation$artifact_inputs, request)
+  registered <- registration$registry
   contract$artifact_storage <- list(policy = registered$storage_policy, registry_path = registered$path,
                                     registry_manifest = registered$manifest, reused_existing_registry = isTRUE(registered$reused),
                                     registry_manifest_sha256 = registered$manifest_sha256 %||% production_release_sha256(registered$manifest),
-                                    canonical_payload_root = canonical$production_runs,
-                                    source = source_artifacts, registered = registered$artifacts)
+                                    canonical_payload_root = registration$canonical$production_runs,
+                                    source = registration$source, registered = registered$artifacts)
   contract$artifact_inputs <- registered$artifacts
   list(contract = contract, registry = registered)
+}
+
+production_release_register_adoption_artifacts <- function(request_path, repo_root) {
+  request <- production_release_read_request(request_path, repo_root)
+  if (!identical(production_release_validate_request(request), "adopt")) {
+    stop("Artifact-only registration requires an adoption request.", call. = FALSE)
+  }
+  if (!isTRUE(request$operation$artifact_registration_authorized)) {
+    stop("This request does not authorize artifact-only registration.", call. = FALSE)
+  }
+  if (isTRUE(request$operation$dispatch_authorized) ||
+      length(tolower(unlist(request$operation$requested_stages, use.names = FALSE)))) {
+    stop("Artifact-only registration requires dispatch_authorized: false and an empty requested_stages list.", call. = FALSE)
+  }
+  if (!identical(as.character(request$configuration$role), "candidate_execution")) {
+    stop("Artifact-only registration requires a candidate_execution configuration.", call. = FALSE)
+  }
+  request_path <- attr(request, "request_path")
+  request_sha256 <- attr(request, "request_sha256")
+  if (!identical(production_release_sha256(request_path), request_sha256)) {
+    stop("Artifact registration request changed after validation.", call. = FALSE)
+  }
+  compatibility <- production_release_configuration_compatibility(request, repo_root)
+  if (!isTRUE(compatibility$matches)) {
+    failed <- names(compatibility$checks)[!unlist(compatibility$checks)]
+    stop("Candidate configuration differs from the W44 adoption request: ", paste(failed, collapse = ", "), call. = FALSE)
+  }
+  adoption <- production_release_validate_adoption(request, repo_root, verify_files = TRUE)
+  if (!toupper(as.character(adoption$outcome)) %in% c("PASS", "PASS_WITH_WARNINGS")) {
+    stop("Adoption evidence did not pass; refusing artifact registration.", call. = FALSE)
+  }
+  registration <- production_release_adoption_registration_bundle(adoption$artifact_inputs, request)
+  registry <- registration$registry
+  list(
+    status = "ARTIFACTS_REGISTERED_NO_DISPATCH",
+    request_id = request$request_id,
+    request_sha256 = request_sha256,
+    operation_mode = "adopt",
+    dispatch_authorized = FALSE,
+    adoption_validation_outcome = adoption$outcome,
+    registry_path = registry$path,
+    registry_manifest = registry$manifest,
+    registry_manifest_sha256 = registry$manifest_sha256 %||% production_release_sha256(registry$manifest),
+    reused_existing_registry = isTRUE(registry$reused)
+  )
 }
 
 production_release_write_model_manifest <- function(contract) {

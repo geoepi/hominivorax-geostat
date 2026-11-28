@@ -787,3 +787,59 @@ test_that("incomplete releases cannot activate", {
   expect_error(production_release_activate(active_path, bad_release$manifest_path, 1L, fixture_hash(active_path), file.path(root, "events")), "Post-fit gate")
   expect_identical(yaml::read_yaml(active_path)$production_id, "old-model")
 })
+
+test_that("adopted artifacts can be registered with dispatch disabled and no stages", {
+  fixture <- make_adoption_fixture()
+  dir.create(fixture$output_root, recursive = TRUE, showWarnings = FALSE)
+  request <- yaml::read_yaml(fixture$request_path)
+  request$operation$requested_stages <- character()
+  request$operation$artifact_registration_authorized <- TRUE
+  request$operation$dispatch_authorized <- FALSE
+  yaml::write_yaml(request, fixture$request_path)
+
+  first <- production_release_register_adoption_artifacts(fixture$request_path, fixture$root)
+  expect_identical(first$status, "ARTIFACTS_REGISTERED_NO_DISPATCH")
+  expect_identical(first$operation_mode, "adopt")
+  expect_identical(first$dispatch_authorized, FALSE)
+  expect_false(first$reused_existing_registry)
+  expect_true(file.exists(first$registry_manifest))
+  expect_true(grepl("model_registry/ORIGINAL_W44_2026_PRODUCTION$", first$registry_path))
+  expect_identical(list.files(fixture$output_root), "model_registry")
+
+  registry_manifest <- yaml::read_yaml(first$registry_manifest)
+  expect_identical(registry_manifest$artifacts$fit$sha256, fixture_hash(fixture$artifact_paths$fit))
+  expect_identical(registry_manifest$artifacts$fit$source_path, normalizePath(fixture$artifact_paths$fit))
+  expect_identical(registry_manifest$artifacts$fit$path,
+                   file.path(first$registry_path, "fit", basename(fixture$artifact_paths$fit)))
+  expect_identical(fixture_hash(fixture$artifact_paths$fit),
+                   registry_manifest$artifacts$fit$sha256)
+
+  second <- production_release_register_adoption_artifacts(fixture$request_path, fixture$root)
+  expect_true(second$reused_existing_registry)
+  expect_identical(second$registry_manifest_sha256, first$registry_manifest_sha256)
+  expect_identical(list.files(fixture$output_root), "model_registry")
+})
+
+test_that("artifact-only adoption registration rejects missing authorization and execution stages", {
+  fixture <- make_adoption_fixture()
+  request <- yaml::read_yaml(fixture$request_path)
+  request$operation$requested_stages <- character()
+  yaml::write_yaml(request, fixture$request_path)
+  expect_error(production_release_register_adoption_artifacts(fixture$request_path, fixture$root),
+               "does not authorize artifact-only registration")
+  expect_false(dir.exists(fixture$output_root))
+
+  request$operation$artifact_registration_authorized <- TRUE
+  request$operation$requested_stages <- "postfit"
+  yaml::write_yaml(request, fixture$request_path)
+  expect_error(production_release_read_request(fixture$request_path, fixture$root),
+               "request no execution stages")
+  expect_false(dir.exists(fixture$output_root))
+
+  request$operation$requested_stages <- character()
+  request$operation$dispatch_authorized <- TRUE
+  yaml::write_yaml(request, fixture$request_path)
+  expect_error(production_release_read_request(fixture$request_path, fixture$root),
+               "request no execution stages")
+  expect_false(dir.exists(fixture$output_root))
+})

@@ -56,6 +56,13 @@ if (action == "cleanup-report") {
   quit(save = "no", status = 0L)
 }
 
+if (action == "register-adopted-artifacts") {
+  result <- production_release_register_adoption_artifacts(required("request"), option("repo-root", repo_root))
+  cat("Adopted artifacts registered atomically; dispatch disabled and no execution run created\n")
+  emit(result[c("status", "request_id", "request_sha256", "registry_path", "registry_manifest", "registry_manifest_sha256", "reused_existing_registry")])
+  quit(save = "no", status = 0L)
+}
+
 if (action == "register-accepted-package") {
   result <- production_release_register_accepted_package(
     required("release-manifest"), required("accepted-package"),
@@ -90,4 +97,4 @@ if (action == "rollback") {
   quit(save = "no", status = 0L)
 }
 
-stop("Unknown action: ", action, ". Supported actions are verify-active, discover-active, cleanup-report, register-accepted-package, reconcile, activate, rollback.", call. = FALSE)
+stop("Unknown action: ", action, ". Supported actions are verify-active, discover-active, cleanup-report, register-adopted-artifacts, register-accepted-package, reconcile, activate, rollback.", call. = FALSE)

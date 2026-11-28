@@ -173,3 +173,23 @@ preservation/duplicate flags. It reports review eligibility and estimated
 recoverable storage only. Eligibility uses the later of the 90-day minimum and
 two subsequent qualified refreshes, and the report requires explicit owner
 and governance approval. No cleanup or automatic deletion is implemented.
+
+## Artifact-only adoption registration
+
+Artifact registration can be performed before Post-fit as a separate, audited
+operation. Its versioned adoption request must set
+`artifact_registration_authorized: true`, keep
+`dispatch_authorized: false`, and leave `requested_stages` empty. The request
+must use a `candidate_execution` configuration. The action runs the full
+adoption evidence validator, stages artifacts under the canonical model
+registry, verifies the staged checksums, and publishes the immutable registry
+manifest atomically. An existing identical registry entry is reused; a
+different entry is refused.
+
+Invoke the action through the Atlas wrapper:
+
+    ./scripts/manage_model_release_atlas.sh       --action register-adopted-artifacts       --request /project/disease_ecology/hominivorax-geostat-config/candidates/<candidate>/artifact-registration-request.yml       --repo-root /project/disease_ecology/hominivorax-geostat
+
+This operation creates no execution run directory and submits no Prepare, Fit,
+or Post-fit job. Keep the later Post-fit planning or dispatch request separate;
+that request must not inherit artifact-registration authorization.
