@@ -1165,7 +1165,12 @@ production_release_copy_bundle <- function(artifact_paths, registry_dir, product
           !identical(normalizePath(record$source_path, mustWork = FALSE), normalizePath(artifact_paths[[name]]$path, mustWork = FALSE))) {
         stop("Existing model registry differs for artifact ", name, call. = FALSE)
       }
-      production_release_verify_file(record$path, record$sha256, artifact_paths[[name]]$bytes %||% NULL, paste0("registered ", name))
+      # Legacy manifests can round large byte counts; retain the exact size from the verified file.
+      verified <- production_release_verify_file(record$path, record$sha256, artifact_paths[[name]]$bytes %||% NULL, paste0("registered ", name))
+      record$path <- verified$path
+      record$bytes <- verified$bytes
+      record$sha256 <- verified$sha256
+      existing$artifacts[[name]] <- record
     }
     return(list(path = normalizePath(registry_dir, mustWork = TRUE), manifest = normalizePath(existing_manifest, mustWork = TRUE),
                 manifest_sha256 = production_release_sha256(existing_manifest), artifacts = existing$artifacts, reused = TRUE,
@@ -1209,7 +1214,7 @@ production_release_copy_bundle <- function(artifact_paths, registry_dir, product
                    canonical_production_root = if (is.null(production_root)) NULL else normalizePath(production_root, mustWork = FALSE),
                    created_at_utc = format(Sys.time(), "%Y-%m-%dT%H:%M:%SZ", tz = "UTC"),
                    artifacts = registered)
-  production_release_atomic_yaml(manifest, file.path(staging, "registry-manifest.yml"), replace = FALSE)
+  production_release_atomic_yaml(manifest, file.path(staging, "registry-manifest.yml"), replace = FALSE, precision = 17)
   if (dir.exists(registry_dir) || file.exists(registry_dir)) stop("Registry destination appeared during staging; refusing to overwrite.", call. = FALSE)
   if (!file.rename(staging, registry_dir)) stop("Atomic registry publication failed; the source artifacts remain unchanged.", call. = FALSE)
   committed <- TRUE
@@ -1398,13 +1403,13 @@ production_release_write_model_manifest <- function(contract) {
   list(path = normalizePath(path, mustWork = TRUE), sha256 = production_release_sha256(path))
 }
 
-production_release_atomic_yaml <- function(object, path, replace = TRUE) {
+production_release_atomic_yaml <- function(object, path, replace = TRUE, precision = getOption("digits")) {
   production_orchestration_require("yaml")
   dir.create(dirname(path), recursive = TRUE, showWarnings = FALSE)
   if (!replace && (file.exists(path) || dir.exists(path))) stop("Refusing to overwrite immutable file: ", path, call. = FALSE)
   temp <- tempfile(pattern = paste0(".", basename(path), ".tmp-"), tmpdir = dirname(path))
   on.exit(if (file.exists(temp)) unlink(temp), add = TRUE)
-  yaml::write_yaml(object, temp)
+  yaml::write_yaml(object, temp, precision = precision)
   if (!file.exists(temp) || file.info(temp)$size <= 0) stop("Temporary YAML write failed: ", temp, call. = FALSE)
   if (!file.rename(temp, path)) stop("Atomic rename failed for ", path, "; the previous file remains unchanged.", call. = FALSE)
   normalizePath(path, mustWork = TRUE)
