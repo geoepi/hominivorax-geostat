@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "record_id": "original-refresh-w44-2026-source-provenance-reconciliation-v1",
+  "fit": {
+    "job_id": "21355414",
+    "launch_commit": "42f27497b251cdcd84d2b44b1844cd18292610a8",
+    "metadata_runtime_commit": "5bf5e8d0f54de55e58f3a698daefb223ddc9d2e0",
+    "metadata_audit_commit": "5bf5e8d0f54de55e58f3a698daefb223ddc9d2e0",
+    "launch_commit_recorded_at": "2026-11-26T19:53:28Z",
+    "metadata_commit_recorded_at": "2026-11-26T20:59:51Z",
+    "audit_start_utc": "2026-11-26T20:00:57.862Z",
+    "audit_end_utc": "2026-11-27T06:29:20.047Z"
+  },
+  "comparison": {
+    "changed_paths": [
+      "docs/archive/configuration-c-1-2026/configuration-c-1-archive-artifact-manifest-2026.csv",
+      "docs/archive/configuration-c-1-2026/configuration-c-1-final-assessment-2026.md",
+      "docs/archive/configuration-c-1-2026/configuration-c-1-fixed-effect-posterior-2026.csv",
+      "docs/archive/configuration-c-1-2026/configuration-c-1-practical-effects-2026.csv",
+      "docs/archive/configuration-c-1-2026/configuration-c-1-predictor-distributions-2026.csv"
+    ],
+    "documentation_paths": [
+      "docs/archive/configuration-c-1-2026/configuration-c-1-final-assessment-2026.md"
+    ],
+    "archived_scientific_evidence_paths": [
+      "docs/archive/configuration-c-1-2026/configuration-c-1-archive-artifact-manifest-2026.csv",
+      "docs/archive/configuration-c-1-2026/configuration-c-1-fixed-effect-posterior-2026.csv",
+      "docs/archive/configuration-c-1-2026/configuration-c-1-practical-effects-2026.csv",
+      "docs/archive/configuration-c-1-2026/configuration-c-1-predictor-distributions-2026.csv"
+    ],
+    "test_only_paths": [],
+    "executable_paths": [],
+    "model_specification_paths": [],
+    "configuration_paths": [],
+    "runtime_setting_paths": [],
+    "launch_tree_ids": {
+      "R": "925fa1c91a7f2f74c9959475ef8e9035d7fffedb",
+      "scripts": "7dd26e8713ae11dca303ae70ea13eca81a2f4bf1",
+      "config": "0e2da2f5c06cad2b161cdfceec24b79522c54c3b",
+      "tests": "df11e77becfa506d46e50498bf6247eb8ae4c748"
+    },
+    "metadata_tree_ids": {
+      "R": "925fa1c91a7f2f74c9959475ef8e9035d7fffedb",
+      "scripts": "7dd26e8713ae11dca303ae70ea13eca81a2f4bf1",
+      "config": "0e2da2f5c06cad2b161cdfceec24b79522c54c3b",
+      "tests": "df11e77becfa506d46e50498bf6247eb8ae4c748"
+    },
+    "fit_relevant_trees_identical": true,
+    "model_behavior_changed": false,
+    "executable_source_changes": 0,
+    "test_file_changes": 0,
+    "configuration_file_changes": 0,
+    "model_definition_changes": 0,
+    "likelihood_or_runtime_setting_changes": 0,
+    "classification": "NON_EXECUTABLE_C1_ARCHIVE_ONLY"
+  },
+  "metadata_discrepancy": "The fit launcher recorded commit 42f27497b251cdcd84d2b44b1844cd18292610a8. During the fit audit window, the worktree HEAD advanced to 5bf5e8d0f54de55e58f3a698daefb223ddc9d2e0 when four archived Configuration C-1 evidence files and one archive assessment document were added. The R, scripts, config, and tests tree IDs are identical at both commits; the changed-path comparison found no executable, test, model-definition, configuration, likelihood, or runtime-setting changes. The launch commit remains the fit source; both identities are retained.",
+  "decision": {
+    "status": "RECONCILED_NON_EXECUTABLE_METADATA_DRIFT",
+    "source_identity": "launch_commit",
+    "governance_mode": "HGE",
+    "authorization_basis": "USER_TASK_CONDITIONAL_PROVENANCE_RECONCILIATION",
+    "production_activation_authorized": false
+  }
+}

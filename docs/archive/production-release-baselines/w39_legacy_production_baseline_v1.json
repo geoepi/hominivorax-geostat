@@ -1,0 +1,98 @@
+{
+  "schema_version": 1,
+  "record_id": "w39-legacy-production-baseline-v1",
+  "observed_at_utc": "2026-11-27 22:43:03 UTC",
+  "classification": "PARTIALLY_RECONSTRUCTED_LEGACY_STATE",
+  "identity_confidence": {
+    "observed_configuration_and_run": "HIGH",
+    "active_release_identity": "LOW",
+    "verified_rollback_target": false,
+    "rationale": "The current private configuration and a completed W39 run are independently identified, but the private deployment manifest disagrees with the observed checkout/configuration, the current config does not identify a model release or fit artifact, and the expected production model_registry directory is absent."
+  },
+  "observed_current_state": {
+    "canonical_checkout": {
+      "path": "/project/disease_ecology/hominivorax-geostat",
+      "branch": "main",
+      "commit": "cf21c04ef53158b9bcca38dad75e7f75ee9e984a"
+    },
+    "production_configuration": {
+      "path": "/project/disease_ecology/hominivorax-geostat-config/production.yml",
+      "sha256": "0667d4ab1c6780da0ce435bd3a7e67fa83a2b90d0c8cc8b4658909d3d4f6ea49",
+      "observation_path": "/project/disease_ecology/NWScrewworm/data/processed_data/case_detections/combined_clean_obs_2026-10-17_through_2026-W39.csv",
+      "observation_sha256": "193245f75d9fe863de852801b8cdc405d4ceb39d25b512f9c52da4f8876f969c",
+      "analysis_start_epiweek": "2024-W01",
+      "end_rule": "last_complete_epiweek",
+      "unseen_admin_policy": "zero_mean",
+      "production_output_root": "/project/disease_ecology/nws-geostat-output/production_runs",
+      "model_version_field_present": false,
+      "existing_fit_artifact_field_present": false
+    },
+    "latest_observed_run": {
+      "run_id": "20261017_230310_33098504",
+      "run_manifest": "/project/disease_ecology/nws-geostat-output/production_runs/20261017_230310_33098504/metadata/run_manifest.yml",
+      "code_commit": "33098504df8bae18a10b5200db36ab7493ce9901",
+      "analysis_window": {
+        "start_epiweek": "2024-W01",
+        "end_epiweek": "2026-W39",
+        "modeled_weeks": 143
+      },
+      "overall_status": "PASS_WITH_WARNINGS",
+      "stages": {
+        "prepare": "PASS",
+        "fit": "PASS_WITH_WARNINGS",
+        "postfit": "NOT_RUN"
+      },
+      "scheduler_jobs": {
+        "prepare": "20937602",
+        "fit": "20937603",
+        "postfit": "20937604"
+      }
+    },
+    "latest_observed_fit": {
+      "job_id": "20937603",
+      "status": "WARNING",
+      "started_utc": "2026-10-17T23:32:18Z",
+      "ended_utc": "2026-10-18T03:35:04Z",
+      "artifact_path": "/project/disease_ecology/nws-geostat-output/production_runs/20261017_230310_33098504/stage3b/joint_model_fit.rds",
+      "artifact_sha256": "a9c20b0dfd2da3342e67d4ec7751bc6845e01b70889930c4f432fdca491de651",
+      "sha256_independently_rechecked": true
+    },
+    "latest_observed_postfit": {
+      "job_id": "20937604",
+      "status": "FAIL",
+      "started_utc": "2026-10-18T03:36:25Z",
+      "ended_utc": "2026-10-18T04:05:17Z",
+      "code_commit": "33098504df8bae18a10b5200db36ab7493ce9901",
+      "error": "Pipeline command failed (status 1): scripts/run_postfit_reporting.R",
+      "output_artifact": null,
+      "output_sha256": null
+    }
+  },
+  "historical_deployment_manifest": {
+    "path": "/project/disease_ecology/hominivorax-geostat-config/deployment-manifest.yml",
+    "observed_sha256": "7d1eae69290f63e7432d2a7c9fc9796a637981ffd96718808d187ad079e9fc16",
+    "recorded_canonical_commit": "d2a2ff96766971416b41e00123b46ddbf1906322",
+    "recorded_production_config_sha256": "45022942bca0fd9dd49fe50a7b19c0049badadf8d38f7071e0826e692b90b966",
+    "verified_at_utc_recorded": "2026-09-29T00:24:33Z",
+    "matches_observed_checkout_and_config": false
+  },
+  "historical_model_qualification": {
+    "status": "NOT_ESTABLISHED",
+    "evidence": "The inspected deployment record and current production config do not identify the historically qualified model release or bind it to the observed W39 fit artifact."
+  },
+  "active_release_pointer": {
+    "expected_registry_root": "/project/disease_ecology/nws-geostat-output/production_runs/model_registry",
+    "root_present": false,
+    "pointer_initialized": false
+  },
+  "rollback_contract": {
+    "target_verified": false,
+    "active_release_pointer_created": false,
+    "reason": "The current evidence cannot establish one verified, qualified W39 production artifact identity with matching code/config provenance. A rollback pointer would therefore be misleading."
+  },
+  "governance_decision": {
+    "mode": "HGE",
+    "active_release_pointer_authorized": false,
+    "decision": "Do not initialize or activate an active-release pointer from this partial reconstruction."
+  }
+}

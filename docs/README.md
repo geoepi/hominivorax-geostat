@@ -23,6 +23,9 @@ This directory separates operator guidance from technical contracts.
   options, dynamic runtime contracts, resources, and resumption.
 - [Production validation](developer/production-validation.md) — Prepare, Fit,
   and Post-fit gates and their failure semantics.
+- [Refresh and release framework](developer/refresh-release-framework.md) —
+  request schema, fit adoption, stable artifact registration, activation, and
+  rollback.
 - [Post-fit acceptance](post-fit-acceptance.md) — extraction, validation,
   projection, raster, and acceptance interfaces.
 - [Post-fit reporting](post-fit-reporting.md) and [reporting schema](post-fit-reporting-schema.md)

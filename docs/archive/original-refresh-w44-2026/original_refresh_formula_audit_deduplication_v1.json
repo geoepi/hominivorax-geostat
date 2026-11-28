@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "record_id": "original-refresh-w44-2026-formula-audit-deduplication-v1",
+  "source_audit": {
+    "path": "docs/archive/original-refresh-w44-2026/original_refresh_formula_audit.csv",
+    "sha256": "016c543b28265ebe5e5ada8e1bdbaf18718d30ad365c27de8d6fadcdc16050ac",
+    "unchanged": true
+  },
+  "source_artifact_inventory": {
+    "path": "docs/archive/original-refresh-w44-2026/original_refresh_artifact_manifest.csv",
+    "sha256": "8927eccc2140d7fcac54a9a8aeb2f71b8f66921487a8ac31208534c2ea0067aa",
+    "unchanged": true
+  },
+  "duplicate_check_rows": [
+    {
+      "source_line": 8,
+      "check": "fit_not_executed",
+      "status": "PASS",
+      "observed": "FALSE",
+      "expected": "FALSE",
+      "details": "Stage 3A assembly must not execute a fit."
+    },
+    {
+      "source_line": 15,
+      "check": "fit_not_executed",
+      "status": "PASS",
+      "observed": "FALSE",
+      "expected": "FALSE",
+      "details": "Stage 3A assembly remains deterministic and fit-free."
+    }
+  ],
+  "normalized_audit": {
+    "path": "docs/archive/original-refresh-w44-2026/original_refresh_formula_audit_adoption_v2.csv",
+    "sha256": "123cdb4c74a0db1d3427784999efaf6d2458f79b29da4dedc7079705a01c72da",
+    "bytes": 4373,
+    "source_check_count": 14,
+    "normalized_check_count": 13,
+    "fit_not_executed_rows": 1
+  },
+  "independent_fit_metadata": {
+    "path": "/project/disease_ecology/hominivorax-geostat-original-refresh-w44-2026/outputs/original_refresh_w44_2026/stage3b/joint_model_fit_metadata.rds",
+    "sha256": "60deea11ed39f059402c08ce2f75bf4ec2af74c1198bde1d1866c1f92b0d3599",
+    "stage3a_executed_fit": false,
+    "runtime_commit": "5bf5e8d0f54de55e58f3a698daefb223ddc9d2e0",
+    "audit_start_utc": "2026-11-26T20:00:57.862Z",
+    "audit_end_utc": "2026-11-27T06:29:20.047Z"
+  },
+  "rationale": "The two source rows are semantically identical for check, status, observed, and expected values; they differ only in explanatory detail. The original audit and inventory remain unchanged. This adoption-only view combines their descriptions without changing any scientific result and retains both source rows and the independent Stage 3A executed_fit=FALSE metadata reference."
+}
