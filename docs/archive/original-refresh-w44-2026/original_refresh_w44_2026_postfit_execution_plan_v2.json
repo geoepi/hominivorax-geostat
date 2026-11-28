@@ -1,0 +1,313 @@
+{
+  "schema_version": 2,
+  "record_id": "original-refresh-w44-postfit-execution-plan-v2",
+  "created_at_utc": "2026-11-28T04:46:00Z",
+  "supersedes": "original_refresh_w44_2026_postfit_execution_plan_v1.json",
+  "status": "BLOCKED_UNTIL_REVIEW_AND_CANONICAL_REGISTRATION",
+  "postfit_resource_qualification": "READY_WITH_LIMITATIONS",
+  "postfit_execution_ready": false,
+  "execution_performed": false,
+  "dispatch_authorized": false,
+  "scheduler_jobs_submitted": 0,
+  "production_activation_performed": false,
+  "model_refit_required": false,
+  "scientific_specification_changed": false,
+  "model": {
+    "candidate_model_id": "ORIGINAL_REFRESH_W44_2026",
+    "proposed_production_id": "ORIGINAL_W44_2026_PRODUCTION",
+    "release_class": "ROUTINE_REFRESH",
+    "specification_id": "original_joint_inla_v1",
+    "coefficient_count": 16,
+    "source_fit_job_id": "21355414",
+    "fit_sha256": "e9409c37ca88dedb0441d65c184c2c5cae9ca1dcf923aeb52db03bf8e451605c",
+    "candidate_identity_sha256": "d55fcc137f685766c45ee7614fafa19186f36cd6c01a646696619990bead2dff"
+  },
+  "candidate_configuration": {
+    "role": "candidate_execution",
+    "path": "/project/disease_ecology/hominivorax-geostat-config/candidates/ORIGINAL_W44_2026_PRODUCTION/production.yml",
+    "sha256": "fbfe88a45c47d9f544f714e65d8d3f5398237f26156ac28bdc79f9a3947359d6",
+    "no_dispatch_request": "/project/disease_ecology/hominivorax-geostat-config/candidates/ORIGINAL_W44_2026_PRODUCTION/adoption_request.yml",
+    "no_dispatch_request_sha256": "aa9e8eaba0a1e04ad7e5339a6d23b5612304d43c3db3207936456cf0c811668c",
+    "contents_in_git": false,
+    "w39_production_configuration_modified": false,
+    "validation_status": "BLOCKED_ON_CANONICAL_REPOSITORY_SYNC",
+    "last_atlas_dry_run": "Halted before planning because canonical main is missing config/original_refresh_w44_2026/identity.yml; the identity file is present in the PR15/PR16 worktree.",
+    "dry_run_submitted_jobs": 0,
+    "dry_run_created_run_directory": false
+  },
+  "analysis": {
+    "start": "2022-W01",
+    "end": "2026-W44",
+    "weeks": 252,
+    "prediction_grid_rows_approximate": 4000000,
+    "observation_release": "combined_clean_obs_2026-11-13.csv",
+    "observation_sha256": "784168081cc1d3206f3537b8731994cbfc34be15be7c515fe06710d4ea9bdaac"
+  },
+  "artifacts": {
+    "status": "NOT_REGISTERED",
+    "authoritative_inventory": "docs/archive/original-refresh-w44-2026/original_refresh_artifact_manifest_adoption_v2.csv",
+    "inventory_roles": 30,
+    "source_tree": "/project/disease_ecology/hominivorax-geostat-original-refresh-w44-2026/outputs/original_refresh_w44_2026",
+    "source_preserved": true,
+    "all_source_checksums_and_byte_sizes_verified": true,
+    "direct_stage_lineage_verified": true,
+    "configuration_identity_verified": true,
+    "fit_source_provenance_reconciled": true,
+    "qualification_identity_verified": true,
+    "formula_prior_compatibility_verified": true,
+    "readability_verified": true,
+    "expected_registry_manifest": "/project/disease_ecology/nws-geostat-output/production_runs/model_registry/ORIGINAL_W44_2026_PRODUCTION/registry-manifest.yml",
+    "expected_paths": {
+      "stage1": "/project/disease_ecology/nws-geostat-output/production_runs/model_registry/ORIGINAL_W44_2026_PRODUCTION/stage1/model_inputs.rds",
+      "stage2": "/project/disease_ecology/nws-geostat-output/production_runs/model_registry/ORIGINAL_W44_2026_PRODUCTION/stage2/joint_model_inputs.rds",
+      "stage3a": "/project/disease_ecology/nws-geostat-output/production_runs/model_registry/ORIGINAL_W44_2026_PRODUCTION/stage3a/joint_inla_build.rds",
+      "fit": "/project/disease_ecology/nws-geostat-output/production_runs/model_registry/ORIGINAL_W44_2026_PRODUCTION/fit/joint_model_fit.rds"
+    },
+    "core_set": [
+      {
+        "role": "stage1",
+        "bytes": 697619900,
+        "sha256": "64571f7b3a7aa59625cbe788d10ce8f149f1b53b8015efcabceed99dcc25f9af"
+      },
+      {
+        "role": "stage2",
+        "bytes": 697271352,
+        "sha256": "1a09657781f6989154d331a7467c6dbc28d7be8011991709d3259e94eac95fe0"
+      },
+      {
+        "role": "stage3a",
+        "bytes": 2634681832,
+        "sha256": "74dc75e578474712cc06c62634b50c26631779003c8e804bbd2f7ff62bbb74a5"
+      },
+      {
+        "role": "fit",
+        "bytes": 6634772026,
+        "sha256": "e9409c37ca88dedb0441d65c184c2c5cae9ca1dcf923aeb52db03bf8e451605c"
+      }
+    ],
+    "identity_sha256": {
+      "fit_metadata": "60deea11ed39f059402c08ce2f75bf4ec2af74c1198bde1d1866c1f92b0d3599",
+      "stage2_config": "22aafb5781a226d52decd63ff8a4cbf04e1ecb9515fe2370f7607c3bb27da0a5",
+      "stage3a_config": "be68cc2bc3417c48144be3761fda966df6b4a2bcc4525a477a4083c2f8e86484",
+      "fit_config": "8c380a47bc9444195b2608ce57510acb1b051f06739b83ccc1cddf39f1c731f8",
+      "qualification_manifest": "f7799eb0220bafb7b9915b1cacda1ad5eb6a7df12bd4461a2a26cb93db6dafdc"
+    },
+    "transfer": {
+      "method": "one copy of the complete inventory into isolated staging below the canonical model registry",
+      "core_bytes": 10664345110,
+      "core_gib": 9.93,
+      "stage_hash_and_size_verify": true,
+      "atomic_manifest_publish_after_all_checks": true,
+      "overwrite_existing_version": false,
+      "remove_or_move_source": false
+    },
+    "destination_check": {
+      "owner": "john.humphreys",
+      "group": "proj-disease_ecology",
+      "setgid_group_inheritance": true,
+      "quota_available_gib": 4109,
+      "filesystem_free_gib": 4500,
+      "status": "PASS; recheck immediately before copy"
+    }
+  },
+  "execution_plan": {
+    "repository": "/project/disease_ecology/hominivorax-geostat",
+    "scheduler": {
+      "account": "disease_ecology",
+      "partition": "bigmem",
+      "cpus": 4,
+      "memory": "128G",
+      "time": "12:00:00",
+      "dependency": "none"
+    },
+    "run_id_format": "YYYYMMDD_HHMMSS_<8 lowercase hexadecimal characters>",
+    "run_root": "/project/disease_ecology/nws-geostat-output/production_runs/<execution_run_id>",
+    "reporting_root": "/project/disease_ecology/nws-geostat-output/production_runs/<execution_run_id>/reporting/<execution_run_id>",
+    "mode": "stage",
+    "stage": "postfit",
+    "command_template": [
+      "bash",
+      "/project/disease_ecology/hominivorax-geostat/scripts/run_pipeline_atlas.sh",
+      "--mode",
+      "stage",
+      "--config",
+      "/project/disease_ecology/hominivorax-geostat-config/candidates/ORIGINAL_W44_2026_PRODUCTION/production.yml",
+      "--run-id",
+      "<execution_run_id>",
+      "--run-root",
+      "/project/disease_ecology/nws-geostat-output/production_runs/<execution_run_id>",
+      "--stage",
+      "postfit",
+      "--repo-root",
+      "/project/disease_ecology/hominivorax-geostat"
+    ],
+    "command_is_template_only": true,
+    "prepare_executes": false,
+    "fit_executes": false,
+    "postfit_submitted": false,
+    "inla_fit_invoked": false,
+    "posterior_sampling_required": false,
+    "existing_qualified_fit_and_upstream_artifacts_reused": true,
+    "fit_job_id_is_provenance_only": true,
+    "steps": [
+      {
+        "n": 1,
+        "name": "Extraction",
+        "script": "scripts/extract_joint_inla_results.R",
+        "output": "/project/disease_ecology/nws-geostat-output/production_runs/<execution_run_id>/extraction"
+      },
+      {
+        "n": 2,
+        "name": "Production validation",
+        "script": "scripts/run_joint_inla_validation.R",
+        "output": "/project/disease_ecology/nws-geostat-output/production_runs/<execution_run_id>/validation"
+      },
+      {
+        "n": 3,
+        "name": "Prediction-grid projection",
+        "script": "scripts/run_joint_inla_projection.R",
+        "output": "/project/disease_ecology/nws-geostat-output/production_runs/<execution_run_id>/projection"
+      },
+      {
+        "n": 4,
+        "name": "Weekly rasterization",
+        "script": "scripts/run_joint_inla_rasterization.R",
+        "output": "/project/disease_ecology/nws-geostat-output/production_runs/<execution_run_id>/raster"
+      },
+      {
+        "n": 5,
+        "name": "Structural reconstruction",
+        "script": "scripts/run_structural_surface_diagnostics.R",
+        "output": "/project/disease_ecology/nws-geostat-output/production_runs/<execution_run_id>/structural"
+      },
+      {
+        "n": 6,
+        "name": "Temperature-masked products",
+        "script": "scripts/run_masked_structural_rpi_diagnostics.R",
+        "output": "/project/disease_ecology/nws-geostat-output/production_runs/<execution_run_id>/masked_structural_rpi"
+      },
+      {
+        "n": 7,
+        "name": "RPI, reporting, product integrity and QA",
+        "script": "scripts/run_postfit_reporting.R",
+        "output": "/project/disease_ecology/nws-geostat-output/production_runs/<execution_run_id>/reporting/<execution_run_id>"
+      }
+    ],
+    "scientific_contract": {
+      "administrative_support": "zero_mean",
+      "coordinates": "lonlat",
+      "crs": "EPSG:4326",
+      "temperature_mask_c": 16,
+      "rpi_calibration": "same_week_observation_pairs",
+      "rpi_quantile": 0.1,
+      "generation_interval_days": 21,
+      "days_per_layer": 7
+    },
+    "accepted_products": {
+      "root": "/project/disease_ecology/nws-geostat-output/postfit_acceptance",
+      "expected_package_pattern": "postfit_acceptance_<UTC>_<execution_run_id>_fit21355414",
+      "acceptance_requires_all_gates": true,
+      "gates": [
+        "Post-fit production gate",
+        "reporting_qa_summary.csv with no FAIL",
+        "finite dynamic RPI threshold artifact",
+        "product manifests and integrity checks"
+      ],
+      "placeholder_package_created": false,
+      "required_products": [
+        "fixed_effects_tier1",
+        "fixed_effects_tier2",
+        "species_composition",
+        "cattle_effect",
+        "temporal_effects",
+        "selected_week_maps",
+        "model_summary",
+        "potential_abundance",
+        "tier2_eta_structural",
+        "tier2_intensity_structural",
+        "structural_potential_abundance",
+        "structural_potential_abundance_temp_masked",
+        "random_effect_summaries",
+        "rpi_dynamic_threshold",
+        "rpi",
+        "rpi_class_summary",
+        "rpi_class_map",
+        "rpi_readiness"
+      ]
+    }
+  },
+  "resource_assessment": {
+    "evidence": [
+      {
+        "job": "21359436",
+        "scope": "W44 extraction + production validation",
+        "requested": "4 CPU / 128G",
+        "elapsed": "00:17:37",
+        "max_rss_kib": 79330920,
+        "max_rss_gib": 75.7,
+        "result": "completed"
+      },
+      {
+        "job": "20791393",
+        "scope": "historical partial Post-fit",
+        "requested": "4 CPU / 64G",
+        "max_rss_kib": 44593636,
+        "max_rss_gib": 42.5,
+        "result": "failed exit 1; no OOM reported"
+      },
+      {
+        "job": "20937604",
+        "scope": "historical partial Post-fit",
+        "requested": "4 CPU / 64G",
+        "max_rss_kib": 47542380,
+        "max_rss_gib": 45.3,
+        "result": "failed exit 1; no OOM reported"
+      }
+    ],
+    "recommendation": "4 CPUs, 128 GiB, 12 hours on Atlas bigmem",
+    "status": "READY_WITH_LIMITATIONS",
+    "limitation": "No completed 252-week end-to-end Post-fit memory, duration, or temporary-disk measurement exists. The 128 GiB request exceeds the measured W44 extraction/validation peak but does not prove full-run reliability.",
+    "serial_cpu_assessment": "The current Post-fit sequence is serial; retain four CPUs.",
+    "storage": {
+      "core_registry_copy_gib": 9.93,
+      "historical_partial_outputs_bytes": 722000000,
+      "historical_outputs_are_not_a_w44_full_run_estimate": true,
+      "current_quota_available_gib": 4109,
+      "full_run_peak_unmeasured": true
+    },
+    "restartability": {
+      "per_stage_checkpoints": false,
+      "automatic_resume": false,
+      "failure_marks_run_failed": true,
+      "unchecked_partial_intermediate_reuse": false,
+      "recovery": "diagnose, inspect and verify intermediates by manifest/checksum; use a new run ID unless validated reuse is approved"
+    }
+  },
+  "chime_discovery": {
+    "adapter": "CHIME PR #48",
+    "run_id_format": "timestamp plus eight hexadecimal characters",
+    "model_release_and_execution_run_ids_are_distinct": true,
+    "source_fit_job_id": 21355414,
+    "prepare_status": "NOT_EXECUTED_BY_THIS_RUN",
+    "fit_status": "NOT_EXECUTED_BY_THIS_RUN",
+    "postfit_status_before_execution": "NOT_RUN",
+    "registry_reference_required": true,
+    "package_root": "/project/disease_ecology/nws-geostat-output/postfit_acceptance",
+    "pre_package_state": "not accepted"
+  },
+  "blockers": [
+    "PR #15, PR #16, and PR #48 remain open drafts without reviews or reported checks.",
+    "The canonical model-registry entry is not published; all registered paths above are expected destinations.",
+    "HGE and CHIME main branches do not yet contain these integration commits.",
+    "The candidate-config dry-run cannot complete until PR15 is reviewed and its identity file is synchronized to the canonical repository."
+  ],
+  "w39_governance": "Historical configuration and deployment manifest disagree; no verified active pointer or rollback target. Do not initialize one.",
+  "audit": {
+    "run_directory_created": false,
+    "registry_copy_attempted": false,
+    "raster_created": false,
+    "acceptance_package_created": false,
+    "production_activation_performed": false,
+    "cleanup_performed": false
+  }
+}

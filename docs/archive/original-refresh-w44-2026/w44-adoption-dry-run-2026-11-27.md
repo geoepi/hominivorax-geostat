@@ -47,7 +47,7 @@ The dry-run reported the run root as:
 
 `/project/disease_ecology/nws-geostat-output/production_runs/adopt-original-refresh-w44-2026-adoption`
 
-The intended Post-fit job uses the production orchestration profile: account `disease_ecology`, partition `bigmem`, 4 CPUs, 64 GB memory, 12 hours, no Slurm dependency on historical fit job `21355414`. The fit job ID is recorded as provenance only. The planned sequence and per-stage output paths are in [the Post-fit execution plan](original_refresh_w44_2026_postfit_execution_plan_v1.json).
+The intended Post-fit job uses the production orchestration profile: account `disease_ecology`, partition `bigmem`, 4 CPUs, 64 GB memory, 12 hours, no Slurm dependency on historical fit job `21355414`. The fit job ID is recorded as provenance only. The planned sequence and per-stage output paths are in [the Post-fit execution plan](original_refresh_w44_2026_postfit_execution_plan_v1.json). This dry-run records the initial 64 GB assumption; the later resource reassessment is in [plan v2](original_refresh_w44_2026_postfit_execution_plan_v2.json).
 
 ## Warnings and limits
 

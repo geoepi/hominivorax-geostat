@@ -143,5 +143,7 @@
   "evidence": {
     "validated_branch_commit": "c5de930425b22665fe1857eab0c225e7fb718d7d",
     "dry_run": "docs/archive/original-refresh-w44-2026/w44-adoption-dry-run-2026-11-27.md"
-  }
+  },
+  "superseded_by": "original_refresh_w44_2026_postfit_execution_plan_v2.json",
+  "supersession_note": "Historical initial plan only. Its 64 GB profile and W39 production.yml reference are superseded; do not use it to execute W44 Post-fit."
 }
